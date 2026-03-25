@@ -1,0 +1,675 @@
+package bottled.perfhud.gui;
+
+import bottled.perfhud.config.PerfHudConfig;
+import bottled.perfhud.hud.PerfHudRenderer;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.chat.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * PerfHUD editor screen.
+ *
+ * <ul>
+ *   <li>Left-click + drag  — move any list</li>
+ *   <li>Right-click on a list — context menu (reorder/toggle, rename, background, shadow, delete)</li>
+ *   <li>Right-click on empty space — create new list</li>
+ *   <li>Escape — close and save</li>
+ * </ul>
+ */
+public class PerfHudGuiScreen extends Screen {
+
+    // ── Drag state ────────────────────────────────────────────────────────────
+    private boolean dragging       = false;
+    private int     draggingListId = -1;
+    private int     dragOffsetX, dragOffsetY;
+    private int     dragLiveX, dragLiveY;
+    private int     dragBoxW, dragBoxH;
+    private PerfHudConfig.SnapX dragSnapX = PerfHudConfig.SnapX.NONE;
+    private PerfHudConfig.SnapY dragSnapY = PerfHudConfig.SnapY.NONE;
+
+    // ── Menu / panel state ────────────────────────────────────────────────────
+    private enum MenuKind { NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME }
+    private MenuKind menuKind   = MenuKind.NONE;
+    private int      menuListId = -1;
+    private int      menuX, menuY;
+    private boolean  reorderOpen       = false;
+    /** Which stat's settings panel is open (null = reorder panel showing). */
+    private PerfHudConfig.Stat statSettingsStat = null;
+    private StringBuilder renameBuffer = new StringBuilder();
+
+    // ── Layout constants ──────────────────────────────────────────────────────
+    private static final int ROW_H     = 13;
+    private static final int PANEL_W   = 160;
+    private static final int PANEL_PAD = 4;
+
+    private static final int SNAP_THRESHOLD = 6;
+    private static final int SNAP_LINE_COL  = 0xBBFFFFFF;
+    private static final int SNAP_HIT_COL   = 0xFFFFAA00;
+    private static final int SNAP_TICK      = 6;
+
+    // ── Context menu item indices ─────────────────────────────────────────────
+    private static final int LM_REORDER = 0;
+    private static final int LM_RENAME  = 1;
+    private static final int LM_BG      = 2;
+    private static final int LM_SHADOW  = 3;
+    private static final int LM_DELETE  = 4;
+    private static final int LM_COUNT   = 5;
+
+    public PerfHudGuiScreen() {
+        super(Component.translatable("gui.perfhud.title"));
+    }
+
+    @Override public boolean isPauseScreen() { return false; }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Rendering
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float partial) {
+        g.fill(0, 0, width, height, 0x80000000);
+
+        PerfHudRenderer.tickCache();
+
+        PerfHudConfig root = PerfHudConfig.getInstance();
+        var font = this.font;
+
+        if (root.lists.isEmpty()) {
+            g.centeredText(font, "§7" + I18n.get("gui.perfhud.no_lists"),
+                    width / 2, height / 2 - 6, 0xFFAAAAAA);
+        }
+
+        if (dragging) drawSnapLines(g);
+
+        for (PerfHudConfig.StatListConfig lc : root.lists) {
+            drawList(g, font, lc, mx, my, dragging && lc.id == draggingListId);
+        }
+
+        g.centeredText(font, "§7" + I18n.get("gui.perfhud.hint"),
+                width / 2, height - 14, 0xFFAAAAAA);
+
+        if      (menuKind == MenuKind.LIST_CONTEXT)   renderListContextMenu(g, font, mx, my);
+        else if (menuKind == MenuKind.EMPTY_SPACE)    renderEmptySpaceMenu(g, font, mx, my);
+        else if (menuKind == MenuKind.RENAME)          renderRenameBox(g, font);
+        else if (reorderOpen && statSettingsStat != null) renderStatSettingsPanel(g, font, mx, my);
+        else if (reorderOpen)                          renderReorderPanel(g, font, mx, my);
+
+        super.extractRenderState(g, mx, my, partial);
+    }
+
+    // ── List box ──────────────────────────────────────────────────────────────
+
+    private void drawList(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
+                          PerfHudConfig.StatListConfig lc, int mx, int my,
+                          boolean isBeingDragged) {
+        PerfHudRenderer.LineCache cache = PerfHudRenderer.getCachedLines(lc);
+        List<String>  lines  = cache.lines();
+        List<Integer> colors = cache.colors();
+
+        boolean empty = lines.isEmpty();
+        List<String>  drawLines  = empty ? List.of("§7" + I18n.get("gui.perfhud.no_stats")) : lines;
+        List<Integer> drawColors = empty ? List.of(0xFFAAAAAA) : colors;
+
+        int lineH = font.lineHeight + 1;
+        int maxW  = drawLines.stream().mapToInt(font::width).max().orElse(60);
+        int boxW  = maxW + 4;
+        int boxH  = lineH * drawLines.size() + 3;
+
+        int wx, wy;
+        if (isBeingDragged) {
+            wx = Math.max(0, Math.min(width  - boxW, dragLiveX));
+            wy = Math.max(0, Math.min(height - boxH, dragLiveY));
+        } else {
+            int[] pos = PerfHudRenderer.getPosition(lc, width, height, boxW, boxH);
+            wx = pos[0]; wy = pos[1];
+        }
+
+        if (lc.showBackground || empty) {
+            g.fill(wx - 1, wy - 1, wx + boxW + 1, wy + boxH + 1,
+                    empty ? 0xAA222222 : 0xCC000000);
+        }
+        if (isHoveringBox(mx, my, wx, wy, boxW, boxH) || isBeingDragged) {
+            g.outline(wx - 1, wy - 1, boxW + 2, boxH + 2, 0xFFFFAA00);
+        }
+
+        boolean shadow = lc.textShadow;
+        for (int i = 0; i < drawLines.size(); i++) {
+            g.text(font, drawLines.get(i), wx + 2, wy + 2 + i * lineH, drawColors.get(i), shadow);
+        }
+    }
+
+    // ── Snap lines ────────────────────────────────────────────────────────────
+
+    private void drawSnapLines(GuiGraphicsExtractor g) {
+        int cx = width  / 2;
+        int cy = height / 2;
+        if (dragSnapX != PerfHudConfig.SnapX.NONE) {
+            g.fill(cx, 0, cx + 1, height, SNAP_LINE_COL);
+            int hitY = dragLiveY + dragBoxH / 2;
+            g.fill(cx - SNAP_TICK, hitY, cx + SNAP_TICK + 1, hitY + 1, SNAP_HIT_COL);
+        }
+        if (dragSnapY != PerfHudConfig.SnapY.NONE) {
+            g.fill(0, cy, width, cy + 1, SNAP_LINE_COL);
+            int hitX = dragLiveX + dragBoxW / 2;
+            g.fill(hitX, cy - SNAP_TICK, hitX + 1, cy + SNAP_TICK + 1, SNAP_HIT_COL);
+        }
+    }
+
+    // ── Context menu ──────────────────────────────────────────────────────────
+
+    private void renderListContextMenu(GuiGraphicsExtractor g,
+                                       net.minecraft.client.gui.Font font,
+                                       int mx, int my) {
+        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null) { menuKind = MenuKind.NONE; return; }
+
+        String onOff_bg  = lc.showBackground ? " §a" + I18n.get("gui.perfhud.menu.on")
+                                              : " §c" + I18n.get("gui.perfhud.menu.off");
+        String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.perfhud.menu.on")
+                                              : " §c" + I18n.get("gui.perfhud.menu.off");
+
+        String[] labels = {
+            "§f" + I18n.get("gui.perfhud.menu.reorder"),
+            "§e" + I18n.get("gui.perfhud.menu.rename"),
+            "§f" + I18n.get("gui.perfhud.menu.background") + onOff_bg,
+            "§f" + I18n.get("gui.perfhud.menu.shadow")     + onOff_sh,
+            "§c" + I18n.get("gui.perfhud.menu.delete")
+        };
+
+        drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
+    }
+
+    // ── Empty-space menu ──────────────────────────────────────────────────────
+
+    private void renderEmptySpaceMenu(GuiGraphicsExtractor g,
+                                      net.minecraft.client.gui.Font font,
+                                      int mx, int my) {
+        String[] labels = { "§a" + I18n.get("gui.perfhud.menu.create") };
+        drawPanel(g, font, labels, mx, my, PANEL_W, 1);
+    }
+
+    // ── Rename box ────────────────────────────────────────────────────────────
+
+    private void renderRenameBox(GuiGraphicsExtractor g,
+                                 net.minecraft.client.gui.Font font) {
+        String prompt  = "§e" + I18n.get("gui.perfhud.rename.prompt");
+        String display = renameBuffer.toString() + "§7|";
+        int panelW = PANEL_W + 40;
+        int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2;
+        int px = clampX(menuX, panelW);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + panelW, py + panelH, 0xEE111111);
+        g.outline(px, py, panelW, panelH, 0xFFFFAA00);
+        g.text(font, prompt,  px + PANEL_PAD, py + PANEL_PAD,             0xFFFFFFFF, false);
+        g.text(font, display, px + PANEL_PAD, py + PANEL_PAD + ROW_H + 2, 0xFFFFFFFF, false);
+    }
+
+    // ── Reorder / Toggle panel ────────────────────────────────────────────────
+
+    private void renderReorderPanel(GuiGraphicsExtractor g,
+                                    net.minecraft.client.gui.Font font,
+                                    int mx, int my) {
+        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null) { reorderOpen = false; return; }
+
+        List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
+        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * all.size() + ROW_H;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
+        g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
+        g.text(font, "§e" + I18n.get("gui.perfhud.reorder.title"),
+                px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+
+        int rowTop = py + PANEL_PAD + ROW_H;
+        for (int i = 0; i < all.size(); i++) {
+            PerfHudConfig.Stat stat = all.get(i);
+            boolean enabled = lc.isEnabled(stat);
+            int ry = rowTop + i * ROW_H;
+
+            if (isHoveringRow(mx, my, px, ry, PANEL_W, ROW_H))
+                g.fill(px + 1, ry, px + PANEL_W - 1, ry + ROW_H, 0x44FFFFFF);
+
+            // Use the lang key for each stat's display name
+            String statName = I18n.get("stat.perfhud." + stat.name().toLowerCase());
+            String label = (enabled ? "§a✔ " : "§c✘ ") + statName;
+            g.text(font, label, px + PANEL_PAD + 12, ry + 2, 0xFFFFFFFF, false);
+
+            int orderIdx = lc.statOrder.indexOf(stat.name());
+            // ⚙ cog button
+            boolean cogHovered = isHoveringRow(mx, my, px + PANEL_W - 28, ry, 10, ROW_H);
+            g.text(font, cogHovered ? "§e⚙" : "§7⚙", px + PANEL_W - 28, ry + 2, 0xFFFFFFFF, false);
+            if (orderIdx > 0)
+                g.text(font, "§7▲", px + PANEL_W - 18, ry + 2, 0xFFFFFFFF, false);
+            if (orderIdx < lc.statOrder.size() - 1)
+                g.text(font, "§7▼", px + PANEL_W - 10, ry + 2, 0xFFFFFFFF, false);
+        }
+
+        int closeY = rowTop + all.size() * ROW_H;
+        if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H))
+            g.fill(px + 1, closeY, px + PANEL_W - 1, closeY + ROW_H, 0x44FFFFFF);
+        g.text(font, "§7" + I18n.get("gui.perfhud.reorder.close"),
+                px + PANEL_PAD, closeY + 2, 0xFFFFFFFF, false);
+    }
+
+    // ── Per-stat settings panel ───────────────────────────────────────────────
+
+    private void renderStatSettingsPanel(GuiGraphicsExtractor g,
+                                         net.minecraft.client.gui.Font font,
+                                         int mx, int my) {
+        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null || statSettingsStat == null) { statSettingsStat = null; return; }
+
+        PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
+        String statLabel = I18n.get("stat.perfhud." + statSettingsStat.name().toLowerCase());
+
+        // 1 header row + 1 setting row + 1 back row
+        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
+        g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
+
+        // Header
+        g.text(font, "§e" + I18n.get("gui.perfhud.stat_settings.title", statLabel),
+                px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+
+        // Show Prefix toggle
+        int ry1 = py + PANEL_PAD + ROW_H;
+        if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H))
+            g.fill(px + 1, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
+        String prefixToggle = I18n.get("gui.perfhud.stat_settings.show_prefix")
+                + (ss.showPrefix ? " §a" + I18n.get("gui.perfhud.menu.on")
+                                 : " §c" + I18n.get("gui.perfhud.menu.off"));
+        g.text(font, "§f" + prefixToggle, px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
+
+        // Back button
+        int ryBack = py + PANEL_PAD + ROW_H * 2;
+        if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
+            g.fill(px + 1, ryBack, px + PANEL_W - 1, ryBack + ROW_H, 0x44FFFFFF);
+        g.text(font, "§7" + I18n.get("gui.perfhud.stat_settings.back"),
+                px + PANEL_PAD, ryBack + 2, 0xFFFFFFFF, false);
+    }
+
+    private void handleStatSettingsPanelClick(int mx, int my,
+                                              PerfHudConfig.StatListConfig lc) {
+        if (statSettingsStat == null) return;
+        PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
+
+        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        int ry1    = py + PANEL_PAD + ROW_H;
+        int ryBack = py + PANEL_PAD + ROW_H * 2;
+
+        if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
+            ss.showPrefix = !ss.showPrefix;
+            PerfHudConfig.getInstance().save();
+        } else if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H)) {
+            statSettingsStat = null; // back to reorder panel
+        }
+    }
+
+    // ── Shared panel drawing helper ───────────────────────────────────────────
+
+    private void drawPanel(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
+                           String[] labels, int mx, int my, int panelW, int count) {
+        int panelH = PANEL_PAD * 2 + ROW_H * count;
+        int px = clampX(menuX, panelW);
+        int py = clampY(menuY, panelH);
+        g.fill(px, py, px + panelW, py + panelH, 0xEE111111);
+        g.outline(px, py, panelW, panelH, 0xFFFFAA00);
+        for (int i = 0; i < labels.length; i++) {
+            int ry = py + PANEL_PAD + i * ROW_H;
+            if (isHoveringRow(mx, my, px, ry, panelW, ROW_H))
+                g.fill(px + 1, ry, px + panelW - 1, ry + ROW_H, 0x44FFFFFF);
+            g.text(font, labels[i], px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Mouse events
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        int mx  = (int) event.x();
+        int my  = (int) event.y();
+        int btn = event.button();
+
+        PerfHudConfig root = PerfHudConfig.getInstance();
+
+        if (menuKind == MenuKind.RENAME) {
+            menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (menuKind == MenuKind.LIST_CONTEXT) {
+            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && isInsideListContextMenu(mx, my)) handleListContextMenuClick(mx, my, lc);
+            else menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (menuKind == MenuKind.EMPTY_SPACE) {
+            if (isInsideEmptySpaceMenu(mx, my)) handleEmptySpaceMenuClick(mx, my, root);
+            else menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (reorderOpen) {
+            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && statSettingsStat != null) {
+                // Stat settings panel is open — check bounds and route
+                if (isInsideStatSettingsPanel(mx, my)) handleStatSettingsPanelClick(mx, my, lc);
+                else { statSettingsStat = null; } // click outside → back to reorder
+            } else if (lc != null && isInsideReorderPanel(mx, my, lc)) {
+                handleReorderPanelClick(mx, my, lc);
+            } else {
+                reorderOpen = false;
+                statSettingsStat = null;
+            }
+            return true;
+        }
+
+        List<PerfHudConfig.StatListConfig> lists = root.lists;
+        for (int i = lists.size() - 1; i >= 0; i--) {
+            PerfHudConfig.StatListConfig lc = lists.get(i);
+            int[] b = getListBounds(lc);
+            if (!isHoveringBox(mx, my, b[0], b[1], b[2], b[3])) continue;
+            if (btn == 0) {
+                dragging       = true;
+                draggingListId = lc.id;
+                dragOffsetX    = mx - b[0];
+                dragOffsetY    = my - b[1];
+                dragLiveX      = b[0];
+                dragLiveY      = b[1];
+                dragBoxW       = b[2];
+                dragBoxH       = b[3];
+                dragSnapX      = PerfHudConfig.SnapX.NONE;
+                dragSnapY      = PerfHudConfig.SnapY.NONE;
+                return true;
+            } else if (btn == 1) {
+                menuKind   = MenuKind.LIST_CONTEXT;
+                menuListId = lc.id;
+                menuX      = mx;
+                menuY      = my;
+                return true;
+            }
+        }
+
+        if (btn == 1) {
+            menuKind = MenuKind.EMPTY_SPACE;
+            menuX    = mx;
+            menuY    = my;
+            return true;
+        }
+
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (dragging && event.button() == 0) {
+            int mx   = (int) event.x();
+            int my   = (int) event.y();
+            int rawX = Math.max(0, Math.min(width  - dragBoxW, mx - dragOffsetX));
+            int rawY = Math.max(0, Math.min(height - dragBoxH, my - dragOffsetY));
+            int[] snapped = applySnap(rawX, rawY, dragBoxW, dragBoxH);
+            dragLiveX = snapped[0];
+            dragLiveY = snapped[1];
+            return true;
+        }
+        return super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (dragging && event.button() == 0) {
+            PerfHudConfig.StatListConfig lc = getListById(draggingListId);
+            if (lc != null) {
+                lc.snapX = dragSnapX;
+                lc.snapY = dragSnapY;
+                snapToNearestCorner(lc, dragLiveX, dragLiveY, dragBoxW, dragBoxH);
+            }
+            dragging       = false;
+            draggingListId = -1;
+            dragSnapX      = PerfHudConfig.SnapX.NONE;
+            dragSnapY      = PerfHudConfig.SnapY.NONE;
+            PerfHudConfig.getInstance().save();
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    // ── Keyboard ─────────────────────────────────────────────────────────────
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
+        if (menuKind == MenuKind.RENAME) {
+            if (keyCode == 256) { // Escape — cancel
+                menuKind = MenuKind.NONE;
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter — confirm
+                PerfHudConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null) {
+                    String trimmed = renameBuffer.toString().trim();
+                    lc.name = trimmed.isEmpty() ? "List " + lc.id : trimmed;
+                    PerfHudConfig.getInstance().save();
+                }
+                menuKind = MenuKind.NONE;
+                return true;
+            }
+            if (keyCode == 259 && !renameBuffer.isEmpty()) { // Backspace
+                renameBuffer.deleteCharAt(renameBuffer.length() - 1);
+                return true;
+            }
+            return true;
+        }
+        if (keyCode == 256) { onClose(); return true; }
+        return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        if (menuKind == MenuKind.RENAME) {
+            char ch = (char) event.codepoint();
+            if (ch >= 32 && renameBuffer.length() < 32)
+                renameBuffer.append(ch);
+            return true;
+        }
+        return super.charTyped(event);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Menu click handlers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private void handleListContextMenuClick(int mx, int my,
+                                            PerfHudConfig.StatListConfig lc) {
+        int panelH = PANEL_PAD * 2 + ROW_H * LM_COUNT;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        if (mx < px || mx > px + PANEL_W) return;
+        int rel = my - (py + PANEL_PAD);
+        if (rel < 0 || rel >= ROW_H * LM_COUNT) return;
+        int idx = rel / ROW_H;
+
+        PerfHudConfig root = PerfHudConfig.getInstance();
+        menuKind = MenuKind.NONE;
+
+        switch (idx) {
+            case LM_REORDER -> reorderOpen = true;
+            case LM_RENAME  -> { menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
+            case LM_BG      -> { lc.showBackground = !lc.showBackground; root.save(); }
+            case LM_SHADOW  -> { lc.textShadow     = !lc.textShadow;     root.save(); }
+            case LM_DELETE  -> { root.removeList(lc.id); root.save(); reorderOpen = false; }
+        }
+    }
+
+    private void handleEmptySpaceMenuClick(int mx, int my, PerfHudConfig root) {
+        int panelH = PANEL_PAD * 2 + ROW_H;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        if (isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
+            PerfHudConfig.StatListConfig nl = root.createList();
+            snapToNearestCorner(nl, mx, my, 0, 0);
+            root.save();
+        }
+        menuKind = MenuKind.NONE;
+    }
+
+    private void handleReorderPanelClick(int mx, int my, PerfHudConfig.StatListConfig lc) {
+        List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
+        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * all.size() + ROW_H;
+        int px     = clampX(menuX, PANEL_W);
+        int py     = clampY(menuY, panelH);
+        int rowTop = py + PANEL_PAD + ROW_H;
+
+        int closeY = rowTop + all.size() * ROW_H;
+        if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H)) { reorderOpen = false; statSettingsStat = null; return; }
+
+        for (int i = 0; i < all.size(); i++) {
+            PerfHudConfig.Stat stat = all.get(i);
+            int ry = rowTop + i * ROW_H;
+            if (my < ry || my >= ry + ROW_H) continue;
+            int orderIdx = lc.statOrder.indexOf(stat.name());
+            // ⚙ cog — open per-stat settings
+            if (mx >= px + PANEL_W - 28 && mx < px + PANEL_W - 18) {
+                statSettingsStat = stat;
+                return;
+            }
+            // ▲
+            if (mx >= px + PANEL_W - 18 && mx < px + PANEL_W - 10 && orderIdx > 0) {
+                lc.statOrder.add(orderIdx - 1, lc.statOrder.remove(orderIdx));
+            // ▼
+            } else if (mx >= px + PANEL_W - 10 && orderIdx < lc.statOrder.size() - 1) {
+                lc.statOrder.add(orderIdx + 1, lc.statOrder.remove(orderIdx));
+            // toggle enable
+            } else {
+                lc.setEnabled(stat, !lc.isEnabled(stat));
+            }
+            PerfHudConfig.getInstance().save();
+            return;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Hit-test helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private boolean isHoveringBox(int mx, int my, int bx, int by, int bw, int bh) {
+        return mx >= bx - 1 && mx <= bx + bw + 1 && my >= by - 1 && my <= by + bh + 1;
+    }
+    private boolean isHoveringRow(int mx, int my, int px, int ry, int pw, int rh) {
+        return mx >= px && mx <= px + pw && my >= ry && my < ry + rh;
+    }
+    private boolean isInsideListContextMenu(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H * LM_COUNT;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+    private boolean isInsideEmptySpaceMenu(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+    private boolean isInsideStatSettingsPanel(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+    private boolean isInsideReorderPanel(int mx, int my, PerfHudConfig.StatListConfig lc) {
+        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * allStatsOrdered(lc).size() + ROW_H;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Snap helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private int[] applySnap(int bx, int by, int bw, int bh) {
+        int cx = width  / 2, cy = height / 2, T = SNAP_THRESHOLD;
+
+        int snappedX = bx; dragSnapX = PerfHudConfig.SnapX.NONE; int bestDx = T + 1;
+        int d = Math.abs(bx - cx);
+        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx;          dragSnapX = PerfHudConfig.SnapX.LEFT_ON_CENTER; }
+        d = Math.abs((bx + bw / 2) - cx);
+        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx - bw / 2; dragSnapX = PerfHudConfig.SnapX.CENTER_ON_CENTER; }
+        d = Math.abs((bx + bw) - cx);
+        if (d <= T && d < bestDx) {              snappedX = cx - bw;     dragSnapX = PerfHudConfig.SnapX.RIGHT_ON_CENTER; }
+
+        int snappedY = by; dragSnapY = PerfHudConfig.SnapY.NONE; int bestDy = T + 1;
+        d = Math.abs(by - cy);
+        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy;          dragSnapY = PerfHudConfig.SnapY.TOP_ON_CENTER; }
+        d = Math.abs((by + bh / 2) - cy);
+        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy - bh / 2; dragSnapY = PerfHudConfig.SnapY.CENTER_ON_CENTER; }
+        d = Math.abs((by + bh) - cy);
+        if (d <= T && d < bestDy) {              snappedY = cy - bh;     dragSnapY = PerfHudConfig.SnapY.BOTTOM_ON_CENTER; }
+
+        return new int[]{ snappedX, snappedY };
+    }
+
+    private void snapToNearestCorner(PerfHudConfig.StatListConfig lc,
+                                     int bx, int by, int boxW, int boxH) {
+        boolean nearRight  = (bx + boxW / 2) > width  / 2;
+        boolean nearBottom = (by + boxH / 2) > height / 2;
+        if (!nearRight && !nearBottom) {
+            lc.anchorCorner = PerfHudConfig.Corner.TOP_LEFT;
+            lc.anchorDx = bx;                    lc.anchorDy = by;
+        } else if (nearRight && !nearBottom) {
+            lc.anchorCorner = PerfHudConfig.Corner.TOP_RIGHT;
+            lc.anchorDx = width - (bx + boxW);   lc.anchorDy = by;
+        } else if (!nearRight) {
+            lc.anchorCorner = PerfHudConfig.Corner.BOTTOM_LEFT;
+            lc.anchorDx = bx;                    lc.anchorDy = height - (by + boxH);
+        } else {
+            lc.anchorCorner = PerfHudConfig.Corner.BOTTOM_RIGHT;
+            lc.anchorDx = width - (bx + boxW);   lc.anchorDy = height - (by + boxH);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Utility
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private int[] getListBounds(PerfHudConfig.StatListConfig lc) {
+        var font = this.font;
+        PerfHudRenderer.LineCache cache = PerfHudRenderer.getCachedLines(lc);
+        List<String> lines = cache.lines().isEmpty()
+                ? List.of(I18n.get("gui.perfhud.no_stats")) : cache.lines();
+        int lineH = font.lineHeight + 1;
+        int maxW  = lines.stream().mapToInt(font::width).max().orElse(60);
+        int boxW  = maxW + 4;
+        int boxH  = lineH * lines.size() + 3;
+        int[] pos = PerfHudRenderer.getPosition(lc, width, height, boxW, boxH);
+        return new int[]{ pos[0], pos[1], boxW, boxH };
+    }
+
+    private PerfHudConfig.StatListConfig getListById(int id) {
+        for (PerfHudConfig.StatListConfig lc : PerfHudConfig.getInstance().lists)
+            if (lc.id == id) return lc;
+        return null;
+    }
+
+    private List<PerfHudConfig.Stat> allStatsOrdered(PerfHudConfig.StatListConfig lc) {
+        List<PerfHudConfig.Stat> result = new ArrayList<>();
+        for (String name : lc.statOrder) {
+            try { result.add(PerfHudConfig.Stat.valueOf(name)); }
+            catch (IllegalArgumentException ignored) {}
+        }
+        return result;
+    }
+
+    private int clampX(int x, int w) { return Math.max(0, Math.min(width  - w - 4, x)); }
+    private int clampY(int y, int h) { return Math.max(0, Math.min(height - h - 4, y)); }
+}

@@ -1,0 +1,210 @@
+package bottled.perfhud.config;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import net.fabricmc.loader.api.FabricLoader;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public class PerfHudConfig {
+
+    /**
+     * Which screen corner a list is anchored to.
+     * anchorDx/anchorDy are pixel offsets FROM that corner, so the list
+     * moves with its corner on window resize, keeping inter-list gaps stable.
+     */
+    public enum Corner {
+        TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT
+    }
+
+    /** How this list is anchored to the vertical centre line (x-axis snap). */
+    public enum SnapX {
+        NONE,
+        LEFT_ON_CENTER,    // list's left  edge on the vertical centre line
+        CENTER_ON_CENTER,  // list's centre     on the vertical centre line
+        RIGHT_ON_CENTER    // list's right edge on the vertical centre line
+    }
+
+    /** How this list is anchored to the horizontal centre line (y-axis snap). */
+    public enum SnapY {
+        NONE,
+        TOP_ON_CENTER,     // list's top    edge on the horizontal centre line
+        CENTER_ON_CENTER,  // list's centre      on the horizontal centre line
+        BOTTOM_ON_CENTER   // list's bottom edge on the horizontal centre line
+    }
+
+    public enum Stat {
+        TPS, MSPT, FPS, PING, MEMORY, CPU,
+        ENTITIES, CHUNKS, RENDERED_SECTIONS,
+        COORDS, FACING, SPEED, GC_TIME
+    }
+
+    // ── Root config ───────────────────────────────────────────────────────────
+    public int                  nextId = 1;
+    public List<StatListConfig> lists  = new ArrayList<>();
+
+    // ── Per-stat settings ─────────────────────────────────────────────────────
+    public static class StatSettings {
+        /** Whether to show the label prefix (e.g. "TPS: ") before the value. */
+        public boolean showPrefix = true;
+    }
+
+    // ── Per-list config ───────────────────────────────────────────────────────
+    public static class StatListConfig {
+        /** Unique identifier, starts from 0. */
+        public int    id;
+        /** User-visible name shown in the GUI. Defaults to "List N". */
+        public String name;
+
+        // Per-stat enabled flags, display order, and individual settings
+        public Map<String, Boolean>      statEnabled  = defaultEnabledMap();
+        public List<String>              statOrder    = defaultOrder();
+        public Map<String, StatSettings> statSettings = new LinkedHashMap<>();
+
+        // Position — corner anchor + pixel offsets
+        public Corner anchorCorner = Corner.TOP_LEFT;
+        /** Pixels from the anchor corner's horizontal edge. */
+        public int    anchorDx    = 4;
+        /** Pixels from the anchor corner's vertical edge. */
+        public int    anchorDy    = 4;
+
+        // Appearance
+        public boolean showBackground = true;
+        public boolean textShadow     = false;
+
+        // Snap
+        public SnapX snapX = SnapX.NONE;
+        public SnapY snapY = SnapY.NONE;
+
+        public StatListConfig() {}
+
+        public StatListConfig(int id) {
+            this.id   = id;
+            this.name = "List " + id;
+        }
+
+        private static Map<String, Boolean> defaultEnabledMap() {
+            Map<String, Boolean> m = new LinkedHashMap<>();
+            for (Stat s : Stat.values()) {
+                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
+            }
+            return m;
+        }
+
+        private static List<String> defaultOrder() {
+            List<String> l = new ArrayList<>();
+            for (Stat s : Stat.values()) l.add(s.name());
+            return l;
+        }
+
+        public boolean isEnabled(Stat stat) {
+            return statEnabled.getOrDefault(stat.name(), false);
+        }
+
+        public void setEnabled(Stat stat, boolean value) {
+            statEnabled.put(stat.name(), value);
+        }
+
+        /** Returns stats in statOrder order, enabled only, no duplicates. */
+        public List<Stat> getVisibleStats() {
+            List<Stat> result = new ArrayList<>();
+            for (String n : statOrder) {
+                try {
+                    Stat s = Stat.valueOf(n.toUpperCase());
+                    if (isEnabled(s) && !result.contains(s)) result.add(s);
+                } catch (IllegalArgumentException ignored) {}
+            }
+            return result;
+        }
+
+        /** Gets (or lazily creates) the settings for a stat. */
+        public StatSettings getStatSettings(Stat stat) {
+            return statSettings.computeIfAbsent(stat.name(), k -> new StatSettings());
+        }
+
+        /** Back-fill any stats added since this config was written. */
+        public void backFill() {
+            if (name == null) name = "List " + id;
+            if (statSettings == null) statSettings = new LinkedHashMap<>();
+            for (Stat s : Stat.values()) {
+                statEnabled.putIfAbsent(s.name(), false);
+                if (!statOrder.contains(s.name())) statOrder.add(s.name());
+                statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
+            }
+        }
+
+        /** Display name used in the GUI header. */
+        public String displayName() {
+            return (name == null || name.isBlank()) ? "List " + id : name;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    public StatListConfig createList() {
+        StatListConfig cfg = new StatListConfig(nextId++);
+        cfg.anchorDx = 4 + lists.size() * 20;
+        cfg.anchorDy = 4 + lists.size() * 20;
+        lists.add(cfg);
+        return cfg;
+    }
+
+    public void removeList(int id) {
+        lists.removeIf(l -> l.id == id);
+    }
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+    private static final Gson GSON =
+            new GsonBuilder().setPrettyPrinting().create();
+    private static final Path CONFIG_PATH =
+            FabricLoader.getInstance().getConfigDir().resolve("perfhud.json");
+
+    private static PerfHudConfig INSTANCE;
+
+    public static PerfHudConfig getInstance() {
+        if (INSTANCE == null) INSTANCE = load();
+        return INSTANCE;
+    }
+
+    public static PerfHudConfig load() {
+        if (Files.exists(CONFIG_PATH)) {
+            try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
+                PerfHudConfig cfg = GSON.fromJson(r, PerfHudConfig.class);
+                if (cfg != null) {
+                    if (cfg.lists == null) cfg.lists = new ArrayList<>();
+                    for (StatListConfig list : cfg.lists) {
+                        if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
+                        if (list.statOrder   == null) list.statOrder   = new ArrayList<>();
+                        // anchorCorner field renamed from alignment — treat null as TOP_LEFT
+                        if (list.anchorCorner == null) list.anchorCorner = Corner.TOP_LEFT;
+                        list.backFill();
+                    }
+                    return cfg;
+                }
+            } catch (IOException e) {
+                System.err.println("[PerfHUD] Failed to load config: " + e.getMessage());
+            }
+        }
+        PerfHudConfig defaults = new PerfHudConfig();
+        defaults.lists.add(new StatListConfig(0));
+        defaults.nextId = 1;
+        defaults.save();
+        return defaults;
+    }
+
+    public void save() {
+        try (Writer w = Files.newBufferedWriter(CONFIG_PATH)) {
+            GSON.toJson(this, w);
+        } catch (IOException e) {
+            System.err.println("[PerfHUD] Failed to save config: " + e.getMessage());
+        }
+    }
+}

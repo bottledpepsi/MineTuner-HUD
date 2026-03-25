@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "perfhud",
+	"version": "${version}",
+	"name": "PerfHUD",
+	"description": "Customisable performance HUD \u2014 multiple stat lists, drag-and-drop positioning, snap-to-centre, TPS, FPS, ping, memory, CPU, coords, facing, speed, and more.",
+	"authors": [
+		"bottledpepsi"
+	],
+	"contact": {
+		"homepage": "https://bottledpepsi.github.io",
+		"sources": "https://github.com/bottledpepsi/perfhud"
+	},
+	"license": "GPL-3.0",
+	"icon": "assets/perfhud/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			"bottled.perfhud.PerfHud"
+		],
+		"client": [
+			"bottled.perfhud.PerfHudClient"
+		]
+	},
+	"mixins": [
+		"perfhud.mixins.json",
+		{
+			"config": "perfhud.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18",
+		"minecraft": ">=26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
