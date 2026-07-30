@@ -38,6 +38,42 @@ public final class MtssDataHolder {
     public static double cpuPercent = -1.0;
     public static long   gcTimeMs   = 0;
 
+    // ── History (for graphs) ─────────────────────────────────────────
+    private static final int HISTORY_SIZE = 2000;
+
+    private static final RingBuffer tpsHistory   = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer msptHistory  = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer fpsHistory   = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer cpuHistory   = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer pingHistory  = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer memHistory   = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer speedHistory = new RingBuffer(HISTORY_SIZE);
+
+    /** Minimal fixed-size float ring buffer with copy-out reads. Not thread-safe (client render thread only). */
+    private static final class RingBuffer {
+        private final float[] buf;
+        private int   count = 0; // number of valid samples, caps at buf.length
+        private int   head  = 0; // index the NEXT sample will be written to
+
+        RingBuffer(int size) { this.buf = new float[size]; }
+
+        void push(float value) {
+            buf[head] = value;
+            head = (head + 1) % buf.length;
+            if (count < buf.length) count++;
+        }
+
+        /** Returns a copy of the valid samples in oldest-to-newest order. */
+        float[] snapshot() {
+            float[] out = new float[count];
+            int start = (head - count + buf.length) % buf.length;
+            for (int i = 0; i < count; i++) {
+                out[i] = buf[(start + i) % buf.length];
+            }
+            return out;
+        }
+    }
+
     // ── Internals ─────────────────────────────────────────────────────────────
     private static final MemoryMXBean          MEM_BEAN = ManagementFactory.getMemoryMXBean();
     private static final OperatingSystemMXBean OS_BEAN  = ManagementFactory.getOperatingSystemMXBean();
@@ -56,6 +92,19 @@ public final class MtssDataHolder {
         long max  = MEM_BEAN.getHeapMemoryUsage().getMax();
         memUsedMb = used / (1024 * 1024);
         memMaxMb  = max  / (1024 * 1024);
+
+        // Sample the graphable stats once per frame. CPU is skipped when -1
+        // (unsupported JVM vendor) and Ping when -1 (not connected / no info
+        // yet) so unsupported/unavailable readings don't pollute the buffer
+        // with a flat line at -1. Memory is skipped if memMaxMb isn't known
+        // yet (0 on the very first frame before any heap read has happened).
+        tpsHistory.push(getTps());
+        if (mspt >= 0f) msptHistory.push(mspt);
+        fpsHistory.push(fps);
+        if (cpuPercent >= 0) cpuHistory.push((float) cpuPercent);
+        if (ping >= 0) pingHistory.push(ping);
+        if (memMaxMb > 0) memHistory.push((float) (100.0 * memUsedMb / memMaxMb));
+        speedHistory.push(speedBps);
     }
 
     public static void updateSlowMetrics() {
@@ -78,6 +127,18 @@ public final class MtssDataHolder {
         }
         gcTimeMs = total;
     }
+
+    // ── History accessors ─────────────────────────────────────────────────────
+    // Each returns a fresh copy in oldest-to-newest order; callers (renderers)
+    // must not be able to mutate the backing ring buffer.
+
+    public static float[] getTpsHistory()   { return tpsHistory.snapshot(); }
+    public static float[] getMsptHistory()  { return msptHistory.snapshot(); }
+    public static float[] getFpsHistory()   { return fpsHistory.snapshot(); }
+    public static float[] getCpuHistory()   { return cpuHistory.snapshot(); }
+    public static float[] getPingHistory()  { return pingHistory.snapshot(); }
+    public static float[] getMemHistory()   { return memHistory.snapshot(); }
+    public static float[] getSpeedHistory() { return speedHistory.snapshot(); }
 
     // ── Color helpers ─────────────────────────────────────────────────────────
 

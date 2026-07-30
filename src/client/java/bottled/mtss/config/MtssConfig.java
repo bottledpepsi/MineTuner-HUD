@@ -58,7 +58,14 @@ public class MtssConfig {
         public boolean showPrefix = true;
         /** Decimal places for numeric stats that support it (TPS, MSPT, CPU, Speed). Ignored otherwise. */
         public int decimals = 1;
+        /** Render graph. */
+        public boolean renderAsGraph = false;
     }
+
+    /** Stats for which the rolling graph render mode is available. */
+    public static final java.util.Set<Stat> GRAPHABLE_STATS = java.util.Set.of(
+            Stat.TPS, Stat.MSPT, Stat.FPS, Stat.CPU, Stat.PING, Stat.MEMORY, Stat.SPEED
+    );
 
     // ── Per-list config ───────────────────────────────────────────────────────
     public static class StatListConfig {
@@ -165,8 +172,9 @@ public class MtssConfig {
             for (Map.Entry<String, StatSettings> e : this.statSettings.entrySet()) {
                 StatSettings src = e.getValue();
                 StatSettings dst = new StatSettings();
-                dst.showPrefix = src.showPrefix;
-                dst.decimals   = src.decimals;
+                dst.showPrefix    = src.showPrefix;
+                dst.decimals      = src.decimals;
+                dst.renderAsGraph = src.renderAsGraph;
                 copy.statSettings.put(e.getKey(), dst);
             }
             copy.anchorCorner   = this.anchorCorner;

@@ -145,17 +145,24 @@ public class MtssGuiScreen extends Screen {
                           MtssConfig.StatListConfig lc, int mx, int my,
                           boolean isBeingDragged) {
         MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
-        List<String>  lines  = cache.lines();
-        List<Integer> colors = cache.colors();
+        boolean empty = cache.rowKinds().isEmpty();
 
-        boolean empty = lines.isEmpty();
-        List<String>  drawLines  = empty ? List.of("§7" + I18n.get("gui.mtss.no_stats")) : lines;
-        List<Integer> drawColors = empty ? List.of(0xFFAAAAAA) : colors;
-
+        // Box size: for the empty placeholder, keep the old single-line-of-text
+        // sizing (there's no LineCache row to measure). Otherwise defer to
+        // LineCache.boxW/boxH so graph rows are sized identically here and in
+        // the live HUD — this is the same box math MtssRenderer.render() uses,
+        // so the editor preview and the live overlay can never disagree on
+        // hit-testing dimensions.
         int lineH = font.lineHeight + 1;
-        int maxW  = drawLines.stream().mapToInt(font::width).max().orElse(60);
-        int boxW  = maxW + 4;
-        int boxH  = lineH * drawLines.size() + 3;
+        int boxW, boxH;
+        if (empty) {
+            String placeholder = I18n.get("gui.mtss.no_stats");
+            boxW = font.width(placeholder) + 4;
+            boxH = lineH + 3;
+        } else {
+            boxW = cache.boxW(font);
+            boxH = cache.boxH(font);
+        }
 
         int wx, wy;
         if (isBeingDragged) {
@@ -175,8 +182,10 @@ public class MtssGuiScreen extends Screen {
         }
 
         boolean shadow = lc.textShadow;
-        for (int i = 0; i < drawLines.size(); i++) {
-            g.text(font, drawLines.get(i), wx + 2, wy + 2 + i * lineH, drawColors.get(i), shadow);
+        if (empty) {
+            g.text(font, "§7" + I18n.get("gui.mtss.no_stats"), wx + 2, wy + 2, 0xFFAAAAAA, shadow);
+        } else {
+            MtssRenderer.drawRows(g, font, cache, wx + 2, wy + 2, shadow);
         }
     }
 
@@ -394,6 +403,25 @@ public class MtssGuiScreen extends Screen {
             || stat == MtssConfig.Stat.CPU || stat == MtssConfig.Stat.SPEED;
     }
 
+    /** Stats that can be rendered as a rolling graph instead of text. */
+    private boolean supportsGraph(MtssConfig.Stat stat) {
+        return MtssConfig.GRAPHABLE_STATS.contains(stat);
+    }
+
+    /**
+     * Row count for the stat settings panel: header + prefix + (optional
+     * decimals) + (optional graph toggle) + back. Shared by the render,
+     * click-handling, and hit-testing methods below so they can't drift out
+     * of sync with each other (see the reorder/toggle panel's history of the
+     * same bug, noted in the changelog).
+     */
+    private int statSettingsPanelRows(MtssConfig.Stat stat) {
+        int rows = 3; // header + prefix + back
+        if (supportsDecimals(stat)) rows++;
+        if (supportsGraph(stat))    rows++;
+        return rows;
+    }
+
     private void renderStatSettingsPanel(GuiGraphicsExtractor g,
                                          net.minecraft.client.gui.Font font,
                                          int mx, int my) {
@@ -403,9 +431,10 @@ public class MtssGuiScreen extends Screen {
         MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
         String statLabel = I18n.get("stat.mtss." + statSettingsStat.name().toLowerCase());
         boolean decimalsRow = supportsDecimals(statSettingsStat);
+        boolean graphRow    = supportsGraph(statSettingsStat);
 
-        // 1 header row + 1 prefix row + (optional decimals row) + 1 back row
-        int rows = decimalsRow ? 4 : 3;
+        // 1 header row + 1 prefix row + (optional decimals row) + (optional graph row) + 1 back row
+        int rows = statSettingsPanelRows(statSettingsStat);
         int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
@@ -440,6 +469,18 @@ public class MtssGuiScreen extends Screen {
             nextRow++;
         }
 
+        // Render-as-graph toggle (only for graphable stats: TPS, MSPT, FPS, CPU, Ping, Memory, Speed)
+        if (graphRow) {
+            int ryGraph = py + PANEL_PAD + ROW_H * nextRow;
+            if (isHoveringRow(mx, my, px, ryGraph, PANEL_W, ROW_H))
+                g.fill(px + 1, ryGraph, px + PANEL_W - 1, ryGraph + ROW_H, 0x44FFFFFF);
+            String graphToggle = I18n.get("gui.mtss.stat_settings.render_as_graph")
+                    + (ss.renderAsGraph ? " §a" + I18n.get("gui.mtss.menu.on")
+                                        : " §c" + I18n.get("gui.mtss.menu.off"));
+            g.text(font, "§f" + graphToggle, px + PANEL_PAD, ryGraph + 2, 0xFFFFFFFF, false);
+            nextRow++;
+        }
+
         // Back button
         int ryBack = py + PANEL_PAD + ROW_H * nextRow;
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
@@ -453,8 +494,9 @@ public class MtssGuiScreen extends Screen {
         if (statSettingsStat == null) return;
         MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
         boolean decimalsRow = supportsDecimals(statSettingsStat);
+        boolean graphRow    = supportsGraph(statSettingsStat);
 
-        int rows = decimalsRow ? 4 : 3;
+        int rows = statSettingsPanelRows(statSettingsStat);
         int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
@@ -476,6 +518,16 @@ public class MtssGuiScreen extends Screen {
                 return;
             } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.min(4, ss.decimals + 1);
+                MtssConfig.getInstance().save();
+                return;
+            }
+            nextRow++;
+        }
+
+        if (graphRow) {
+            int ryGraph = py + PANEL_PAD + ROW_H * nextRow;
+            if (isHoveringRow(mx, my, px, ryGraph, PANEL_W, ROW_H)) {
+                ss.renderAsGraph = !ss.renderAsGraph;
                 MtssConfig.getInstance().save();
                 return;
             }
@@ -758,7 +810,7 @@ public class MtssGuiScreen extends Screen {
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
     private boolean isInsideStatSettingsPanel(int mx, int my) {
-        int rows = (statSettingsStat != null && supportsDecimals(statSettingsStat)) ? 4 : 3;
+        int rows = (statSettingsStat != null) ? statSettingsPanelRows(statSettingsStat) : 3;
         int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
@@ -821,12 +873,17 @@ public class MtssGuiScreen extends Screen {
     private int[] getListBounds(MtssConfig.StatListConfig lc) {
         var font = this.font;
         MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
-        List<String> lines = cache.lines().isEmpty()
-                ? List.of(I18n.get("gui.mtss.no_stats")) : cache.lines();
         int lineH = font.lineHeight + 1;
-        int maxW  = lines.stream().mapToInt(font::width).max().orElse(60);
-        int boxW  = maxW + 4;
-        int boxH  = lineH * lines.size() + 3;
+        int boxW, boxH;
+        if (cache.rowKinds().isEmpty()) {
+            // Mirrors drawList's empty-placeholder sizing.
+            String placeholder = I18n.get("gui.mtss.no_stats");
+            boxW = font.width(placeholder) + 4;
+            boxH = lineH + 3;
+        } else {
+            boxW = cache.boxW(font);
+            boxH = cache.boxH(font);
+        }
         int[] pos = MtssRenderer.getPosition(lc, width, height, boxW, boxH);
         return new int[]{ pos[0], pos[1], boxW, boxH };
     }

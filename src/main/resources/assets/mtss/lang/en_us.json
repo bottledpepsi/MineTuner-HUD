@@ -59,5 +59,6 @@
   "gui.mtss.stat_settings.title": "Settings: %s",
   "gui.mtss.stat_settings.back": "\u25c0  Back",
   "gui.mtss.stat_settings.show_prefix": "Show Prefix",
-  "gui.mtss.stat_settings.decimals": "Decimals: %s"
+  "gui.mtss.stat_settings.decimals": "Decimals: %s",
+  "gui.mtss.stat_settings.render_as_graph": "Render as Graph"
 }

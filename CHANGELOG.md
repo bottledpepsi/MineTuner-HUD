@@ -2,6 +2,31 @@
 
 All notable changes to MineTuner Statistics Server are documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Rolling history graphs** for TPS, MSPT, FPS, CPU, Ping, Memory, and Speed.
+  Each of these stats now has a `renderAsGraph` setting that swaps its text
+  line for an 80×28px rolling graph, sourced from a 128-sample ring buffer
+  fed once per frame. Memory graphs heap-used as a percentage of heap-max
+  (the same basis its threshold coloring already used), so the graph is
+  legible without tracking a separately-changing max alongside it. The graph
+  is colored by the stat's existing threshold-color function and normalizes
+  against the min/max of its own visible window. Old configs without the
+  field continue to load and render as text, unchanged.
+- **Graph redesign:** each graph now frames its plot area with a border and
+  a faint 50%-mark reference line, overlays the current formatted value
+  (same text, same decimals/prefix settings, as text mode would show) in
+  the top-left corner, and labels the visible window's min/max in the
+  bottom corners — so the shape of the graph is no longer the only
+  information on screen. The box automatically widens if a stat's label
+  (e.g. "Mem: 8192/16384MB") needs more room than the graph's base width.
+- **Render as Graph** toggle in each graphable stat's settings panel (⚙ →
+  same panel as Show Prefix / Decimals), so the rolling graph can be turned
+  on or off per-stat without editing `mtss.json` by hand. Only shown for
+  the seven graphable stats above — other stats' settings panels are
+  unchanged.
+
 ## [1.1.0] - Unreleased
 
 ### Changed

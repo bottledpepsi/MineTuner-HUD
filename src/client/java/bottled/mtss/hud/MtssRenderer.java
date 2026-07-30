@@ -17,12 +17,34 @@ public class MtssRenderer {
     // buildLines is called both here (render) and in the GUI (drawList + getListBounds).
     // The cache avoids redundant string building within the same frame.
 
-    public record LineCache(List<String> lines, List<Integer> colors) {
+    /** One row that renders as a rolling graph instead of text. */
+    public record GraphEntry(MtssConfig.Stat stat, float[] history, int color,
+                             String label, float min, float max) {}
+
+    /** Which underlying list a given display row pulls from. */
+    public enum RowKind { TEXT, GRAPH }
+
+    public static final int GRAPH_W = 80;
+    public static final int GRAPH_H = 28;
+
+    public record LineCache(List<String> lines, List<Integer> colors,
+                            List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
+
         public int boxW(net.minecraft.client.gui.Font font) {
-            return lines.stream().mapToInt(font::width).max().orElse(0) + 4;
+            int textW = lines.stream().mapToInt(font::width).max().orElse(0);
+            int graphW = graphEntries.isEmpty() ? 0 : graphEntries.stream()
+                    .mapToInt(e -> Math.max(GRAPH_W, font.width(e.label()) + 4))
+                    .max().orElse(GRAPH_W);
+            return Math.max(textW, graphW) + 4;
         }
+
         public int boxH(net.minecraft.client.gui.Font font) {
-            return (font.lineHeight + 1) * lines.size() + 3;
+            int lineH = font.lineHeight + 1;
+            int h = 3;
+            for (RowKind k : rowKinds) {
+                h += (k == RowKind.GRAPH) ? (GRAPH_H + 1) : lineH;
+            }
+            return h;
         }
     }
 
@@ -46,10 +68,12 @@ public class MtssRenderer {
     /** Returns cached lines for this list, building them if needed this frame. */
     public static LineCache getCachedLines(MtssConfig.StatListConfig cfg) {
         return FRAME_CACHE.computeIfAbsent(cfg.id, id -> {
-            List<String>  lines  = new ArrayList<>();
-            List<Integer> colors = new ArrayList<>();
-            buildLines(cfg, lines, colors);
-            return new LineCache(lines, colors);
+            List<String>     lines        = new ArrayList<>();
+            List<Integer>    colors       = new ArrayList<>();
+            List<GraphEntry> graphEntries = new ArrayList<>();
+            List<RowKind>    rowKinds     = new ArrayList<>();
+            buildLines(cfg, lines, colors, graphEntries, rowKinds);
+            return new LineCache(lines, colors, graphEntries, rowKinds);
         });
     }
 
@@ -87,8 +111,81 @@ public class MtssRenderer {
     // ── Line building ─────────────────────────────────────────────────────────
 
     public static void buildLines(MtssConfig.StatListConfig cfg,
-                                  List<String> lines, List<Integer> colors) {
+                                  List<String> lines, List<Integer> colors,
+                                  List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
+            // Graph mode only applies to the graphable stats; getStatSettings()
+            // lazily creates settings for any stat, so this is safe even for
+            // stats that have never had a settings entry written to disk.
+            boolean asGraph = MtssConfig.GRAPHABLE_STATS.contains(stat)
+                    && cfg.getStatSettings(stat).renderAsGraph;
+
+            if (asGraph) {
+                int decimals = cfg.getStatSettings(stat).decimals;
+                float[] history = switch (stat) {
+                    case TPS   -> MtssDataHolder.getTpsHistory();
+                    case MSPT  -> MtssDataHolder.getMsptHistory();
+                    case FPS   -> MtssDataHolder.getFpsHistory();
+                    case CPU   -> MtssDataHolder.getCpuHistory();
+                    case PING  -> MtssDataHolder.getPingHistory();
+                    case MEMORY-> MtssDataHolder.getMemHistory();
+                    case SPEED -> MtssDataHolder.getSpeedHistory();
+                    default    -> new float[0]; // unreachable — guarded by GRAPHABLE_STATS above
+                };
+                // Skip entirely if there's nothing to draw yet (e.g. CPU unsupported,
+                // or MSPT/Ping/Memory never sampled because remote-server/disconnected/
+                // heap-not-yet-read) — matches the text-mode behavior of skipping
+                // empty/unavailable stats.
+                if (history.length == 0) continue;
+
+                int color = switch (stat) {
+                    case TPS   -> MtssDataHolder.getTpsColor();
+                    case MSPT  -> MtssDataHolder.getTpsColor(); // MSPT has no dedicated color helper; TPS's threshold covers the same underlying tick-time signal
+                    case FPS   -> MtssDataHolder.getFpsColor();
+                    case CPU   -> MtssDataHolder.getCpuColor();
+                    case PING  -> MtssDataHolder.getPingColor();
+                    case MEMORY-> MtssDataHolder.getMemColor();
+                    case SPEED -> MtssDataHolder.getSpeedColor();
+                    default    -> 0xFFFFFFFF;
+                };
+                if (cfg.useCustomColor) color = cfg.overrideColor;
+
+                // Current-value label uses the same formatted string (and the
+                // same decimals/showPrefix settings) as text mode would, so
+                // switching a stat between text and graph doesn't change how
+                // its number reads — just how it's presented. Memory graphs
+                // the used/max percentage (see MtssDataHolder), but the label
+                // still shows the familiar "Mem: used/maxMB" text so the
+                // actual megabyte figures aren't lost.
+                String label = switch (stat) {
+                    case TPS   -> MtssDataHolder.getFormattedTps(decimals);
+                    case MSPT  -> MtssDataHolder.getFormattedMspt(decimals);
+                    case FPS   -> MtssDataHolder.getFormattedFps();
+                    case PING  -> MtssDataHolder.getFormattedPing();
+                    case CPU   -> MtssDataHolder.getFormattedCpu(decimals);
+                    case MEMORY-> MtssDataHolder.getFormattedMem();
+                    case SPEED -> MtssDataHolder.getFormattedSpeed(decimals);
+                    default    -> "";
+                };
+                if (!cfg.getStatSettings(stat).showPrefix) {
+                    int sep = label.indexOf(": ");
+                    if (sep >= 0) label = label.substring(sep + 2);
+                }
+                // MSPT (and, transitively here, nothing else) can go back to
+                // unavailable mid-session — e.g. leaving a singleplayer world
+                // — while its history buffer still holds old samples. Rather
+                // than overlay a blank label, fall back to the current
+                // (possibly stale) numeric value so something is always shown.
+                if (label.isEmpty()) label = history[history.length - 1] + "";
+
+                float min = Float.MAX_VALUE, max = -Float.MAX_VALUE;
+                for (float v : history) { if (v < min) min = v; if (v > max) max = v; }
+
+                graphEntries.add(new GraphEntry(stat, history, color, label, min, max));
+                rowKinds.add(RowKind.GRAPH);
+                continue;
+            }
+
             String text  = null;
             int    color = 0xFFFFFFFF;
             int    decimals = cfg.getStatSettings(stat).decimals;
@@ -120,6 +217,7 @@ public class MtssRenderer {
             if (cfg.useCustomColor) color = cfg.overrideColor;
             lines.add(text);
             colors.add(color);
+            rowKinds.add(RowKind.TEXT);
         }
     }
 
@@ -196,14 +294,11 @@ public class MtssRenderer {
 
         for (MtssConfig.StatListConfig listCfg : root.lists) {
             LineCache cache = getCachedLines(listCfg);
-            List<String>  lines  = cache.lines();
-            List<Integer> colors = cache.colors();
-            if (lines.isEmpty()) continue;
+            if (cache.rowKinds().isEmpty()) continue;
 
             float scale = listCfg.textScale <= 0f ? 1f : listCfg.textScale;
             int unscaledW = cache.boxW(font);
             int unscaledH = cache.boxH(font);
-            int lineH = font.lineHeight + 1;
 
             // Position math happens in screen-pixel space, so use the scaled box size
             // for layout — otherwise a scaled-up list could overlap the screen edge or
@@ -220,9 +315,7 @@ public class MtssRenderer {
             boolean shadow = listCfg.textShadow;
 
             if (scale == 1f) {
-                for (int i = 0; i < lines.size(); i++) {
-                    graphics.text(font, lines.get(i), x + 2, y + 2 + i * lineH, colors.get(i), shadow);
-                }
+                drawRows(graphics, font, cache, x + 2, y + 2, shadow);
             } else {
                 // Scale around the box's top-left corner: translate to (x, y) in screen space,
                 // scale, then draw at the unscaled local offsets.
@@ -230,11 +323,127 @@ public class MtssRenderer {
                 matrices.pushMatrix();
                 matrices.translate(x, y);
                 matrices.scale(scale, scale);
-                for (int i = 0; i < lines.size(); i++) {
-                    graphics.text(font, lines.get(i), 2, 2 + i * lineH, colors.get(i), shadow);
-                }
+                drawRows(graphics, font, cache, 0, 0, shadow);
                 matrices.popMatrix();
             }
         }
+    }
+
+    /**
+     * Draws every row (text line or graph) in a list's cache, in original
+     * statOrder order, starting at local offset (baseX, baseY) — which is
+     * either the final screen position (unscaled path) or (0,0) inside an
+     * already-translated+scaled matrix (scaled path).
+     * <p>
+     * Public so {@code MtssGuiScreen.drawList} can reuse the exact same
+     * row-drawing logic (text + graph interleaving) for the editor preview,
+     * instead of re-implementing it against a hand-rolled lines-only loop.
+     */
+    public static void drawRows(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
+                                 LineCache cache, int baseX, int baseY, boolean shadow) {
+        int lineH = font.lineHeight + 1;
+        // Graphs stretch to the box's actual content width (which may be wider
+        // than GRAPH_W if a label like "Mem: 8192/16384MB" needed the extra
+        // room) rather than staying fixed-width and leaving dead space.
+        int contentW = cache.boxW(font) - 4;
+        int textIdx = 0, graphIdx = 0;
+        int cursorY = baseY;
+        for (RowKind kind : cache.rowKinds()) {
+            if (kind == RowKind.TEXT) {
+                graphics.text(font, cache.lines().get(textIdx), baseX, cursorY,
+                        cache.colors().get(textIdx), shadow);
+                textIdx++;
+                cursorY += lineH;
+            } else {
+                drawGraph(graphics, font, cache.graphEntries().get(graphIdx), baseX, cursorY, contentW);
+                graphIdx++;
+                cursorY += GRAPH_H + 1;
+            }
+        }
+    }
+
+    /**
+     * Renders a single rolling history graph as a filled area chart, using only
+     * GuiGraphicsExtractor.fill(...)/text(...) — no new rendering dependency.
+     * Values are normalized against the min/max of the visible history so the
+     * graph is always legible regardless of the stat's absolute scale (e.g.
+     * TPS 0-20 vs Ping 0-300ms). A flat/near-flat history still renders a thin
+     * baseline strip rather than collapsing to nothing.
+     * <p>
+     * Design: a 1px border frames the plot area so it doesn't blend into the
+     * list's background; a horizontal dotted midline marks the 50% level as a
+     * visual reference; the current formatted value is overlaid top-left, and
+     * the window's min/max are overlaid bottom-left/bottom-right in a dim
+     * gray so the numbers that gave the shape meaning aren't left implicit.
+     */
+    private static void drawGraph(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
+                                  GraphEntry entry, int x, int y, int w) {
+        float[] history = entry.history();
+        int color = entry.color();
+
+        // Background + border so the plot area reads as a distinct widget
+        // rather than a loose cluster of bars floating on the list background.
+        graphics.fill(x, y, x + w, y + GRAPH_H, 0x30FFFFFF);
+        graphics.outline(x, y, w, GRAPH_H, 0x60FFFFFF);
+
+        // Dotted midline at the 50% mark — a fixed visual reference so two
+        // glances at the graph can tell "trending up" from "trending down"
+        // without having to read the numbers first.
+        int midY = y + GRAPH_H / 2;
+        for (int dx = 1; dx < w - 1; dx += 3) {
+            graphics.fill(x + dx, midY, x + dx + 1, midY + 1, 0x30FFFFFF);
+        }
+
+        if (history.length >= 2) {
+            float min = entry.min(), max = entry.max();
+            float range = max - min;
+            boolean flat = range < 1e-4f;
+            int n = history.length;
+            int plotW = w - 2; // inset 1px on each side to stay inside the border
+            for (int col = 0; col < plotW; col++) {
+                // Sample index this column represents, spread evenly across history.
+                int sampleIdx = (int) ((long) col * (n - 1) / Math.max(1, plotW - 1));
+                float v = history[sampleIdx];
+                float norm = flat ? 0.5f : (v - min) / range; // 0..1
+                int barH = Math.max(1, Math.round(norm * (GRAPH_H - 3)));
+                int colX = x + 1 + col;
+                int barTop = y + GRAPH_H - 1 - barH;
+                graphics.fill(colX, barTop, colX + 1, y + GRAPH_H - 1, color);
+            }
+        }
+
+        // Current-value label, top-left, with a translucent backing strip so
+        // it stays legible over bars of the same brightness.
+        String label = entry.label();
+        if (!label.isEmpty()) {
+            int labelW = font.width(label);
+            graphics.fill(x + 1, y + 1, x + 1 + labelW + 2, y + 1 + font.lineHeight, 0x80000000);
+            graphics.text(font, label, x + 2, y + 1, color, false);
+        }
+
+        // Min/max of the visible window, bottom corners, dim so they read as
+        // axis labels rather than competing with the current-value label.
+        if (history.length >= 2) {
+            String minLabel = formatAxisValue(entry.stat(), entry.min());
+            String maxLabel = formatAxisValue(entry.stat(), entry.max());
+            int axisY = y + GRAPH_H - font.lineHeight;
+            graphics.text(font, minLabel, x + 2, axisY, 0xB0CCCCCC, false);
+            int maxW = font.width(maxLabel);
+            graphics.text(font, maxLabel, x + w - maxW - 2, axisY, 0xB0CCCCCC, false);
+        }
+    }
+
+    /**
+     * Compact numeric-only formatting for the graph's min/max axis labels —
+     * deliberately not the full "Label: value unit" string (that's what the
+     * current-value overlay is for); just enough precision to read the
+     * window's range at a glance.
+     */
+    private static String formatAxisValue(MtssConfig.Stat stat, float value) {
+        return switch (stat) {
+            case TPS, MSPT, CPU, SPEED -> String.format("%.1f", value);
+            case MEMORY -> Math.round(value) + "%";
+            default -> Integer.toString(Math.round(value)); // FPS, Ping — whole units
+        };
     }
 }
