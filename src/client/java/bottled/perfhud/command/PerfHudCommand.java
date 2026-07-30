@@ -14,7 +14,7 @@ public class PerfHudCommand {
             // /perfhud gui — open the GUI
             .then(literal("gui").executes(ctx -> {
                 Minecraft.getInstance().schedule(() ->
-                        Minecraft.getInstance().setScreen(new PerfHudGuiScreen()));
+                        Minecraft.getInstance().gui.setScreen(new PerfHudGuiScreen()));
                 return 1;
             }))
         );

@@ -8,3 +8,10 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+plugins {
+	// Lets Gradle auto-download a JDK 25 toolchain (see build.gradle) if one
+	// isn't already installed locally — fixes "release version 25 not supported"
+	// when Gradle is launched from an older JDK (e.g. via an IDE's Java extension).
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}

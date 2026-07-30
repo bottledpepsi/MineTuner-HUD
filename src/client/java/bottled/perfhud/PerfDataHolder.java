@@ -26,6 +26,11 @@ public final class PerfDataHolder {
     public static double playerZ    = 0;
     public static String facingName = "S";
     public static float  speedBps   = 0;
+    public static int    lightLevel = 0;
+
+    // ── World ─────────────────────────────────────────────────────────────────
+    public static String biomeName     = "";
+    public static String dimensionName = "";
 
     // ── System (throttled) ────────────────────────────────────────────────────
     public static long   memUsedMb  = 0;
@@ -58,6 +63,9 @@ public final class PerfDataHolder {
         if (now - lastSlowUpdateMs < SLOW_MS) return;
         lastSlowUpdateMs = now;
 
+        // com.sun.management.OperatingSystemMXBean is a HotSpot/OpenJDK-specific internal API.
+        // On other JVM vendors this instanceof check simply fails and cpuPercent stays -1,
+        // which getFormattedCpu() reports as "N/A" — no crash, just reduced functionality.
         if (OS_BEAN instanceof com.sun.management.OperatingSystemMXBean sun) {
             double raw = sun.getProcessCpuLoad();
             cpuPercent = raw >= 0 ? raw * 100.0 : -1.0;
@@ -119,22 +127,39 @@ public final class PerfDataHolder {
         return net.minecraft.client.resources.language.I18n.get(key, args);
     }
 
-    public static String getFormattedTps()  { return t("perfhud.stat.tps",  String.format("%.1f", getTps())); }
+    private static String fmt(double value, int decimals) {
+        return String.format("%." + Math.max(0, Math.min(6, decimals)) + "f", value);
+    }
+
+    public static String getFormattedTps()               { return getFormattedTps(1); }
+    public static String getFormattedTps(int decimals)    { return t("perfhud.stat.tps",  fmt(getTps(), decimals)); }
 
     /** Returns empty string on remote servers — caller skips the line. */
-    public static String getFormattedMspt() {
-        return mspt >= 0f ? t("perfhud.stat.mspt", String.format("%.1f", mspt)) : "";
+    public static String getFormattedMspt()               { return getFormattedMspt(1); }
+    public static String getFormattedMspt(int decimals) {
+        return mspt >= 0f ? t("perfhud.stat.mspt", fmt(mspt, decimals)) : "";
     }
 
     public static String getFormattedFps()      { return t("perfhud.stat.fps",      fps); }
     public static String getFormattedPing()     { return ping >= 0 ? t("perfhud.stat.ping", ping) : t("perfhud.stat.ping.na"); }
     public static String getFormattedMem()      { return t("perfhud.stat.memory",   memUsedMb, memMaxMb); }
-    public static String getFormattedCpu()      { return cpuPercent >= 0 ? t("perfhud.stat.cpu", String.format("%.1f", cpuPercent)) : t("perfhud.stat.cpu.na"); }
+
+    public static String getFormattedCpu()             { return getFormattedCpu(1); }
+    public static String getFormattedCpu(int decimals) {
+        return cpuPercent >= 0 ? t("perfhud.stat.cpu", fmt(cpuPercent, decimals)) : t("perfhud.stat.cpu.na");
+    }
+
     public static String getFormattedEntities() { return t("perfhud.stat.entities", entityCount); }
     public static String getFormattedChunks()   { return t("perfhud.stat.chunks",   loadedChunks); }
     public static String getFormattedRendered() { return t("perfhud.stat.rendered", renderedSections); }
     public static String getFormattedCoords()   { return t("perfhud.stat.coords",   (int) Math.floor(playerX), (int) Math.floor(playerY), (int) Math.floor(playerZ)); }
     public static String getFormattedFacing()   { return t("perfhud.stat.facing",   facingName); }
-    public static String getFormattedSpeed()    { return t("perfhud.stat.speed",    String.format("%.2f", speedBps)); }
+
+    public static String getFormattedSpeed()             { return getFormattedSpeed(2); }
+    public static String getFormattedSpeed(int decimals) { return t("perfhud.stat.speed", fmt(speedBps, decimals)); }
+
     public static String getFormattedGcTime()   { return t("perfhud.stat.gc",       gcTimeMs); }
+    public static String getFormattedBiome()    { return t("perfhud.stat.biome",    biomeName.isEmpty() ? "?" : biomeName); }
+    public static String getFormattedLight()    { return t("perfhud.stat.light",    lightLevel); }
+    public static String getFormattedDimension(){ return t("perfhud.stat.dimension", dimensionName.isEmpty() ? "?" : dimensionName); }
 }

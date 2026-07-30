@@ -14,7 +14,7 @@ You decide what stats appear, where they appear, and how many separate stat pane
 
 ## Stats
 
-PerfHUD tracks **13 metrics** across server, client, player, and system categories:
+PerfHUD tracks **16 metrics** across server, client, player, and system categories:
 
 | Stat | Description | Notes |
 |---|---|---|
@@ -23,7 +23,7 @@ PerfHUD tracks **13 metrics** across server, client, player, and system categori
 | **FPS** | Client frames per second | Color-coded: ≥60 green, ≥30 yellow, <30 red. |
 | **Ping** | Round-trip latency in ms | Color-coded: ≤80ms green, ≤150ms yellow, >150ms red. |
 | **Memory** | JVM heap usage (used / max MB) | Color-coded by heap fill percentage. |
-| **CPU** | JVM process CPU load % | Polled every 500ms via `OperatingSystemMXBean`. |
+| **CPU** | JVM process CPU load % | Polled every 500ms via `OperatingSystemMXBean`. HotSpot/OpenJDK only — shows "N/A" on other JVM vendors. |
 | **Entities** | Loaded entity count in your dimension | — |
 | **Chunks** | Loaded chunk count | — |
 | **Rendered Sections** | Number of chunk sections in the render pass | Pulled directly from `LevelRenderer`. |
@@ -31,6 +31,11 @@ PerfHUD tracks **13 metrics** across server, client, player, and system categori
 | **Facing** | Cardinal + intercardinal direction | Full 8-way: N, NE, E, SE, S, SW, W, NW. |
 | **Speed** | Horizontal movement speed in blocks/second | Calculated from `deltaMovement` × 20 ticks/s. |
 | **GC Time** | Cumulative JVM garbage collection time in ms | Sums all GC beans via `GarbageCollectorMXBean`. |
+| **Biome** | Biome at your current position | — |
+| **Light Level** | Local light level at your block position | — |
+| **Dimension** | Current dimension ID | e.g. `overworld`, `the_nether`, `the_end`. |
+
+Stats that render a number (**TPS, MSPT, CPU, Speed**) support a configurable decimal-places setting, adjustable per-list via each stat's settings panel (⚙).
 
 ---
 
@@ -48,14 +53,19 @@ While dragging, lists snap to the vertical and horizontal centre lines of your s
 ### Per-list stat control
 Right-click any list in the editor to open its context menu:
 - **Reorder / Toggle** — enable or disable individual stats, and move them up/down within the list
-- **Per-stat settings** — toggle the label prefix (e.g. hide "TPS: " and show just the value)
+- **Per-stat settings** — toggle the label prefix (e.g. hide "TPS: " and show just the value), and for numeric stats (TPS, MSPT, CPU, Speed) set the number of decimal places
 - **Rename** — give each list a custom name
 - **Background** — toggle the semi-transparent dark background per list
 - **Text Shadow** — toggle text shadow per list
+- **Color / Scale** — override the normal color-coding with a custom color, and scale the list's text from 0.5x to 2.0x
+- **Duplicate** — clone a list (including all its stats and settings) as a starting point for a variant layout
 - **Delete** — remove the list entirely
 
 ### Right-click to create
 Right-click on any empty area of the editor screen to instantly create a new stat list at that location.
+
+### Keybind to open the editor
+In addition to `/perfhud gui`, a keybind (default: **H**) opens the editor directly — rebindable in **Options → Controls → Key Binds → PerfHUD**.
 
 ### Color-coded values
 TPS, FPS, Ping, Memory, CPU, and Speed all render in context-aware colors (green / yellow / red) based on thresholds — you can tell at a glance whether something's wrong without reading the number.
@@ -87,13 +97,13 @@ All stat string building is cached per-frame in a generation-keyed `HashMap`. Th
 ## Usage
 
 ### Opening the editor
-Run the command `/perfhud gui` in chat.
+Run the command `/perfhud gui` in chat, or press the **PerfHUD** keybind (default: **H**, rebindable in Controls).
 
 ### Controls in the editor
 | Action | Result |
 |---|---|
 | **Left-click + drag** | Move a stat list |
-| **Right-click on a list** | Open context menu (configure, rename, delete) |
+| **Right-click on a list** | Open context menu (configure, rename, color/scale, duplicate, delete) |
 | **Right-click on empty space** | Create a new list at that position |
 | **Escape** | Close the editor and save |
 
@@ -101,8 +111,14 @@ Run the command `/perfhud gui` in chat.
 Inside a list's context menu, click **Reorder / Toggle stats** to open the stat panel for that list:
 - Click a stat row to **toggle it on or off**
 - Click **▲ / ▼** to move a stat up or down in the display order
-- Click **⚙** to open per-stat settings (currently: show/hide the label prefix)
+- Click **⚙** to open per-stat settings — show/hide the label prefix, and for numeric stats (TPS, MSPT, CPU, Speed) adjust decimal places with **- / +**
 - Click **✕ Close** to return to the context menu
+
+### Color / Scale panel
+Inside a list's context menu, click **Color / Scale...** to:
+- Toggle **Use Custom Color** to override the normal threshold-based coloring
+- Click **Cycle Color** to step through a curated color palette
+- Use **- / +** to adjust the list's text scale between 0.5x and 2.0x
 
 ### Config file
 Settings are saved automatically to `.minecraft/config/perfhud.json`. You can inspect or back up this file, but there's no need to edit it manually — the in-game GUI covers everything.

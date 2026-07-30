@@ -44,7 +44,8 @@ public class PerfHudConfig {
     public enum Stat {
         TPS, MSPT, FPS, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
-        COORDS, FACING, SPEED, GC_TIME
+        COORDS, FACING, SPEED, GC_TIME,
+        BIOME, LIGHT_LEVEL, DIMENSION
     }
 
     // ── Root config ───────────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ public class PerfHudConfig {
     public static class StatSettings {
         /** Whether to show the label prefix (e.g. "TPS: ") before the value. */
         public boolean showPrefix = true;
+        /** Decimal places for numeric stats that support it (TPS, MSPT, CPU, Speed). Ignored otherwise. */
+        public int decimals = 1;
     }
 
     // ── Per-list config ───────────────────────────────────────────────────────
@@ -79,6 +82,12 @@ public class PerfHudConfig {
         // Appearance
         public boolean showBackground = true;
         public boolean textShadow     = false;
+        /** When true, overrideColor replaces each stat's normal/threshold color. */
+        public boolean useCustomColor = false;
+        /** ARGB color used when useCustomColor is true. Defaults to opaque white. */
+        public int     overrideColor  = 0xFFFFFFFF;
+        /** Text scale multiplier for this list, 0.5–2.0. */
+        public float   textScale      = 1.0f;
 
         // Snap
         public SnapX snapX = SnapX.NONE;
@@ -145,6 +154,33 @@ public class PerfHudConfig {
         public String displayName() {
             return (name == null || name.isBlank()) ? "List " + id : name;
         }
+
+        /** Deep-copies this list's settings into a brand-new list with the given id, offset slightly. */
+        public StatListConfig duplicate(int newId) {
+            StatListConfig copy = new StatListConfig(newId);
+            copy.name           = displayName() + " (copy)";
+            copy.statEnabled    = new LinkedHashMap<>(this.statEnabled);
+            copy.statOrder      = new ArrayList<>(this.statOrder);
+            copy.statSettings   = new LinkedHashMap<>();
+            for (Map.Entry<String, StatSettings> e : this.statSettings.entrySet()) {
+                StatSettings src = e.getValue();
+                StatSettings dst = new StatSettings();
+                dst.showPrefix = src.showPrefix;
+                dst.decimals   = src.decimals;
+                copy.statSettings.put(e.getKey(), dst);
+            }
+            copy.anchorCorner   = this.anchorCorner;
+            copy.anchorDx       = this.anchorDx + 12;
+            copy.anchorDy       = this.anchorDy + 12;
+            copy.showBackground = this.showBackground;
+            copy.textShadow     = this.textShadow;
+            copy.useCustomColor = this.useCustomColor;
+            copy.overrideColor  = this.overrideColor;
+            copy.textScale      = this.textScale;
+            copy.snapX          = this.snapX;
+            copy.snapY          = this.snapY;
+            return copy;
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -159,6 +195,18 @@ public class PerfHudConfig {
 
     public void removeList(int id) {
         lists.removeIf(l -> l.id == id);
+    }
+
+    /** Duplicates the given list (by id) and appends the copy. Returns the new list, or null if not found. */
+    public StatListConfig duplicateList(int id) {
+        for (StatListConfig lc : lists) {
+            if (lc.id == id) {
+                StatListConfig copy = lc.duplicate(nextId++);
+                lists.add(copy);
+                return copy;
+            }
+        }
+        return null;
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────

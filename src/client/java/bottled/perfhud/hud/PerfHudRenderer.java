@@ -91,20 +91,24 @@ public class PerfHudRenderer {
         for (PerfHudConfig.Stat stat : cfg.getVisibleStats()) {
             String text  = null;
             int    color = 0xFFFFFFFF;
+            int    decimals = cfg.getStatSettings(stat).decimals;
             switch (stat) {
-                case TPS   -> { text = PerfDataHolder.getFormattedTps();      color = PerfDataHolder.getTpsColor(); }
-                case MSPT  -> { text = PerfDataHolder.getFormattedMspt(); /* empty on remote servers */ }
+                case TPS   -> { text = PerfDataHolder.getFormattedTps(decimals);   color = PerfDataHolder.getTpsColor(); }
+                case MSPT  -> { text = PerfDataHolder.getFormattedMspt(decimals); /* empty on remote servers */ }
                 case FPS   -> { text = PerfDataHolder.getFormattedFps();      color = PerfDataHolder.getFpsColor(); }
                 case PING  -> { text = PerfDataHolder.getFormattedPing();     color = PerfDataHolder.getPingColor(); }
                 case MEMORY-> { text = PerfDataHolder.getFormattedMem();      color = PerfDataHolder.getMemColor(); }
-                case CPU   -> { text = PerfDataHolder.getFormattedCpu();      color = PerfDataHolder.getCpuColor(); }
+                case CPU   -> { text = PerfDataHolder.getFormattedCpu(decimals);   color = PerfDataHolder.getCpuColor(); }
                 case ENTITIES         -> { text = PerfDataHolder.getFormattedEntities(); }
                 case CHUNKS           -> { text = PerfDataHolder.getFormattedChunks(); }
                 case RENDERED_SECTIONS-> { text = PerfDataHolder.getFormattedRendered(); }
                 case COORDS           -> { text = PerfDataHolder.getFormattedCoords(); }
                 case FACING           -> { text = PerfDataHolder.getFormattedFacing(); }
-                case SPEED            -> { text = PerfDataHolder.getFormattedSpeed();   color = PerfDataHolder.getSpeedColor(); }
+                case SPEED            -> { text = PerfDataHolder.getFormattedSpeed(decimals); color = PerfDataHolder.getSpeedColor(); }
                 case GC_TIME          -> { text = PerfDataHolder.getFormattedGcTime(); }
+                case BIOME            -> { text = PerfDataHolder.getFormattedBiome(); }
+                case LIGHT_LEVEL      -> { text = PerfDataHolder.getFormattedLight(); }
+                case DIMENSION        -> { text = PerfDataHolder.getFormattedDimension(); }
             }
             if (text == null || text.isEmpty()) continue;
             // Strip prefix ("Label: ") when showPrefix is disabled for this stat
@@ -112,6 +116,8 @@ public class PerfHudRenderer {
                 int sep = text.indexOf(": ");
                 if (sep >= 0) text = text.substring(sep + 2);
             }
+            // Per-list color override replaces threshold coloring entirely
+            if (cfg.useCustomColor) color = cfg.overrideColor;
             lines.add(text);
             colors.add(color);
         }
@@ -124,7 +130,7 @@ public class PerfHudRenderer {
 
         if (mc.getDebugOverlay().showDebugScreen()) return;
         if (mc.getConnection() == null) return;
-        if (mc.screen instanceof bottled.perfhud.gui.PerfHudGuiScreen) return;
+        if (mc.gui.screen() instanceof bottled.perfhud.gui.PerfHudGuiScreen) return;
 
         // Advance frame cache so getCachedLines() is fresh this frame
         tickCache();
@@ -147,11 +153,20 @@ public class PerfHudRenderer {
         if (mc.level != null) {
             PerfDataHolder.entityCount  = mc.level.getEntityCount();
             PerfDataHolder.loadedChunks = mc.level.getChunkSource().getLoadedChunksCount();
+            PerfDataHolder.dimensionName = mc.level.dimension().identifier().getPath();
         }
         if (mc.player != null) {
             PerfDataHolder.playerX = mc.player.getX();
             PerfDataHolder.playerY = mc.player.getY();
             PerfDataHolder.playerZ = mc.player.getZ();
+            if (mc.level != null) {
+                net.minecraft.core.BlockPos pos = mc.player.blockPosition();
+                PerfDataHolder.lightLevel = mc.level.getMaxLocalRawBrightness(pos);
+                var biomeHolder = mc.level.getBiome(pos);
+                PerfDataHolder.biomeName = biomeHolder.unwrapKey()
+                        .map(key -> key.identifier().getPath())
+                        .orElse("?");
+            }
             // Direction enum: NORTH/SOUTH/EAST/WEST + intercardinals from yaw
             float yaw = ((mc.player.getYRot() % 360) + 360) % 360;
             if      (yaw <  22.5f)  PerfDataHolder.facingName = "S";
@@ -169,7 +184,7 @@ public class PerfHudRenderer {
             PerfDataHolder.speedBps = (float)(Math.sqrt(dx * dx + dz * dz) * 20.0);
         }
         if (mc.levelRenderer != null) {
-            PerfDataHolder.renderedSections = mc.levelRenderer.countRenderedSections();
+            PerfDataHolder.renderedSections = mc.levelExtractor.countRenderedSections();
         }
 
         PerfDataHolder.updateFastMetrics();
@@ -185,9 +200,16 @@ public class PerfHudRenderer {
             List<Integer> colors = cache.colors();
             if (lines.isEmpty()) continue;
 
-            int boxW = cache.boxW(font);
-            int boxH = cache.boxH(font);
+            float scale = listCfg.textScale <= 0f ? 1f : listCfg.textScale;
+            int unscaledW = cache.boxW(font);
+            int unscaledH = cache.boxH(font);
             int lineH = font.lineHeight + 1;
+
+            // Position math happens in screen-pixel space, so use the scaled box size
+            // for layout — otherwise a scaled-up list could overlap the screen edge or
+            // other lists at its anchor point.
+            int boxW = Math.round(unscaledW * scale);
+            int boxH = Math.round(unscaledH * scale);
 
             int[] pos = getPosition(listCfg, graphics.guiWidth(), graphics.guiHeight(), boxW, boxH);
             int x = pos[0], y = pos[1];
@@ -196,8 +218,22 @@ public class PerfHudRenderer {
                 graphics.fill(x - 1, y - 1, x + boxW + 1, y + boxH + 1, 0x90000000);
             }
             boolean shadow = listCfg.textShadow;
-            for (int i = 0; i < lines.size(); i++) {
-                graphics.text(font, lines.get(i), x + 2, y + 2 + i * lineH, colors.get(i), shadow);
+
+            if (scale == 1f) {
+                for (int i = 0; i < lines.size(); i++) {
+                    graphics.text(font, lines.get(i), x + 2, y + 2 + i * lineH, colors.get(i), shadow);
+                }
+            } else {
+                // Scale around the box's top-left corner: translate to (x, y) in screen space,
+                // scale, then draw at the unscaled local offsets.
+                var matrices = graphics.pose();
+                matrices.pushMatrix();
+                matrices.translate(x, y);
+                matrices.scale(scale, scale);
+                for (int i = 0; i < lines.size(); i++) {
+                    graphics.text(font, lines.get(i), 2, 2 + i * lineH, colors.get(i), shadow);
+                }
+                matrices.popMatrix();
             }
         }
     }

@@ -18,10 +18,13 @@ import java.util.List;
  *
  * <ul>
  *   <li>Left-click + drag  — move any list</li>
- *   <li>Right-click on a list — context menu (reorder/toggle, rename, background, shadow, delete)</li>
+ *   <li>Right-click on a list — context menu (reorder/toggle, rename, background,
+ *       shadow, color/scale, duplicate, delete)</li>
  *   <li>Right-click on empty space — create new list</li>
  *   <li>Escape — close and save</li>
  * </ul>
+ *
+ * Opened via {@code /perfhud gui} or the configurable keybind (default: H).
  */
 public class PerfHudGuiScreen extends Screen {
 
@@ -55,18 +58,49 @@ public class PerfHudGuiScreen extends Screen {
     private static final int SNAP_TICK      = 6;
 
     // ── Context menu item indices ─────────────────────────────────────────────
-    private static final int LM_REORDER = 0;
-    private static final int LM_RENAME  = 1;
-    private static final int LM_BG      = 2;
-    private static final int LM_SHADOW  = 3;
-    private static final int LM_DELETE  = 4;
-    private static final int LM_COUNT   = 5;
+    private static final int LM_REORDER    = 0;
+    private static final int LM_RENAME     = 1;
+    private static final int LM_BG         = 2;
+    private static final int LM_SHADOW     = 3;
+    private static final int LM_COLOR      = 4;
+    private static final int LM_DUPLICATE  = 5;
+    private static final int LM_DELETE     = 6;
+    private static final int LM_COUNT      = 7;
+
+    // ── Color/scale sub-panel row indices ─────────────────────────────────────
+    private static final int CS_USE_CUSTOM = 0;
+    private static final int CS_CYCLE      = 1;
+    private static final int CS_SCALE_DOWN = 2;
+    private static final int CS_SCALE_UP   = 2; // same row as SCALE_DOWN, split by x position
+    private static final int CS_BACK       = 3;
+    private static final int CS_COUNT      = 4;
+
+    /** Small curated swatch palette to cycle through for the custom list color. */
+    private static final int[] COLOR_SWATCHES = {
+        0xFFFFFFFF, // white
+        0xFF55FF55, // green
+        0xFFFFFF55, // yellow
+        0xFFFF5555, // red
+        0xFF55FFFF, // cyan
+        0xFFFF55FF, // magenta
+        0xFF5555FF, // blue
+        0xFFFFAA00, // orange
+    };
+
+    private boolean colorScaleOpen = false;
 
     public PerfHudGuiScreen() {
         super(Component.translatable("gui.perfhud.title"));
     }
 
     @Override public boolean isPauseScreen() { return false; }
+
+    /** Force-save on close as a safety net, even though every mutation already saves individually. */
+    @Override
+    public void onClose() {
+        PerfHudConfig.getInstance().save();
+        super.onClose();
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Rendering
@@ -98,6 +132,7 @@ public class PerfHudGuiScreen extends Screen {
         if      (menuKind == MenuKind.LIST_CONTEXT)   renderListContextMenu(g, font, mx, my);
         else if (menuKind == MenuKind.EMPTY_SPACE)    renderEmptySpaceMenu(g, font, mx, my);
         else if (menuKind == MenuKind.RENAME)          renderRenameBox(g, font);
+        else if (colorScaleOpen)                       renderColorScalePanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null) renderStatSettingsPanel(g, font, mx, my);
         else if (reorderOpen)                          renderReorderPanel(g, font, mx, my);
 
@@ -175,15 +210,105 @@ public class PerfHudGuiScreen extends Screen {
         String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.perfhud.menu.on")
                                               : " §c" + I18n.get("gui.perfhud.menu.off");
 
-        String[] labels = {
-            "§f" + I18n.get("gui.perfhud.menu.reorder"),
-            "§e" + I18n.get("gui.perfhud.menu.rename"),
-            "§f" + I18n.get("gui.perfhud.menu.background") + onOff_bg,
-            "§f" + I18n.get("gui.perfhud.menu.shadow")     + onOff_sh,
-            "§c" + I18n.get("gui.perfhud.menu.delete")
-        };
+        String[] labels = new String[LM_COUNT];
+        labels[LM_REORDER]   = "§f" + I18n.get("gui.perfhud.menu.reorder");
+        labels[LM_RENAME]    = "§e" + I18n.get("gui.perfhud.menu.rename");
+        labels[LM_BG]        = "§f" + I18n.get("gui.perfhud.menu.background") + onOff_bg;
+        labels[LM_SHADOW]    = "§f" + I18n.get("gui.perfhud.menu.shadow")     + onOff_sh;
+        labels[LM_COLOR]     = "§f" + I18n.get("gui.perfhud.menu.color_scale");
+        labels[LM_DUPLICATE] = "§b" + I18n.get("gui.perfhud.menu.duplicate");
+        labels[LM_DELETE]    = "§c" + I18n.get("gui.perfhud.menu.delete");
 
         drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
+    }
+
+    // ── Color / scale sub-panel ───────────────────────────────────────────────
+
+    private void renderColorScalePanel(GuiGraphicsExtractor g,
+                                       net.minecraft.client.gui.Font font,
+                                       int mx, int my) {
+        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null) { colorScaleOpen = false; return; }
+
+        int panelH = PANEL_PAD * 2 + ROW_H * CS_COUNT;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
+        g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
+
+        // Row 0: use custom color toggle
+        int ry0 = py + PANEL_PAD;
+        if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H))
+            g.fill(px + 1, ry0, px + PANEL_W - 1, ry0 + ROW_H, 0x44FFFFFF);
+        String useCustomLabel = I18n.get("gui.perfhud.color_scale.use_custom")
+                + (lc.useCustomColor ? " §a" + I18n.get("gui.perfhud.menu.on")
+                                     : " §c" + I18n.get("gui.perfhud.menu.off"));
+        g.text(font, "§f" + useCustomLabel, px + PANEL_PAD, ry0 + 2, 0xFFFFFFFF, false);
+
+        // Row 1: cycle swatch (only meaningful when custom color is on, but always clickable)
+        int ry1 = py + PANEL_PAD + ROW_H;
+        if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H))
+            g.fill(px + 1, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§f" + I18n.get("gui.perfhud.color_scale.cycle_color"),
+                px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
+        // Small color swatch preview on the right
+        g.fill(px + PANEL_W - 20, ry1 + 2, px + PANEL_W - 8, ry1 + ROW_H - 2, lc.overrideColor);
+        g.outline(px + PANEL_W - 20, ry1 + 2, 12, ROW_H - 4, 0xFF000000);
+
+        // Row 2: scale down / up
+        int ry2 = py + PANEL_PAD + ROW_H * 2;
+        boolean hoverDown = isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H);
+        boolean hoverUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H);
+        if (hoverDown) g.fill(px + 1, ry2, px + PANEL_W / 2, ry2 + ROW_H, 0x44FFFFFF);
+        if (hoverUp)   g.fill(px + PANEL_W / 2, ry2, px + PANEL_W - 1, ry2 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§f- " + I18n.get("gui.perfhud.color_scale.scale", String.format("%.2f", lc.textScale)),
+                px + PANEL_PAD, ry2 + 2, 0xFFFFFFFF, false);
+        g.text(font, "§f+", px + PANEL_W - 14, ry2 + 2, 0xFFFFFFFF, false);
+
+        // Row 3: back
+        int ry3 = py + PANEL_PAD + ROW_H * 3;
+        if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H))
+            g.fill(px + 1, ry3, px + PANEL_W - 1, ry3 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§7" + I18n.get("gui.perfhud.stat_settings.back"),
+                px + PANEL_PAD, ry3 + 2, 0xFFFFFFFF, false);
+    }
+
+    private boolean isInsideColorScalePanel(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H * CS_COUNT;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+
+    private void handleColorScalePanelClick(int mx, int my, PerfHudConfig.StatListConfig lc) {
+        int panelH = PANEL_PAD * 2 + ROW_H * CS_COUNT;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+        PerfHudConfig root = PerfHudConfig.getInstance();
+
+        int ry0 = py + PANEL_PAD;
+        int ry1 = py + PANEL_PAD + ROW_H;
+        int ry2 = py + PANEL_PAD + ROW_H * 2;
+        int ry3 = py + PANEL_PAD + ROW_H * 3;
+
+        if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H)) {
+            lc.useCustomColor = !lc.useCustomColor;
+            root.save();
+        } else if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
+            int idx = java.util.stream.IntStream.range(0, COLOR_SWATCHES.length)
+                    .filter(i -> COLOR_SWATCHES[i] == lc.overrideColor)
+                    .findFirst().orElse(-1);
+            lc.overrideColor = COLOR_SWATCHES[(idx + 1) % COLOR_SWATCHES.length];
+            root.save();
+        } else if (isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H)) {
+            lc.textScale = Math.max(0.5f, Math.round((lc.textScale - 0.1f) * 100f) / 100f);
+            root.save();
+        } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H)) {
+            lc.textScale = Math.min(2.0f, Math.round((lc.textScale + 0.1f) * 100f) / 100f);
+            root.save();
+        } else if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H)) {
+            colorScaleOpen = false;
+        }
     }
 
     // ── Empty-space menu ──────────────────────────────────────────────────────
@@ -221,7 +346,7 @@ public class PerfHudGuiScreen extends Screen {
         if (lc == null) { reorderOpen = false; return; }
 
         List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
-        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * all.size() + ROW_H;
+        int panelH = reorderPanelHeight(lc);
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
@@ -263,6 +388,12 @@ public class PerfHudGuiScreen extends Screen {
 
     // ── Per-stat settings panel ───────────────────────────────────────────────
 
+    /** Stats whose formatted value supports a configurable decimal-places setting. */
+    private boolean supportsDecimals(PerfHudConfig.Stat stat) {
+        return stat == PerfHudConfig.Stat.TPS || stat == PerfHudConfig.Stat.MSPT
+            || stat == PerfHudConfig.Stat.CPU || stat == PerfHudConfig.Stat.SPEED;
+    }
+
     private void renderStatSettingsPanel(GuiGraphicsExtractor g,
                                          net.minecraft.client.gui.Font font,
                                          int mx, int my) {
@@ -271,9 +402,11 @@ public class PerfHudGuiScreen extends Screen {
 
         PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
         String statLabel = I18n.get("stat.perfhud." + statSettingsStat.name().toLowerCase());
+        boolean decimalsRow = supportsDecimals(statSettingsStat);
 
-        // 1 header row + 1 setting row + 1 back row
-        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        // 1 header row + 1 prefix row + (optional decimals row) + 1 back row
+        int rows = decimalsRow ? 4 : 3;
+        int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
@@ -293,8 +426,22 @@ public class PerfHudGuiScreen extends Screen {
                                  : " §c" + I18n.get("gui.perfhud.menu.off"));
         g.text(font, "§f" + prefixToggle, px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
 
+        // Decimals stepper (only for numeric stats)
+        int nextRow = 2;
+        if (decimalsRow) {
+            int ryDec = py + PANEL_PAD + ROW_H * nextRow;
+            boolean hoverDown = isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H);
+            boolean hoverUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H);
+            if (hoverDown) g.fill(px + 1, ryDec, px + PANEL_W / 2, ryDec + ROW_H, 0x44FFFFFF);
+            if (hoverUp)   g.fill(px + PANEL_W / 2, ryDec, px + PANEL_W - 1, ryDec + ROW_H, 0x44FFFFFF);
+            g.text(font, "§f- " + I18n.get("gui.perfhud.stat_settings.decimals", ss.decimals),
+                    px + PANEL_PAD, ryDec + 2, 0xFFFFFFFF, false);
+            g.text(font, "§f+", px + PANEL_W - 14, ryDec + 2, 0xFFFFFFFF, false);
+            nextRow++;
+        }
+
         // Back button
-        int ryBack = py + PANEL_PAD + ROW_H * 2;
+        int ryBack = py + PANEL_PAD + ROW_H * nextRow;
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
             g.fill(px + 1, ryBack, px + PANEL_W - 1, ryBack + ROW_H, 0x44FFFFFF);
         g.text(font, "§7" + I18n.get("gui.perfhud.stat_settings.back"),
@@ -305,18 +452,38 @@ public class PerfHudGuiScreen extends Screen {
                                               PerfHudConfig.StatListConfig lc) {
         if (statSettingsStat == null) return;
         PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
+        boolean decimalsRow = supportsDecimals(statSettingsStat);
 
-        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        int rows = decimalsRow ? 4 : 3;
+        int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
-        int ry1    = py + PANEL_PAD + ROW_H;
-        int ryBack = py + PANEL_PAD + ROW_H * 2;
+        int ry1 = py + PANEL_PAD + ROW_H;
+        int nextRow = 2;
 
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
             ss.showPrefix = !ss.showPrefix;
             PerfHudConfig.getInstance().save();
-        } else if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H)) {
+            return;
+        }
+
+        if (decimalsRow) {
+            int ryDec = py + PANEL_PAD + ROW_H * nextRow;
+            if (isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H)) {
+                ss.decimals = Math.max(0, ss.decimals - 1);
+                PerfHudConfig.getInstance().save();
+                return;
+            } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H)) {
+                ss.decimals = Math.min(4, ss.decimals + 1);
+                PerfHudConfig.getInstance().save();
+                return;
+            }
+            nextRow++;
+        }
+
+        int ryBack = py + PANEL_PAD + ROW_H * nextRow;
+        if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H)) {
             statSettingsStat = null; // back to reorder panel
         }
     }
@@ -363,6 +530,12 @@ public class PerfHudGuiScreen extends Screen {
         if (menuKind == MenuKind.EMPTY_SPACE) {
             if (isInsideEmptySpaceMenu(mx, my)) handleEmptySpaceMenuClick(mx, my, root);
             else menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (colorScaleOpen) {
+            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && isInsideColorScalePanel(mx, my)) handleColorScalePanelClick(mx, my, lc);
+            else colorScaleOpen = false;
             return true;
         }
         if (reorderOpen) {
@@ -508,11 +681,13 @@ public class PerfHudGuiScreen extends Screen {
         menuKind = MenuKind.NONE;
 
         switch (idx) {
-            case LM_REORDER -> reorderOpen = true;
-            case LM_RENAME  -> { menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
-            case LM_BG      -> { lc.showBackground = !lc.showBackground; root.save(); }
-            case LM_SHADOW  -> { lc.textShadow     = !lc.textShadow;     root.save(); }
-            case LM_DELETE  -> { root.removeList(lc.id); root.save(); reorderOpen = false; }
+            case LM_REORDER   -> reorderOpen = true;
+            case LM_RENAME    -> { menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
+            case LM_BG        -> { lc.showBackground = !lc.showBackground; root.save(); }
+            case LM_SHADOW    -> { lc.textShadow     = !lc.textShadow;     root.save(); }
+            case LM_COLOR     -> colorScaleOpen = true;
+            case LM_DUPLICATE -> { root.duplicateList(lc.id); root.save(); }
+            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; }
         }
     }
 
@@ -529,7 +704,7 @@ public class PerfHudGuiScreen extends Screen {
 
     private void handleReorderPanelClick(int mx, int my, PerfHudConfig.StatListConfig lc) {
         List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
-        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * all.size() + ROW_H;
+        int panelH = reorderPanelHeight(lc);
         int px     = clampX(menuX, PANEL_W);
         int py     = clampY(menuY, panelH);
         int rowTop = py + PANEL_PAD + ROW_H;
@@ -583,12 +758,13 @@ public class PerfHudGuiScreen extends Screen {
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
     private boolean isInsideStatSettingsPanel(int mx, int my) {
-        int panelH = PANEL_PAD * 2 + ROW_H * 3;
+        int rows = (statSettingsStat != null && supportsDecimals(statSettingsStat)) ? 4 : 3;
+        int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
     private boolean isInsideReorderPanel(int mx, int my, PerfHudConfig.StatListConfig lc) {
-        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * allStatsOrdered(lc).size() + ROW_H;
+        int panelH = reorderPanelHeight(lc);
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
@@ -668,6 +844,11 @@ public class PerfHudGuiScreen extends Screen {
             catch (IllegalArgumentException ignored) {}
         }
         return result;
+    }
+
+    /** Shared height formula for the reorder/toggle panel: header + one row per stat + close row. */
+    private int reorderPanelHeight(PerfHudConfig.StatListConfig lc) {
+        return PANEL_PAD * 2 + ROW_H + ROW_H * allStatsOrdered(lc).size() + ROW_H;
     }
 
     private int clampX(int x, int w) { return Math.max(0, Math.min(width  - w - 4, x)); }

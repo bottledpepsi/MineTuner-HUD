@@ -61,6 +61,14 @@ java {
 
 	sourceCompatibility = JavaVersion.VERSION_25
 	targetCompatibility = JavaVersion.VERSION_25
+
+	// Without this, Gradle compiles using whatever JDK launched it (e.g. the JDK configured
+	// in your IDE), and options.release = 25 below fails with "release version 25 not
+	// supported" if that JDK is older than 25. This tells Gradle to select (or auto-provision,
+	// if enabled — see gradle.properties) a JDK 25 toolchain specifically for compilation.
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
 }
 
 jar {
