@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "bottled.perfhud.mixin",
+	"package": "bottled.mtss.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"ClientPacketListenerMixin"

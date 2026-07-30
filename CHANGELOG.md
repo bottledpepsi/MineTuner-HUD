@@ -1,11 +1,20 @@
 # Changelog
 
-All notable changes to PerfHUD are documented in this file.
+All notable changes to MineTuner Statistics Server are documented in this file.
 
 ## [1.1.0] - Unreleased
 
+### Changed
+- **Renamed the mod from PerfHUD to MineTuner Statistics Server (MTSS).** This is a breaking change for existing installs:
+  - Mod ID changed from `perfhud` to `mtss`.
+  - Java package changed from `bottled.perfhud` to `bottled.mtss`; all classes renamed accordingly (e.g. `PerfHudConfig` → `MtssConfig`, `PerfDataHolder` → `MtssDataHolder`).
+  - Client command changed from `/perfhud gui` to `/mtss gui`.
+  - Config file renamed from `.minecraft/config/perfhud.json` to `.minecraft/config/mtss.json` — **existing configs will not be picked up automatically**; back up and manually rename `perfhud.json` to `mtss.json` if you want to keep your current layout.
+  - Translation keys renamed from the `perfhud`/`gui.perfhud`/`stat.perfhud` namespaces to `mtss`/`gui.mtss`/`stat.mtss`.
+  - Mixin config files renamed (`perfhud.mixins.json` → `mtss.mixins.json`, `perfhud.client.mixins.json` → `mtss.client.mixins.json`).
+
 ### Added
-- Keybind to open the PerfHUD editor (default: **H**), in addition to `/perfhud gui`.
+- Keybind to open the MineTuner Statistics Server editor (default: **H**), in addition to `/mtss gui`.
 - Three new stats: **Biome**, **Light Level**, **Dimension**.
 - Per-stat decimal-place setting for numeric stats (TPS, MSPT, CPU, Speed), adjustable via each stat's settings panel (⚙).
 - Per-list **Color / Scale** panel:

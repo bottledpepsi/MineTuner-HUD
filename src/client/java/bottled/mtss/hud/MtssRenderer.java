@@ -1,7 +1,7 @@
-package bottled.perfhud.hud;
+package bottled.mtss.hud;
 
-import bottled.perfhud.PerfDataHolder;
-import bottled.perfhud.config.PerfHudConfig;
+import bottled.mtss.MtssDataHolder;
+import bottled.mtss.config.MtssConfig;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -11,7 +11,7 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PerfHudRenderer {
+public class MtssRenderer {
 
     // ── Per-frame line cache ──────────────────────────────────────────────────
     // buildLines is called both here (render) and in the GUI (drawList + getListBounds).
@@ -44,7 +44,7 @@ public class PerfHudRenderer {
     }
 
     /** Returns cached lines for this list, building them if needed this frame. */
-    public static LineCache getCachedLines(PerfHudConfig.StatListConfig cfg) {
+    public static LineCache getCachedLines(MtssConfig.StatListConfig cfg) {
         return FRAME_CACHE.computeIfAbsent(cfg.id, id -> {
             List<String>  lines  = new ArrayList<>();
             List<Integer> colors = new ArrayList<>();
@@ -55,7 +55,7 @@ public class PerfHudRenderer {
 
     // ── Position ──────────────────────────────────────────────────────────────
 
-    public static int[] getPosition(PerfHudConfig.StatListConfig cfg,
+    public static int[] getPosition(MtssConfig.StatListConfig cfg,
                                     int screenW, int screenH, int boxW, int boxH) {
         int x, y;
         switch (cfg.anchorCorner) {
@@ -86,29 +86,29 @@ public class PerfHudRenderer {
 
     // ── Line building ─────────────────────────────────────────────────────────
 
-    public static void buildLines(PerfHudConfig.StatListConfig cfg,
+    public static void buildLines(MtssConfig.StatListConfig cfg,
                                   List<String> lines, List<Integer> colors) {
-        for (PerfHudConfig.Stat stat : cfg.getVisibleStats()) {
+        for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
             String text  = null;
             int    color = 0xFFFFFFFF;
             int    decimals = cfg.getStatSettings(stat).decimals;
             switch (stat) {
-                case TPS   -> { text = PerfDataHolder.getFormattedTps(decimals);   color = PerfDataHolder.getTpsColor(); }
-                case MSPT  -> { text = PerfDataHolder.getFormattedMspt(decimals); /* empty on remote servers */ }
-                case FPS   -> { text = PerfDataHolder.getFormattedFps();      color = PerfDataHolder.getFpsColor(); }
-                case PING  -> { text = PerfDataHolder.getFormattedPing();     color = PerfDataHolder.getPingColor(); }
-                case MEMORY-> { text = PerfDataHolder.getFormattedMem();      color = PerfDataHolder.getMemColor(); }
-                case CPU   -> { text = PerfDataHolder.getFormattedCpu(decimals);   color = PerfDataHolder.getCpuColor(); }
-                case ENTITIES         -> { text = PerfDataHolder.getFormattedEntities(); }
-                case CHUNKS           -> { text = PerfDataHolder.getFormattedChunks(); }
-                case RENDERED_SECTIONS-> { text = PerfDataHolder.getFormattedRendered(); }
-                case COORDS           -> { text = PerfDataHolder.getFormattedCoords(); }
-                case FACING           -> { text = PerfDataHolder.getFormattedFacing(); }
-                case SPEED            -> { text = PerfDataHolder.getFormattedSpeed(decimals); color = PerfDataHolder.getSpeedColor(); }
-                case GC_TIME          -> { text = PerfDataHolder.getFormattedGcTime(); }
-                case BIOME            -> { text = PerfDataHolder.getFormattedBiome(); }
-                case LIGHT_LEVEL      -> { text = PerfDataHolder.getFormattedLight(); }
-                case DIMENSION        -> { text = PerfDataHolder.getFormattedDimension(); }
+                case TPS   -> { text = MtssDataHolder.getFormattedTps(decimals);   color = MtssDataHolder.getTpsColor(); }
+                case MSPT  -> { text = MtssDataHolder.getFormattedMspt(decimals); /* empty on remote servers */ }
+                case FPS   -> { text = MtssDataHolder.getFormattedFps();      color = MtssDataHolder.getFpsColor(); }
+                case PING  -> { text = MtssDataHolder.getFormattedPing();     color = MtssDataHolder.getPingColor(); }
+                case MEMORY-> { text = MtssDataHolder.getFormattedMem();      color = MtssDataHolder.getMemColor(); }
+                case CPU   -> { text = MtssDataHolder.getFormattedCpu(decimals);   color = MtssDataHolder.getCpuColor(); }
+                case ENTITIES         -> { text = MtssDataHolder.getFormattedEntities(); }
+                case CHUNKS           -> { text = MtssDataHolder.getFormattedChunks(); }
+                case RENDERED_SECTIONS-> { text = MtssDataHolder.getFormattedRendered(); }
+                case COORDS           -> { text = MtssDataHolder.getFormattedCoords(); }
+                case FACING           -> { text = MtssDataHolder.getFormattedFacing(); }
+                case SPEED            -> { text = MtssDataHolder.getFormattedSpeed(decimals); color = MtssDataHolder.getSpeedColor(); }
+                case GC_TIME          -> { text = MtssDataHolder.getFormattedGcTime(); }
+                case BIOME            -> { text = MtssDataHolder.getFormattedBiome(); }
+                case LIGHT_LEVEL      -> { text = MtssDataHolder.getFormattedLight(); }
+                case DIMENSION        -> { text = MtssDataHolder.getFormattedDimension(); }
             }
             if (text == null || text.isEmpty()) continue;
             // Strip prefix ("Label: ") when showPrefix is disabled for this stat
@@ -130,71 +130,71 @@ public class PerfHudRenderer {
 
         if (mc.getDebugOverlay().showDebugScreen()) return;
         if (mc.getConnection() == null) return;
-        if (mc.gui.screen() instanceof bottled.perfhud.gui.PerfHudGuiScreen) return;
+        if (mc.gui.screen() instanceof bottled.mtss.gui.MtssGuiScreen) return;
 
         // Advance frame cache so getCachedLines() is fresh this frame
         tickCache();
 
         // ── Data collection ──────────────────────────────────────────────────
         if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
-            PerfDataHolder.mspt =
+            MtssDataHolder.mspt =
                     mc.getSingleplayerServer().getAverageTickTimeNanos() / 1_000_000.0f;
         } else {
-            PerfDataHolder.mspt = -1f; // not available on remote servers
+            MtssDataHolder.mspt = -1f; // not available on remote servers
         }
-        PerfDataHolder.fps = mc.getFps();
+        MtssDataHolder.fps = mc.getFps();
 
         ClientPacketListener conn = mc.getConnection();
         if (mc.player != null && conn != null) {
             PlayerInfo info = conn.getPlayerInfo(mc.player.getUUID());
-            PerfDataHolder.ping = info != null ? info.getLatency() : -1;
+            MtssDataHolder.ping = info != null ? info.getLatency() : -1;
         }
 
         if (mc.level != null) {
-            PerfDataHolder.entityCount  = mc.level.getEntityCount();
-            PerfDataHolder.loadedChunks = mc.level.getChunkSource().getLoadedChunksCount();
-            PerfDataHolder.dimensionName = mc.level.dimension().identifier().getPath();
+            MtssDataHolder.entityCount  = mc.level.getEntityCount();
+            MtssDataHolder.loadedChunks = mc.level.getChunkSource().getLoadedChunksCount();
+            MtssDataHolder.dimensionName = mc.level.dimension().identifier().getPath();
         }
         if (mc.player != null) {
-            PerfDataHolder.playerX = mc.player.getX();
-            PerfDataHolder.playerY = mc.player.getY();
-            PerfDataHolder.playerZ = mc.player.getZ();
+            MtssDataHolder.playerX = mc.player.getX();
+            MtssDataHolder.playerY = mc.player.getY();
+            MtssDataHolder.playerZ = mc.player.getZ();
             if (mc.level != null) {
                 net.minecraft.core.BlockPos pos = mc.player.blockPosition();
-                PerfDataHolder.lightLevel = mc.level.getMaxLocalRawBrightness(pos);
+                MtssDataHolder.lightLevel = mc.level.getMaxLocalRawBrightness(pos);
                 var biomeHolder = mc.level.getBiome(pos);
-                PerfDataHolder.biomeName = biomeHolder.unwrapKey()
+                MtssDataHolder.biomeName = biomeHolder.unwrapKey()
                         .map(key -> key.identifier().getPath())
                         .orElse("?");
             }
             // Direction enum: NORTH/SOUTH/EAST/WEST + intercardinals from yaw
             float yaw = ((mc.player.getYRot() % 360) + 360) % 360;
-            if      (yaw <  22.5f)  PerfDataHolder.facingName = "S";
-            else if (yaw <  67.5f)  PerfDataHolder.facingName = "SW";
-            else if (yaw < 112.5f)  PerfDataHolder.facingName = "W";
-            else if (yaw < 157.5f)  PerfDataHolder.facingName = "NW";
-            else if (yaw < 202.5f)  PerfDataHolder.facingName = "N";
-            else if (yaw < 247.5f)  PerfDataHolder.facingName = "NE";
-            else if (yaw < 292.5f)  PerfDataHolder.facingName = "E";
-            else if (yaw < 337.5f)  PerfDataHolder.facingName = "SE";
-            else                     PerfDataHolder.facingName = "S";
+            if      (yaw <  22.5f)  MtssDataHolder.facingName = "S";
+            else if (yaw <  67.5f)  MtssDataHolder.facingName = "SW";
+            else if (yaw < 112.5f)  MtssDataHolder.facingName = "W";
+            else if (yaw < 157.5f)  MtssDataHolder.facingName = "NW";
+            else if (yaw < 202.5f)  MtssDataHolder.facingName = "N";
+            else if (yaw < 247.5f)  MtssDataHolder.facingName = "NE";
+            else if (yaw < 292.5f)  MtssDataHolder.facingName = "E";
+            else if (yaw < 337.5f)  MtssDataHolder.facingName = "SE";
+            else                     MtssDataHolder.facingName = "S";
             // Horizontal speed: delta movement is per-tick, × 20 = blocks/sec
             double dx = mc.player.getDeltaMovement().x;
             double dz = mc.player.getDeltaMovement().z;
-            PerfDataHolder.speedBps = (float)(Math.sqrt(dx * dx + dz * dz) * 20.0);
+            MtssDataHolder.speedBps = (float)(Math.sqrt(dx * dx + dz * dz) * 20.0);
         }
         if (mc.levelRenderer != null) {
-            PerfDataHolder.renderedSections = mc.levelExtractor.countRenderedSections();
+            MtssDataHolder.renderedSections = mc.levelExtractor.countRenderedSections();
         }
 
-        PerfDataHolder.updateFastMetrics();
-        PerfDataHolder.updateSlowMetrics();
+        MtssDataHolder.updateFastMetrics();
+        MtssDataHolder.updateSlowMetrics();
 
         // ── Render each stat list (uses frame cache) ─────────────────────────
-        PerfHudConfig root = PerfHudConfig.getInstance();
+        MtssConfig root = MtssConfig.getInstance();
         var font = mc.font;
 
-        for (PerfHudConfig.StatListConfig listCfg : root.lists) {
+        for (MtssConfig.StatListConfig listCfg : root.lists) {
             LineCache cache = getCachedLines(listCfg);
             List<String>  lines  = cache.lines();
             List<Integer> colors = cache.colors();

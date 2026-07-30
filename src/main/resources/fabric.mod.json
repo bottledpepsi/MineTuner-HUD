@@ -1,31 +1,31 @@
 {
 	"schemaVersion": 1,
-	"id": "perfhud",
+	"id": "mtss",
 	"version": "${version}",
-	"name": "PerfHUD",
-	"description": "Customisable performance HUD \u2014 multiple stat lists, drag-and-drop positioning, snap-to-centre, per-list color/scale, TPS, FPS, ping, memory, CPU, coords, facing, speed, biome, light level, dimension, and more.",
+	"name": "MineTuner Statistics Server",
+	"description": "Customisable performance HUD for Minecraft.",
 	"authors": [
 		"bottledpepsi"
 	],
 	"contact": {
 		"homepage": "https://bottledpepsi.github.io",
-		"sources": "https://github.com/bottledpepsi/perfhud"
+		"sources": "https://github.com/bottledpepsi/MineTuner-Statistics-Server"
 	},
 	"license": "GPL-3.0",
-	"icon": "assets/perfhud/icon.png",
+	"icon": "assets/mtss/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"main": [
-			"bottled.perfhud.PerfHud"
+			"bottled.mtss.MtssMod"
 		],
 		"client": [
-			"bottled.perfhud.PerfHudClient"
+			"bottled.mtss.MtssClient"
 		]
 	},
 	"mixins": [
-		"perfhud.mixins.json",
+		"mtss.mixins.json",
 		{
-			"config": "perfhud.client.mixins.json",
+			"config": "mtss.client.mixins.json",
 			"environment": "client"
 		}
 	],

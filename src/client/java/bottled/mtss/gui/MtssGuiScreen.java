@@ -1,7 +1,7 @@
-package bottled.perfhud.gui;
+package bottled.mtss.gui;
 
-import bottled.perfhud.config.PerfHudConfig;
-import bottled.perfhud.hud.PerfHudRenderer;
+import bottled.mtss.config.MtssConfig;
+import bottled.mtss.hud.MtssRenderer;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * PerfHUD editor screen.
+ * MineTuner Statistics Server editor screen.
  *
  * <ul>
  *   <li>Left-click + drag  — move any list</li>
@@ -24,9 +24,9 @@ import java.util.List;
  *   <li>Escape — close and save</li>
  * </ul>
  *
- * Opened via {@code /perfhud gui} or the configurable keybind (default: H).
+ * Opened via {@code /mtss gui} or the configurable keybind (default: H).
  */
-public class PerfHudGuiScreen extends Screen {
+public class MtssGuiScreen extends Screen {
 
     // ── Drag state ────────────────────────────────────────────────────────────
     private boolean dragging       = false;
@@ -34,8 +34,8 @@ public class PerfHudGuiScreen extends Screen {
     private int     dragOffsetX, dragOffsetY;
     private int     dragLiveX, dragLiveY;
     private int     dragBoxW, dragBoxH;
-    private PerfHudConfig.SnapX dragSnapX = PerfHudConfig.SnapX.NONE;
-    private PerfHudConfig.SnapY dragSnapY = PerfHudConfig.SnapY.NONE;
+    private MtssConfig.SnapX dragSnapX = MtssConfig.SnapX.NONE;
+    private MtssConfig.SnapY dragSnapY = MtssConfig.SnapY.NONE;
 
     // ── Menu / panel state ────────────────────────────────────────────────────
     private enum MenuKind { NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME }
@@ -44,7 +44,7 @@ public class PerfHudGuiScreen extends Screen {
     private int      menuX, menuY;
     private boolean  reorderOpen       = false;
     /** Which stat's settings panel is open (null = reorder panel showing). */
-    private PerfHudConfig.Stat statSettingsStat = null;
+    private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
 
     // ── Layout constants ──────────────────────────────────────────────────────
@@ -89,8 +89,8 @@ public class PerfHudGuiScreen extends Screen {
 
     private boolean colorScaleOpen = false;
 
-    public PerfHudGuiScreen() {
-        super(Component.translatable("gui.perfhud.title"));
+    public MtssGuiScreen() {
+        super(Component.translatable("gui.mtss.title"));
     }
 
     @Override public boolean isPauseScreen() { return false; }
@@ -98,7 +98,7 @@ public class PerfHudGuiScreen extends Screen {
     /** Force-save on close as a safety net, even though every mutation already saves individually. */
     @Override
     public void onClose() {
-        PerfHudConfig.getInstance().save();
+        MtssConfig.getInstance().save();
         super.onClose();
     }
 
@@ -110,23 +110,23 @@ public class PerfHudGuiScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float partial) {
         g.fill(0, 0, width, height, 0x80000000);
 
-        PerfHudRenderer.tickCache();
+        MtssRenderer.tickCache();
 
-        PerfHudConfig root = PerfHudConfig.getInstance();
+        MtssConfig root = MtssConfig.getInstance();
         var font = this.font;
 
         if (root.lists.isEmpty()) {
-            g.centeredText(font, "§7" + I18n.get("gui.perfhud.no_lists"),
+            g.centeredText(font, "§7" + I18n.get("gui.mtss.no_lists"),
                     width / 2, height / 2 - 6, 0xFFAAAAAA);
         }
 
         if (dragging) drawSnapLines(g);
 
-        for (PerfHudConfig.StatListConfig lc : root.lists) {
+        for (MtssConfig.StatListConfig lc : root.lists) {
             drawList(g, font, lc, mx, my, dragging && lc.id == draggingListId);
         }
 
-        g.centeredText(font, "§7" + I18n.get("gui.perfhud.hint"),
+        g.centeredText(font, "§7" + I18n.get("gui.mtss.hint"),
                 width / 2, height - 14, 0xFFAAAAAA);
 
         if      (menuKind == MenuKind.LIST_CONTEXT)   renderListContextMenu(g, font, mx, my);
@@ -142,14 +142,14 @@ public class PerfHudGuiScreen extends Screen {
     // ── List box ──────────────────────────────────────────────────────────────
 
     private void drawList(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
-                          PerfHudConfig.StatListConfig lc, int mx, int my,
+                          MtssConfig.StatListConfig lc, int mx, int my,
                           boolean isBeingDragged) {
-        PerfHudRenderer.LineCache cache = PerfHudRenderer.getCachedLines(lc);
+        MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
         List<String>  lines  = cache.lines();
         List<Integer> colors = cache.colors();
 
         boolean empty = lines.isEmpty();
-        List<String>  drawLines  = empty ? List.of("§7" + I18n.get("gui.perfhud.no_stats")) : lines;
+        List<String>  drawLines  = empty ? List.of("§7" + I18n.get("gui.mtss.no_stats")) : lines;
         List<Integer> drawColors = empty ? List.of(0xFFAAAAAA) : colors;
 
         int lineH = font.lineHeight + 1;
@@ -162,7 +162,7 @@ public class PerfHudGuiScreen extends Screen {
             wx = Math.max(0, Math.min(width  - boxW, dragLiveX));
             wy = Math.max(0, Math.min(height - boxH, dragLiveY));
         } else {
-            int[] pos = PerfHudRenderer.getPosition(lc, width, height, boxW, boxH);
+            int[] pos = MtssRenderer.getPosition(lc, width, height, boxW, boxH);
             wx = pos[0]; wy = pos[1];
         }
 
@@ -185,12 +185,12 @@ public class PerfHudGuiScreen extends Screen {
     private void drawSnapLines(GuiGraphicsExtractor g) {
         int cx = width  / 2;
         int cy = height / 2;
-        if (dragSnapX != PerfHudConfig.SnapX.NONE) {
+        if (dragSnapX != MtssConfig.SnapX.NONE) {
             g.fill(cx, 0, cx + 1, height, SNAP_LINE_COL);
             int hitY = dragLiveY + dragBoxH / 2;
             g.fill(cx - SNAP_TICK, hitY, cx + SNAP_TICK + 1, hitY + 1, SNAP_HIT_COL);
         }
-        if (dragSnapY != PerfHudConfig.SnapY.NONE) {
+        if (dragSnapY != MtssConfig.SnapY.NONE) {
             g.fill(0, cy, width, cy + 1, SNAP_LINE_COL);
             int hitX = dragLiveX + dragBoxW / 2;
             g.fill(hitX, cy - SNAP_TICK, hitX + 1, cy + SNAP_TICK + 1, SNAP_HIT_COL);
@@ -202,22 +202,22 @@ public class PerfHudGuiScreen extends Screen {
     private void renderListContextMenu(GuiGraphicsExtractor g,
                                        net.minecraft.client.gui.Font font,
                                        int mx, int my) {
-        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        MtssConfig.StatListConfig lc = getListById(menuListId);
         if (lc == null) { menuKind = MenuKind.NONE; return; }
 
-        String onOff_bg  = lc.showBackground ? " §a" + I18n.get("gui.perfhud.menu.on")
-                                              : " §c" + I18n.get("gui.perfhud.menu.off");
-        String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.perfhud.menu.on")
-                                              : " §c" + I18n.get("gui.perfhud.menu.off");
+        String onOff_bg  = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
+                                              : " §c" + I18n.get("gui.mtss.menu.off");
+        String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.mtss.menu.on")
+                                              : " §c" + I18n.get("gui.mtss.menu.off");
 
         String[] labels = new String[LM_COUNT];
-        labels[LM_REORDER]   = "§f" + I18n.get("gui.perfhud.menu.reorder");
-        labels[LM_RENAME]    = "§e" + I18n.get("gui.perfhud.menu.rename");
-        labels[LM_BG]        = "§f" + I18n.get("gui.perfhud.menu.background") + onOff_bg;
-        labels[LM_SHADOW]    = "§f" + I18n.get("gui.perfhud.menu.shadow")     + onOff_sh;
-        labels[LM_COLOR]     = "§f" + I18n.get("gui.perfhud.menu.color_scale");
-        labels[LM_DUPLICATE] = "§b" + I18n.get("gui.perfhud.menu.duplicate");
-        labels[LM_DELETE]    = "§c" + I18n.get("gui.perfhud.menu.delete");
+        labels[LM_REORDER]   = "§f" + I18n.get("gui.mtss.menu.reorder");
+        labels[LM_RENAME]    = "§e" + I18n.get("gui.mtss.menu.rename");
+        labels[LM_BG]        = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
+        labels[LM_SHADOW]    = "§f" + I18n.get("gui.mtss.menu.shadow")     + onOff_sh;
+        labels[LM_COLOR]     = "§f" + I18n.get("gui.mtss.menu.color_scale");
+        labels[LM_DUPLICATE] = "§b" + I18n.get("gui.mtss.menu.duplicate");
+        labels[LM_DELETE]    = "§c" + I18n.get("gui.mtss.menu.delete");
 
         drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
     }
@@ -227,7 +227,7 @@ public class PerfHudGuiScreen extends Screen {
     private void renderColorScalePanel(GuiGraphicsExtractor g,
                                        net.minecraft.client.gui.Font font,
                                        int mx, int my) {
-        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        MtssConfig.StatListConfig lc = getListById(menuListId);
         if (lc == null) { colorScaleOpen = false; return; }
 
         int panelH = PANEL_PAD * 2 + ROW_H * CS_COUNT;
@@ -241,16 +241,16 @@ public class PerfHudGuiScreen extends Screen {
         int ry0 = py + PANEL_PAD;
         if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H))
             g.fill(px + 1, ry0, px + PANEL_W - 1, ry0 + ROW_H, 0x44FFFFFF);
-        String useCustomLabel = I18n.get("gui.perfhud.color_scale.use_custom")
-                + (lc.useCustomColor ? " §a" + I18n.get("gui.perfhud.menu.on")
-                                     : " §c" + I18n.get("gui.perfhud.menu.off"));
+        String useCustomLabel = I18n.get("gui.mtss.color_scale.use_custom")
+                + (lc.useCustomColor ? " §a" + I18n.get("gui.mtss.menu.on")
+                                     : " §c" + I18n.get("gui.mtss.menu.off"));
         g.text(font, "§f" + useCustomLabel, px + PANEL_PAD, ry0 + 2, 0xFFFFFFFF, false);
 
         // Row 1: cycle swatch (only meaningful when custom color is on, but always clickable)
         int ry1 = py + PANEL_PAD + ROW_H;
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H))
             g.fill(px + 1, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
-        g.text(font, "§f" + I18n.get("gui.perfhud.color_scale.cycle_color"),
+        g.text(font, "§f" + I18n.get("gui.mtss.color_scale.cycle_color"),
                 px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
         // Small color swatch preview on the right
         g.fill(px + PANEL_W - 20, ry1 + 2, px + PANEL_W - 8, ry1 + ROW_H - 2, lc.overrideColor);
@@ -262,7 +262,7 @@ public class PerfHudGuiScreen extends Screen {
         boolean hoverUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H);
         if (hoverDown) g.fill(px + 1, ry2, px + PANEL_W / 2, ry2 + ROW_H, 0x44FFFFFF);
         if (hoverUp)   g.fill(px + PANEL_W / 2, ry2, px + PANEL_W - 1, ry2 + ROW_H, 0x44FFFFFF);
-        g.text(font, "§f- " + I18n.get("gui.perfhud.color_scale.scale", String.format("%.2f", lc.textScale)),
+        g.text(font, "§f- " + I18n.get("gui.mtss.color_scale.scale", String.format("%.2f", lc.textScale)),
                 px + PANEL_PAD, ry2 + 2, 0xFFFFFFFF, false);
         g.text(font, "§f+", px + PANEL_W - 14, ry2 + 2, 0xFFFFFFFF, false);
 
@@ -270,7 +270,7 @@ public class PerfHudGuiScreen extends Screen {
         int ry3 = py + PANEL_PAD + ROW_H * 3;
         if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H))
             g.fill(px + 1, ry3, px + PANEL_W - 1, ry3 + ROW_H, 0x44FFFFFF);
-        g.text(font, "§7" + I18n.get("gui.perfhud.stat_settings.back"),
+        g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"),
                 px + PANEL_PAD, ry3 + 2, 0xFFFFFFFF, false);
     }
 
@@ -280,11 +280,11 @@ public class PerfHudGuiScreen extends Screen {
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
 
-    private void handleColorScalePanelClick(int mx, int my, PerfHudConfig.StatListConfig lc) {
+    private void handleColorScalePanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
         int panelH = PANEL_PAD * 2 + ROW_H * CS_COUNT;
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
-        PerfHudConfig root = PerfHudConfig.getInstance();
+        MtssConfig root = MtssConfig.getInstance();
 
         int ry0 = py + PANEL_PAD;
         int ry1 = py + PANEL_PAD + ROW_H;
@@ -316,7 +316,7 @@ public class PerfHudGuiScreen extends Screen {
     private void renderEmptySpaceMenu(GuiGraphicsExtractor g,
                                       net.minecraft.client.gui.Font font,
                                       int mx, int my) {
-        String[] labels = { "§a" + I18n.get("gui.perfhud.menu.create") };
+        String[] labels = { "§a" + I18n.get("gui.mtss.menu.create") };
         drawPanel(g, font, labels, mx, my, PANEL_W, 1);
     }
 
@@ -324,7 +324,7 @@ public class PerfHudGuiScreen extends Screen {
 
     private void renderRenameBox(GuiGraphicsExtractor g,
                                  net.minecraft.client.gui.Font font) {
-        String prompt  = "§e" + I18n.get("gui.perfhud.rename.prompt");
+        String prompt  = "§e" + I18n.get("gui.mtss.rename.prompt");
         String display = renameBuffer.toString() + "§7|";
         int panelW = PANEL_W + 40;
         int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2;
@@ -342,22 +342,22 @@ public class PerfHudGuiScreen extends Screen {
     private void renderReorderPanel(GuiGraphicsExtractor g,
                                     net.minecraft.client.gui.Font font,
                                     int mx, int my) {
-        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        MtssConfig.StatListConfig lc = getListById(menuListId);
         if (lc == null) { reorderOpen = false; return; }
 
-        List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
+        List<MtssConfig.Stat> all = allStatsOrdered(lc);
         int panelH = reorderPanelHeight(lc);
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
         g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
         g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
-        g.text(font, "§e" + I18n.get("gui.perfhud.reorder.title"),
+        g.text(font, "§e" + I18n.get("gui.mtss.reorder.title"),
                 px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
 
         int rowTop = py + PANEL_PAD + ROW_H;
         for (int i = 0; i < all.size(); i++) {
-            PerfHudConfig.Stat stat = all.get(i);
+            MtssConfig.Stat stat = all.get(i);
             boolean enabled = lc.isEnabled(stat);
             int ry = rowTop + i * ROW_H;
 
@@ -365,7 +365,7 @@ public class PerfHudGuiScreen extends Screen {
                 g.fill(px + 1, ry, px + PANEL_W - 1, ry + ROW_H, 0x44FFFFFF);
 
             // Use the lang key for each stat's display name
-            String statName = I18n.get("stat.perfhud." + stat.name().toLowerCase());
+            String statName = I18n.get("stat.mtss." + stat.name().toLowerCase());
             String label = (enabled ? "§a✔ " : "§c✘ ") + statName;
             g.text(font, label, px + PANEL_PAD + 12, ry + 2, 0xFFFFFFFF, false);
 
@@ -382,26 +382,26 @@ public class PerfHudGuiScreen extends Screen {
         int closeY = rowTop + all.size() * ROW_H;
         if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H))
             g.fill(px + 1, closeY, px + PANEL_W - 1, closeY + ROW_H, 0x44FFFFFF);
-        g.text(font, "§7" + I18n.get("gui.perfhud.reorder.close"),
+        g.text(font, "§7" + I18n.get("gui.mtss.reorder.close"),
                 px + PANEL_PAD, closeY + 2, 0xFFFFFFFF, false);
     }
 
     // ── Per-stat settings panel ───────────────────────────────────────────────
 
     /** Stats whose formatted value supports a configurable decimal-places setting. */
-    private boolean supportsDecimals(PerfHudConfig.Stat stat) {
-        return stat == PerfHudConfig.Stat.TPS || stat == PerfHudConfig.Stat.MSPT
-            || stat == PerfHudConfig.Stat.CPU || stat == PerfHudConfig.Stat.SPEED;
+    private boolean supportsDecimals(MtssConfig.Stat stat) {
+        return stat == MtssConfig.Stat.TPS || stat == MtssConfig.Stat.MSPT
+            || stat == MtssConfig.Stat.CPU || stat == MtssConfig.Stat.SPEED;
     }
 
     private void renderStatSettingsPanel(GuiGraphicsExtractor g,
                                          net.minecraft.client.gui.Font font,
                                          int mx, int my) {
-        PerfHudConfig.StatListConfig lc = getListById(menuListId);
+        MtssConfig.StatListConfig lc = getListById(menuListId);
         if (lc == null || statSettingsStat == null) { statSettingsStat = null; return; }
 
-        PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
-        String statLabel = I18n.get("stat.perfhud." + statSettingsStat.name().toLowerCase());
+        MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
+        String statLabel = I18n.get("stat.mtss." + statSettingsStat.name().toLowerCase());
         boolean decimalsRow = supportsDecimals(statSettingsStat);
 
         // 1 header row + 1 prefix row + (optional decimals row) + 1 back row
@@ -414,16 +414,16 @@ public class PerfHudGuiScreen extends Screen {
         g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
 
         // Header
-        g.text(font, "§e" + I18n.get("gui.perfhud.stat_settings.title", statLabel),
+        g.text(font, "§e" + I18n.get("gui.mtss.stat_settings.title", statLabel),
                 px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
 
         // Show Prefix toggle
         int ry1 = py + PANEL_PAD + ROW_H;
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H))
             g.fill(px + 1, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
-        String prefixToggle = I18n.get("gui.perfhud.stat_settings.show_prefix")
-                + (ss.showPrefix ? " §a" + I18n.get("gui.perfhud.menu.on")
-                                 : " §c" + I18n.get("gui.perfhud.menu.off"));
+        String prefixToggle = I18n.get("gui.mtss.stat_settings.show_prefix")
+                + (ss.showPrefix ? " §a" + I18n.get("gui.mtss.menu.on")
+                                 : " §c" + I18n.get("gui.mtss.menu.off"));
         g.text(font, "§f" + prefixToggle, px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
 
         // Decimals stepper (only for numeric stats)
@@ -434,7 +434,7 @@ public class PerfHudGuiScreen extends Screen {
             boolean hoverUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H);
             if (hoverDown) g.fill(px + 1, ryDec, px + PANEL_W / 2, ryDec + ROW_H, 0x44FFFFFF);
             if (hoverUp)   g.fill(px + PANEL_W / 2, ryDec, px + PANEL_W - 1, ryDec + ROW_H, 0x44FFFFFF);
-            g.text(font, "§f- " + I18n.get("gui.perfhud.stat_settings.decimals", ss.decimals),
+            g.text(font, "§f- " + I18n.get("gui.mtss.stat_settings.decimals", ss.decimals),
                     px + PANEL_PAD, ryDec + 2, 0xFFFFFFFF, false);
             g.text(font, "§f+", px + PANEL_W - 14, ryDec + 2, 0xFFFFFFFF, false);
             nextRow++;
@@ -444,14 +444,14 @@ public class PerfHudGuiScreen extends Screen {
         int ryBack = py + PANEL_PAD + ROW_H * nextRow;
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
             g.fill(px + 1, ryBack, px + PANEL_W - 1, ryBack + ROW_H, 0x44FFFFFF);
-        g.text(font, "§7" + I18n.get("gui.perfhud.stat_settings.back"),
+        g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"),
                 px + PANEL_PAD, ryBack + 2, 0xFFFFFFFF, false);
     }
 
     private void handleStatSettingsPanelClick(int mx, int my,
-                                              PerfHudConfig.StatListConfig lc) {
+                                              MtssConfig.StatListConfig lc) {
         if (statSettingsStat == null) return;
-        PerfHudConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
+        MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
         boolean decimalsRow = supportsDecimals(statSettingsStat);
 
         int rows = decimalsRow ? 4 : 3;
@@ -464,7 +464,7 @@ public class PerfHudGuiScreen extends Screen {
 
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
             ss.showPrefix = !ss.showPrefix;
-            PerfHudConfig.getInstance().save();
+            MtssConfig.getInstance().save();
             return;
         }
 
@@ -472,11 +472,11 @@ public class PerfHudGuiScreen extends Screen {
             int ryDec = py + PANEL_PAD + ROW_H * nextRow;
             if (isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.max(0, ss.decimals - 1);
-                PerfHudConfig.getInstance().save();
+                MtssConfig.getInstance().save();
                 return;
             } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.min(4, ss.decimals + 1);
-                PerfHudConfig.getInstance().save();
+                MtssConfig.getInstance().save();
                 return;
             }
             nextRow++;
@@ -515,14 +515,14 @@ public class PerfHudGuiScreen extends Screen {
         int my  = (int) event.y();
         int btn = event.button();
 
-        PerfHudConfig root = PerfHudConfig.getInstance();
+        MtssConfig root = MtssConfig.getInstance();
 
         if (menuKind == MenuKind.RENAME) {
             menuKind = MenuKind.NONE;
             return true;
         }
         if (menuKind == MenuKind.LIST_CONTEXT) {
-            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc != null && isInsideListContextMenu(mx, my)) handleListContextMenuClick(mx, my, lc);
             else menuKind = MenuKind.NONE;
             return true;
@@ -533,13 +533,13 @@ public class PerfHudGuiScreen extends Screen {
             return true;
         }
         if (colorScaleOpen) {
-            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc != null && isInsideColorScalePanel(mx, my)) handleColorScalePanelClick(mx, my, lc);
             else colorScaleOpen = false;
             return true;
         }
         if (reorderOpen) {
-            PerfHudConfig.StatListConfig lc = getListById(menuListId);
+            MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc != null && statSettingsStat != null) {
                 // Stat settings panel is open — check bounds and route
                 if (isInsideStatSettingsPanel(mx, my)) handleStatSettingsPanelClick(mx, my, lc);
@@ -553,9 +553,9 @@ public class PerfHudGuiScreen extends Screen {
             return true;
         }
 
-        List<PerfHudConfig.StatListConfig> lists = root.lists;
+        List<MtssConfig.StatListConfig> lists = root.lists;
         for (int i = lists.size() - 1; i >= 0; i--) {
-            PerfHudConfig.StatListConfig lc = lists.get(i);
+            MtssConfig.StatListConfig lc = lists.get(i);
             int[] b = getListBounds(lc);
             if (!isHoveringBox(mx, my, b[0], b[1], b[2], b[3])) continue;
             if (btn == 0) {
@@ -567,8 +567,8 @@ public class PerfHudGuiScreen extends Screen {
                 dragLiveY      = b[1];
                 dragBoxW       = b[2];
                 dragBoxH       = b[3];
-                dragSnapX      = PerfHudConfig.SnapX.NONE;
-                dragSnapY      = PerfHudConfig.SnapY.NONE;
+                dragSnapX      = MtssConfig.SnapX.NONE;
+                dragSnapY      = MtssConfig.SnapY.NONE;
                 return true;
             } else if (btn == 1) {
                 menuKind   = MenuKind.LIST_CONTEXT;
@@ -607,7 +607,7 @@ public class PerfHudGuiScreen extends Screen {
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         if (dragging && event.button() == 0) {
-            PerfHudConfig.StatListConfig lc = getListById(draggingListId);
+            MtssConfig.StatListConfig lc = getListById(draggingListId);
             if (lc != null) {
                 lc.snapX = dragSnapX;
                 lc.snapY = dragSnapY;
@@ -615,9 +615,9 @@ public class PerfHudGuiScreen extends Screen {
             }
             dragging       = false;
             draggingListId = -1;
-            dragSnapX      = PerfHudConfig.SnapX.NONE;
-            dragSnapY      = PerfHudConfig.SnapY.NONE;
-            PerfHudConfig.getInstance().save();
+            dragSnapX      = MtssConfig.SnapX.NONE;
+            dragSnapY      = MtssConfig.SnapY.NONE;
+            MtssConfig.getInstance().save();
             return true;
         }
         return super.mouseReleased(event);
@@ -634,11 +634,11 @@ public class PerfHudGuiScreen extends Screen {
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter — confirm
-                PerfHudConfig.StatListConfig lc = getListById(menuListId);
+                MtssConfig.StatListConfig lc = getListById(menuListId);
                 if (lc != null) {
                     String trimmed = renameBuffer.toString().trim();
                     lc.name = trimmed.isEmpty() ? "List " + lc.id : trimmed;
-                    PerfHudConfig.getInstance().save();
+                    MtssConfig.getInstance().save();
                 }
                 menuKind = MenuKind.NONE;
                 return true;
@@ -669,7 +669,7 @@ public class PerfHudGuiScreen extends Screen {
     // ─────────────────────────────────────────────────────────────────────────
 
     private void handleListContextMenuClick(int mx, int my,
-                                            PerfHudConfig.StatListConfig lc) {
+                                            MtssConfig.StatListConfig lc) {
         int panelH = PANEL_PAD * 2 + ROW_H * LM_COUNT;
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         if (mx < px || mx > px + PANEL_W) return;
@@ -677,7 +677,7 @@ public class PerfHudGuiScreen extends Screen {
         if (rel < 0 || rel >= ROW_H * LM_COUNT) return;
         int idx = rel / ROW_H;
 
-        PerfHudConfig root = PerfHudConfig.getInstance();
+        MtssConfig root = MtssConfig.getInstance();
         menuKind = MenuKind.NONE;
 
         switch (idx) {
@@ -691,19 +691,19 @@ public class PerfHudGuiScreen extends Screen {
         }
     }
 
-    private void handleEmptySpaceMenuClick(int mx, int my, PerfHudConfig root) {
+    private void handleEmptySpaceMenuClick(int mx, int my, MtssConfig root) {
         int panelH = PANEL_PAD * 2 + ROW_H;
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         if (isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
-            PerfHudConfig.StatListConfig nl = root.createList();
+            MtssConfig.StatListConfig nl = root.createList();
             snapToNearestCorner(nl, mx, my, 0, 0);
             root.save();
         }
         menuKind = MenuKind.NONE;
     }
 
-    private void handleReorderPanelClick(int mx, int my, PerfHudConfig.StatListConfig lc) {
-        List<PerfHudConfig.Stat> all = allStatsOrdered(lc);
+    private void handleReorderPanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
+        List<MtssConfig.Stat> all = allStatsOrdered(lc);
         int panelH = reorderPanelHeight(lc);
         int px     = clampX(menuX, PANEL_W);
         int py     = clampY(menuY, panelH);
@@ -713,7 +713,7 @@ public class PerfHudGuiScreen extends Screen {
         if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H)) { reorderOpen = false; statSettingsStat = null; return; }
 
         for (int i = 0; i < all.size(); i++) {
-            PerfHudConfig.Stat stat = all.get(i);
+            MtssConfig.Stat stat = all.get(i);
             int ry = rowTop + i * ROW_H;
             if (my < ry || my >= ry + ROW_H) continue;
             int orderIdx = lc.statOrder.indexOf(stat.name());
@@ -732,7 +732,7 @@ public class PerfHudGuiScreen extends Screen {
             } else {
                 lc.setEnabled(stat, !lc.isEnabled(stat));
             }
-            PerfHudConfig.getInstance().save();
+            MtssConfig.getInstance().save();
             return;
         }
     }
@@ -763,7 +763,7 @@ public class PerfHudGuiScreen extends Screen {
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
-    private boolean isInsideReorderPanel(int mx, int my, PerfHudConfig.StatListConfig lc) {
+    private boolean isInsideReorderPanel(int mx, int my, MtssConfig.StatListConfig lc) {
         int panelH = reorderPanelHeight(lc);
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
@@ -776,40 +776,40 @@ public class PerfHudGuiScreen extends Screen {
     private int[] applySnap(int bx, int by, int bw, int bh) {
         int cx = width  / 2, cy = height / 2, T = SNAP_THRESHOLD;
 
-        int snappedX = bx; dragSnapX = PerfHudConfig.SnapX.NONE; int bestDx = T + 1;
+        int snappedX = bx; dragSnapX = MtssConfig.SnapX.NONE; int bestDx = T + 1;
         int d = Math.abs(bx - cx);
-        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx;          dragSnapX = PerfHudConfig.SnapX.LEFT_ON_CENTER; }
+        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx;          dragSnapX = MtssConfig.SnapX.LEFT_ON_CENTER; }
         d = Math.abs((bx + bw / 2) - cx);
-        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx - bw / 2; dragSnapX = PerfHudConfig.SnapX.CENTER_ON_CENTER; }
+        if (d <= T && d < bestDx) { bestDx = d; snappedX = cx - bw / 2; dragSnapX = MtssConfig.SnapX.CENTER_ON_CENTER; }
         d = Math.abs((bx + bw) - cx);
-        if (d <= T && d < bestDx) {              snappedX = cx - bw;     dragSnapX = PerfHudConfig.SnapX.RIGHT_ON_CENTER; }
+        if (d <= T && d < bestDx) {              snappedX = cx - bw;     dragSnapX = MtssConfig.SnapX.RIGHT_ON_CENTER; }
 
-        int snappedY = by; dragSnapY = PerfHudConfig.SnapY.NONE; int bestDy = T + 1;
+        int snappedY = by; dragSnapY = MtssConfig.SnapY.NONE; int bestDy = T + 1;
         d = Math.abs(by - cy);
-        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy;          dragSnapY = PerfHudConfig.SnapY.TOP_ON_CENTER; }
+        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy;          dragSnapY = MtssConfig.SnapY.TOP_ON_CENTER; }
         d = Math.abs((by + bh / 2) - cy);
-        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy - bh / 2; dragSnapY = PerfHudConfig.SnapY.CENTER_ON_CENTER; }
+        if (d <= T && d < bestDy) { bestDy = d; snappedY = cy - bh / 2; dragSnapY = MtssConfig.SnapY.CENTER_ON_CENTER; }
         d = Math.abs((by + bh) - cy);
-        if (d <= T && d < bestDy) {              snappedY = cy - bh;     dragSnapY = PerfHudConfig.SnapY.BOTTOM_ON_CENTER; }
+        if (d <= T && d < bestDy) {              snappedY = cy - bh;     dragSnapY = MtssConfig.SnapY.BOTTOM_ON_CENTER; }
 
         return new int[]{ snappedX, snappedY };
     }
 
-    private void snapToNearestCorner(PerfHudConfig.StatListConfig lc,
+    private void snapToNearestCorner(MtssConfig.StatListConfig lc,
                                      int bx, int by, int boxW, int boxH) {
         boolean nearRight  = (bx + boxW / 2) > width  / 2;
         boolean nearBottom = (by + boxH / 2) > height / 2;
         if (!nearRight && !nearBottom) {
-            lc.anchorCorner = PerfHudConfig.Corner.TOP_LEFT;
+            lc.anchorCorner = MtssConfig.Corner.TOP_LEFT;
             lc.anchorDx = bx;                    lc.anchorDy = by;
         } else if (nearRight && !nearBottom) {
-            lc.anchorCorner = PerfHudConfig.Corner.TOP_RIGHT;
+            lc.anchorCorner = MtssConfig.Corner.TOP_RIGHT;
             lc.anchorDx = width - (bx + boxW);   lc.anchorDy = by;
         } else if (!nearRight) {
-            lc.anchorCorner = PerfHudConfig.Corner.BOTTOM_LEFT;
+            lc.anchorCorner = MtssConfig.Corner.BOTTOM_LEFT;
             lc.anchorDx = bx;                    lc.anchorDy = height - (by + boxH);
         } else {
-            lc.anchorCorner = PerfHudConfig.Corner.BOTTOM_RIGHT;
+            lc.anchorCorner = MtssConfig.Corner.BOTTOM_RIGHT;
             lc.anchorDx = width - (bx + boxW);   lc.anchorDy = height - (by + boxH);
         }
     }
@@ -818,36 +818,36 @@ public class PerfHudGuiScreen extends Screen {
     // Utility
     // ─────────────────────────────────────────────────────────────────────────
 
-    private int[] getListBounds(PerfHudConfig.StatListConfig lc) {
+    private int[] getListBounds(MtssConfig.StatListConfig lc) {
         var font = this.font;
-        PerfHudRenderer.LineCache cache = PerfHudRenderer.getCachedLines(lc);
+        MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
         List<String> lines = cache.lines().isEmpty()
-                ? List.of(I18n.get("gui.perfhud.no_stats")) : cache.lines();
+                ? List.of(I18n.get("gui.mtss.no_stats")) : cache.lines();
         int lineH = font.lineHeight + 1;
         int maxW  = lines.stream().mapToInt(font::width).max().orElse(60);
         int boxW  = maxW + 4;
         int boxH  = lineH * lines.size() + 3;
-        int[] pos = PerfHudRenderer.getPosition(lc, width, height, boxW, boxH);
+        int[] pos = MtssRenderer.getPosition(lc, width, height, boxW, boxH);
         return new int[]{ pos[0], pos[1], boxW, boxH };
     }
 
-    private PerfHudConfig.StatListConfig getListById(int id) {
-        for (PerfHudConfig.StatListConfig lc : PerfHudConfig.getInstance().lists)
+    private MtssConfig.StatListConfig getListById(int id) {
+        for (MtssConfig.StatListConfig lc : MtssConfig.getInstance().lists)
             if (lc.id == id) return lc;
         return null;
     }
 
-    private List<PerfHudConfig.Stat> allStatsOrdered(PerfHudConfig.StatListConfig lc) {
-        List<PerfHudConfig.Stat> result = new ArrayList<>();
+    private List<MtssConfig.Stat> allStatsOrdered(MtssConfig.StatListConfig lc) {
+        List<MtssConfig.Stat> result = new ArrayList<>();
         for (String name : lc.statOrder) {
-            try { result.add(PerfHudConfig.Stat.valueOf(name)); }
+            try { result.add(MtssConfig.Stat.valueOf(name)); }
             catch (IllegalArgumentException ignored) {}
         }
         return result;
     }
 
     /** Shared height formula for the reorder/toggle panel: header + one row per stat + close row. */
-    private int reorderPanelHeight(PerfHudConfig.StatListConfig lc) {
+    private int reorderPanelHeight(MtssConfig.StatListConfig lc) {
         return PANEL_PAD * 2 + ROW_H + ROW_H * allStatsOrdered(lc).size() + ROW_H;
     }
 

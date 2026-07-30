@@ -1,4 +1,4 @@
-package bottled.perfhud;
+package bottled.mtss;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
@@ -6,7 +6,7 @@ import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.List;
 
-public final class PerfDataHolder {
+public final class MtssDataHolder {
 
     // ── Server ────────────────────────────────────────────────────────────────
     public static float tickRate = 20.0f;
@@ -47,7 +47,7 @@ public final class PerfDataHolder {
     private static long lastSlowUpdateMs = 0;
     private static final long SLOW_MS = 500;
 
-    private PerfDataHolder() {}
+    private MtssDataHolder() {}
 
     // ── Updates ───────────────────────────────────────────────────────────────
 
@@ -132,34 +132,34 @@ public final class PerfDataHolder {
     }
 
     public static String getFormattedTps()               { return getFormattedTps(1); }
-    public static String getFormattedTps(int decimals)    { return t("perfhud.stat.tps",  fmt(getTps(), decimals)); }
+    public static String getFormattedTps(int decimals)    { return t("mtss.stat.tps",  fmt(getTps(), decimals)); }
 
     /** Returns empty string on remote servers — caller skips the line. */
     public static String getFormattedMspt()               { return getFormattedMspt(1); }
     public static String getFormattedMspt(int decimals) {
-        return mspt >= 0f ? t("perfhud.stat.mspt", fmt(mspt, decimals)) : "";
+        return mspt >= 0f ? t("mtss.stat.mspt", fmt(mspt, decimals)) : "";
     }
 
-    public static String getFormattedFps()      { return t("perfhud.stat.fps",      fps); }
-    public static String getFormattedPing()     { return ping >= 0 ? t("perfhud.stat.ping", ping) : t("perfhud.stat.ping.na"); }
-    public static String getFormattedMem()      { return t("perfhud.stat.memory",   memUsedMb, memMaxMb); }
+    public static String getFormattedFps()      { return t("mtss.stat.fps",      fps); }
+    public static String getFormattedPing()     { return ping >= 0 ? t("mtss.stat.ping", ping) : t("mtss.stat.ping.na"); }
+    public static String getFormattedMem()      { return t("mtss.stat.memory",   memUsedMb, memMaxMb); }
 
     public static String getFormattedCpu()             { return getFormattedCpu(1); }
     public static String getFormattedCpu(int decimals) {
-        return cpuPercent >= 0 ? t("perfhud.stat.cpu", fmt(cpuPercent, decimals)) : t("perfhud.stat.cpu.na");
+        return cpuPercent >= 0 ? t("mtss.stat.cpu", fmt(cpuPercent, decimals)) : t("mtss.stat.cpu.na");
     }
 
-    public static String getFormattedEntities() { return t("perfhud.stat.entities", entityCount); }
-    public static String getFormattedChunks()   { return t("perfhud.stat.chunks",   loadedChunks); }
-    public static String getFormattedRendered() { return t("perfhud.stat.rendered", renderedSections); }
-    public static String getFormattedCoords()   { return t("perfhud.stat.coords",   (int) Math.floor(playerX), (int) Math.floor(playerY), (int) Math.floor(playerZ)); }
-    public static String getFormattedFacing()   { return t("perfhud.stat.facing",   facingName); }
+    public static String getFormattedEntities() { return t("mtss.stat.entities", entityCount); }
+    public static String getFormattedChunks()   { return t("mtss.stat.chunks",   loadedChunks); }
+    public static String getFormattedRendered() { return t("mtss.stat.rendered", renderedSections); }
+    public static String getFormattedCoords()   { return t("mtss.stat.coords",   (int) Math.floor(playerX), (int) Math.floor(playerY), (int) Math.floor(playerZ)); }
+    public static String getFormattedFacing()   { return t("mtss.stat.facing",   facingName); }
 
     public static String getFormattedSpeed()             { return getFormattedSpeed(2); }
-    public static String getFormattedSpeed(int decimals) { return t("perfhud.stat.speed", fmt(speedBps, decimals)); }
+    public static String getFormattedSpeed(int decimals) { return t("mtss.stat.speed", fmt(speedBps, decimals)); }
 
-    public static String getFormattedGcTime()   { return t("perfhud.stat.gc",       gcTimeMs); }
-    public static String getFormattedBiome()    { return t("perfhud.stat.biome",    biomeName.isEmpty() ? "?" : biomeName); }
-    public static String getFormattedLight()    { return t("perfhud.stat.light",    lightLevel); }
-    public static String getFormattedDimension(){ return t("perfhud.stat.dimension", dimensionName.isEmpty() ? "?" : dimensionName); }
+    public static String getFormattedGcTime()   { return t("mtss.stat.gc",       gcTimeMs); }
+    public static String getFormattedBiome()    { return t("mtss.stat.biome",    biomeName.isEmpty() ? "?" : biomeName); }
+    public static String getFormattedLight()    { return t("mtss.stat.light",    lightLevel); }
+    public static String getFormattedDimension(){ return t("mtss.stat.dimension", dimensionName.isEmpty() ? "?" : dimensionName); }
 }

@@ -1,6 +1,6 @@
 {
 	"required": false,
-	"package": "bottled.perfhud.mixin",
+	"package": "bottled.mtss.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [],
 	"injectors": {

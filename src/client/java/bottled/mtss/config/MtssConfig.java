@@ -1,4 +1,4 @@
-package bottled.perfhud.config;
+package bottled.mtss.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,7 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class PerfHudConfig {
+public class MtssConfig {
 
     /**
      * Which screen corner a list is anchored to.
@@ -213,19 +213,19 @@ public class PerfHudConfig {
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH =
-            FabricLoader.getInstance().getConfigDir().resolve("perfhud.json");
+            FabricLoader.getInstance().getConfigDir().resolve("mtss.json");
 
-    private static PerfHudConfig INSTANCE;
+    private static MtssConfig INSTANCE;
 
-    public static PerfHudConfig getInstance() {
+    public static MtssConfig getInstance() {
         if (INSTANCE == null) INSTANCE = load();
         return INSTANCE;
     }
 
-    public static PerfHudConfig load() {
+    public static MtssConfig load() {
         if (Files.exists(CONFIG_PATH)) {
             try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
-                PerfHudConfig cfg = GSON.fromJson(r, PerfHudConfig.class);
+                MtssConfig cfg = GSON.fromJson(r, MtssConfig.class);
                 if (cfg != null) {
                     if (cfg.lists == null) cfg.lists = new ArrayList<>();
                     for (StatListConfig list : cfg.lists) {
@@ -238,10 +238,10 @@ public class PerfHudConfig {
                     return cfg;
                 }
             } catch (IOException e) {
-                System.err.println("[PerfHUD] Failed to load config: " + e.getMessage());
+                System.err.println("[MTSS] Failed to load config: " + e.getMessage());
             }
         }
-        PerfHudConfig defaults = new PerfHudConfig();
+        MtssConfig defaults = new MtssConfig();
         defaults.lists.add(new StatListConfig(0));
         defaults.nextId = 1;
         defaults.save();
@@ -252,7 +252,7 @@ public class PerfHudConfig {
         try (Writer w = Files.newBufferedWriter(CONFIG_PATH)) {
             GSON.toJson(this, w);
         } catch (IOException e) {
-            System.err.println("[PerfHUD] Failed to save config: " + e.getMessage());
+            System.err.println("[MTSS] Failed to save config: " + e.getMessage());
         }
     }
 }

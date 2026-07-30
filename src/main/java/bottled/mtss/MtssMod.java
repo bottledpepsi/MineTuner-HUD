@@ -1,15 +1,15 @@
-package bottled.perfhud;
+package bottled.mtss;
 
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PerfHud implements ModInitializer {
-    public static final String MOD_ID = "perfhud";
+public class MtssMod implements ModInitializer {
+    public static final String MOD_ID = "mtss";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     @Override
     public void onInitialize() {
-        LOGGER.info("PerfHUD initialized.");
+        LOGGER.info("MineTuner Statistics Server initialized.");
     }
 }

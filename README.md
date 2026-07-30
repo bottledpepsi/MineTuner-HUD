@@ -1,12 +1,12 @@
-# PerfHUD
+# MineTuner Statistics Server (MTSS)
 
 **A fully customisable, multi-list performance overlay for Fabric**
 
 ---
 
-## What is PerfHUD?
+## What is MineTuner Statistics Server?
 
-PerfHUD puts a clean, configurable HUD on your screen showing real-time performance and world data. Unlike the vanilla debug screen, PerfHUD is designed to live on your screen permanently, unobtrusive, readable, and completely yours to configure.
+MineTuner Statistics Server puts a clean, configurable HUD on your screen showing real-time performance and world data. Unlike the vanilla debug screen, MineTuner Statistics Server is designed to live on your screen permanently, unobtrusive, readable, and completely yours to configure.
 
 You decide what stats appear, where they appear, and how many separate stat panels you want. Everything is controlled via a drag-and-drop in-game GUI. No config file editing required.
 
@@ -14,7 +14,7 @@ You decide what stats appear, where they appear, and how many separate stat pane
 
 ## Stats
 
-PerfHUD tracks **16 metrics** across server, client, player, and system categories:
+MineTuner Statistics Server tracks **16 metrics** across server, client, player, and system categories:
 
 | Stat | Description | Notes |
 |---|---|---|
@@ -45,7 +45,7 @@ Stats that render a number (**TPS, MSPT, CPU, Speed**) support a configurable de
 Create as many separate HUD panels as you want. Each list is independently positioned, configured, and styled. Run a performance-focused panel in one corner and a coordinates/facing panel in another — entirely your call.
 
 ### Drag-and-drop positioning
-Open the editor (`/perfhud gui`) and drag any list anywhere on screen. Positions are saved relative to the nearest screen corner, so your layout survives window resizes and resolution changes without drifting.
+Open the editor (`/mtss gui`) and drag any list anywhere on screen. Positions are saved relative to the nearest screen corner, so your layout survives window resizes and resolution changes without drifting.
 
 ### Snap-to-centre
 While dragging, lists snap to the vertical and horizontal centre lines of your screen with a visible guide line and hit marker. The snap axis is saved — centred panels stay centred regardless of window size.
@@ -65,7 +65,7 @@ Right-click any list in the editor to open its context menu:
 Right-click on any empty area of the editor screen to instantly create a new stat list at that location.
 
 ### Keybind to open the editor
-In addition to `/perfhud gui`, a keybind (default: **H**) opens the editor directly — rebindable in **Options → Controls → Key Binds → PerfHUD**.
+In addition to `/mtss gui`, a keybind (default: **H**) opens the editor directly — rebindable in **Options → Controls → Key Binds → MineTuner Statistics Server**.
 
 ### Color-coded values
 TPS, FPS, Ping, Memory, CPU, and Speed all render in context-aware colors (green / yellow / red) based on thresholds — you can tell at a glance whether something's wrong without reading the number.
@@ -82,7 +82,7 @@ All stat string building is cached per-frame in a generation-keyed `HashMap`. Th
 
 1. Install [**Fabric Loader**](https://fabricmc.net/use/installer/) (≥ 0.18)
 2. Install [**Fabric API**](https://modrinth.com/mod/fabric-api)
-3. Drop the PerfHUD `.jar` into your `mods` folder
+3. Drop the MineTuner Statistics Server `.jar` into your `mods` folder
 4. Launch the game
 
 **Requirements:**
@@ -90,14 +90,14 @@ All stat string building is cached per-frame in a generation-keyed `HashMap`. Th
 - Java 25 or newer
 - Fabric API
 
-> PerfHUD is a **client-side only** mod. It does not need to be installed on servers.
+> MineTuner Statistics Server is a **client-side only** mod. It does not need to be installed on servers.
 
 ---
 
 ## Usage
 
 ### Opening the editor
-Run the command `/perfhud gui` in chat, or press the **PerfHUD** keybind (default: **H**, rebindable in Controls).
+Run the command `/mtss gui` in chat, or press the **MineTuner Statistics Server** keybind (default: **H**, rebindable in Controls).
 
 ### Controls in the editor
 | Action | Result |
@@ -121,7 +121,7 @@ Inside a list's context menu, click **Color / Scale...** to:
 - Use **- / +** to adjust the list's text scale between 0.5x and 2.0x
 
 ### Config file
-Settings are saved automatically to `.minecraft/config/perfhud.json`. You can inspect or back up this file, but there's no need to edit it manually — the in-game GUI covers everything.
+Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually — the in-game GUI covers everything.
 
 ---
 
@@ -129,4 +129,4 @@ Settings are saved automatically to `.minecraft/config/perfhud.json`. You can in
 
 - **Client-side only** — works on any server (vanilla, Paper, Fabric, etc.)
 - **MSPT** is only displayed on singleplayer and LAN worlds — it's silently hidden on remote servers where the data isn't accessible
-- Does not conflict with other HUD mods — PerfHUD registers its overlay via Fabric API's `HudElementRegistry` and attaches before the chat layer
+- Does not conflict with other HUD mods — MineTuner Statistics Server registers its overlay via Fabric API's `HudElementRegistry` and attaches before the chat layer

@@ -1,6 +1,6 @@
-package bottled.perfhud.mixin;
+package bottled.mtss.mixin;
 
-import bottled.perfhud.PerfDataHolder;
+import bottled.mtss.MtssDataHolder;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundTickingStatePacket;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ClientPacketListenerMixin {
 
     @Inject(method = "handleTickingState", at = @At("TAIL"))
-    private void perfHud$onTickingState(ClientboundTickingStatePacket packet, CallbackInfo ci) {
-        PerfDataHolder.tickRate = packet.tickRate();
+    private void mtss$onTickingState(ClientboundTickingStatePacket packet, CallbackInfo ci) {
+        MtssDataHolder.tickRate = packet.tickRate();
     }
 }

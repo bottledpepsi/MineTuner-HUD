@@ -1,9 +1,9 @@
-package bottled.perfhud;
+package bottled.mtss;
 
-import bottled.perfhud.command.PerfHudCommand;
-import bottled.perfhud.config.PerfHudConfig;
-import bottled.perfhud.gui.PerfHudGuiScreen;
-import bottled.perfhud.hud.PerfHudRenderer;
+import bottled.mtss.command.MtssCommand;
+import bottled.mtss.config.MtssConfig;
+import bottled.mtss.gui.MtssGuiScreen;
+import bottled.mtss.hud.MtssRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -18,17 +18,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
 @Environment(EnvType.CLIENT)
-public class PerfHudClient implements ClientModInitializer {
+public class MtssClient implements ClientModInitializer {
 
-    private static final PerfHudRenderer RENDERER = new PerfHudRenderer();
+    private static final MtssRenderer RENDERER = new MtssRenderer();
 
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
-            Identifier.fromNamespaceAndPath(PerfHud.MOD_ID, "main"));
+            Identifier.fromNamespaceAndPath(MtssMod.MOD_ID, "main"));
 
-    /** Default keybind to open the PerfHUD editor — no default GLFW key, bind it in Controls. */
+    /** Default keybind to open the MineTuner Statistics Server editor — no default GLFW key, bind it in Controls. */
     private static final KeyMapping OPEN_GUI_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
-                    "key.perfhud.open_gui",
+                    "key.mtss.open_gui",
                     InputConstants.Type.KEYSYM,
                     InputConstants.KEY_H,
                     CATEGORY
@@ -36,21 +36,21 @@ public class PerfHudClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        PerfHudConfig.getInstance();
+        MtssConfig.getInstance();
 
         HudElementRegistry.attachElementBefore(
                 VanillaHudElements.CHAT,
-                Identifier.fromNamespaceAndPath("perfhud", "overlay"),
+                Identifier.fromNamespaceAndPath("mtss", "overlay"),
                 RENDERER::render
         );
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-                PerfHudCommand.register(dispatcher));
+                MtssCommand.register(dispatcher));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (OPEN_GUI_KEY.consumeClick()) {
                 if (client.gui.screen() == null) {
-                    client.gui.setScreen(new PerfHudGuiScreen());
+                    client.gui.setScreen(new MtssGuiScreen());
                 }
             }
         });
