@@ -67,6 +67,9 @@ Right-click on any empty area of the editor screen to instantly create a new sta
 ### Keybind to open the editor
 In addition to `/mtss gui`, a keybind (default: **H**) opens the editor directly — rebindable in **Options → Controls → Key Binds → MineTuner Statistics Server**.
 
+### Keybind to toggle the overlay
+A separate keybind (unbound by default, rebindable in **Options → Controls → Key Binds → MineTuner Statistics Server**) instantly shows or hides the live overlay without opening the editor — handy for streaming or screenshots. It's independent of the editor: opening the editor still works, and still shows list previews, even while the overlay is hidden.
+
 ### Color-coded values
 TPS, FPS, Ping, Memory, CPU, and Speed all render in context-aware colors (green / yellow / red) based on thresholds — you can tell at a glance whether something's wrong without reading the number.
 
@@ -98,6 +101,9 @@ All stat string building is cached per-frame in a generation-keyed `HashMap`. Th
 
 ### Opening the editor
 Run the command `/mtss gui` in chat, or press the **MineTuner Statistics Server** keybind (default: **H**, rebindable in Controls).
+
+### Hiding the overlay
+Press the **Toggle MineTuner Statistics Server Overlay** keybind (unbound by default, bind it in **Options → Controls → Key Binds → MineTuner Statistics Server**) to instantly show or hide the HUD without opening the editor. An actionbar message confirms whether the overlay is now shown or hidden. This only affects the live overlay — the editor (`/mtss gui` or the open-editor keybind) still opens and previews your lists normally even while the overlay is hidden.
 
 ### Controls in the editor
 | Action | Result |

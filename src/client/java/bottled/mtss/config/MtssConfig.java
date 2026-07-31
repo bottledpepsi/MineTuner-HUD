@@ -51,6 +51,8 @@ public class MtssConfig {
     // ── Root config ───────────────────────────────────────────────────────────
     public int                  nextId = 1;
     public List<StatListConfig> lists  = new ArrayList<>();
+    /** Global show/hide switch for the entire overlay */
+    public boolean               overlayEnabled = true;
 
     // ── Per-stat settings ─────────────────────────────────────────────────────
     public static class StatSettings {
@@ -235,6 +237,11 @@ public class MtssConfig {
             try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
                 MtssConfig cfg = GSON.fromJson(r, MtssConfig.class);
                 if (cfg != null) {
+                    // Note: overlayEnabled needs no explicit backfill here. MtssConfig has
+                    // an implicit no-arg constructor, so Gson constructs it that way (not via
+                    // Unsafe), meaning the `= true` field initializer already runs before the
+                    // JSON is applied, a pre-existing config file with no "overlayEnabled" key
+                    // simply leaves that default in place.
                     if (cfg.lists == null) cfg.lists = new ArrayList<>();
                     for (StatListConfig list : cfg.lists) {
                         if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();

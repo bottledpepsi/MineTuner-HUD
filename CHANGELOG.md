@@ -5,6 +5,17 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Toggle-overlay keybind** (`key.mtss.toggle_overlay`, unbound by default)
+  that instantly shows or hides the entire live HUD without opening the
+  editor — separate from the existing open-editor keybind (`key.mtss.open_gui`,
+  default **H**). Backed by a new root-level `overlayEnabled` flag in
+  `mtss.json`, persisted across restarts and defaulting to `true` so
+  pre-existing configs keep showing their HUD after upgrading. Toggling
+  shows a short actionbar confirmation (`mtss.toggle.on` / `mtss.toggle.off`)
+  and has no effect on the editor — `/mtss gui` and the open-editor keybind
+  still open the editor and preview your lists normally even while the
+  overlay is hidden, since the editor reads cached lines directly rather
+  than going through the live renderer.
 - **Rolling history graphs** for TPS, MSPT, FPS, CPU, Ping, Memory, and Speed.
   Each of these stats now has a `renderAsGraph` setting that swaps its text
   line for an 80×28px rolling graph, sourced from a 128-sample ring buffer

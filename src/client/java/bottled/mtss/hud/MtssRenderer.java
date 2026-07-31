@@ -226,6 +226,7 @@ public class MtssRenderer {
     public void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         Minecraft mc = Minecraft.getInstance();
 
+        if (!MtssConfig.getInstance().overlayEnabled) return;
         if (mc.getDebugOverlay().showDebugScreen()) return;
         if (mc.getConnection() == null) return;
         if (mc.gui.screen() instanceof bottled.mtss.gui.MtssGuiScreen) return;

@@ -15,6 +15,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 @Environment(EnvType.CLIENT)
@@ -31,6 +32,15 @@ public class MtssClient implements ClientModInitializer {
                     "key.mtss.open_gui",
                     InputConstants.Type.KEYSYM,
                     InputConstants.KEY_H,
+                    CATEGORY
+            ));
+
+    /** Keybind to toggle the live overlay on/off without opening the editor — unbound by default, bind it in Controls. */
+    private static final KeyMapping TOGGLE_OVERLAY_KEY = KeyMappingHelper.registerKeyMapping(
+            new KeyMapping(
+                    "key.mtss.toggle_overlay",
+                    InputConstants.Type.KEYSYM,
+                    InputConstants.UNKNOWN.getValue(),
                     CATEGORY
             ));
 
@@ -51,6 +61,15 @@ public class MtssClient implements ClientModInitializer {
             while (OPEN_GUI_KEY.consumeClick()) {
                 if (client.gui.screen() == null) {
                     client.gui.setScreen(new MtssGuiScreen());
+                }
+            }
+            while (TOGGLE_OVERLAY_KEY.consumeClick()) {
+                MtssConfig cfg = MtssConfig.getInstance();
+                cfg.overlayEnabled = !cfg.overlayEnabled;
+                cfg.save();
+                String key = cfg.overlayEnabled ? "mtss.toggle.on" : "mtss.toggle.off";
+                if (client.gui != null) {
+                    client.gui.hud.setOverlayMessage(Component.translatable(key), false);
                 }
             }
         });

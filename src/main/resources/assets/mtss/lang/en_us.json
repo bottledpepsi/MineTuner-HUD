@@ -1,7 +1,9 @@
 {
   "category.mtss": "MineTuner Statistics Server",
   "key.mtss.main": "MineTuner Statistics Server",
-  "key.mtss.open_gui": "Open MineTuner Statistics Server Editor",
+  "key.category.mtss.main": "MineTuner Statistics Server",
+  "key.mtss.open_gui": "Open Editor",
+  "key.mtss.toggle_overlay": "Toggle Overlay",
   "gui.mtss.title": "MineTuner Statistics Server",
   "gui.mtss.hint": "Drag to move  \u2022  Right-click to configure  \u2022  Esc to close",
   "gui.mtss.no_lists": "No lists yet \u2014 right-click to create one",
@@ -60,5 +62,7 @@
   "gui.mtss.stat_settings.back": "\u25c0  Back",
   "gui.mtss.stat_settings.show_prefix": "Show Prefix",
   "gui.mtss.stat_settings.decimals": "Decimals: %s",
-  "gui.mtss.stat_settings.render_as_graph": "Render as Graph"
+  "gui.mtss.stat_settings.render_as_graph": "Render as Graph",
+  "mtss.toggle.on": "MineTuner Statistics Server overlay shown",
+  "mtss.toggle.off": "MineTuner Statistics Server overlay hidden"
 }
