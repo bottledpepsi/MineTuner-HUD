@@ -584,32 +584,64 @@ public class MtssRenderer {
 
         int baseY = plotY + plotH; // exclusive bottom, shared by every column
 
-        // ── Filled area (2-band gradient-faded) ──────────────────────────
-        // Collapsed from 3 bands to 2 versus the original design: still
-        // reads as a fade from more-opaque-near-the-line to more-
-        // transparent-near-the-baseline, at 2/3 the fill() calls for this
-        // pass. One fill() call per column when the bar is too short to
-        // usefully split into two bands.
+        // Precompute each column's fill color once, up front. colorForColumn
+        // does a threshold/gradient lookup per call (cheap on its own, but
+        // the run-merging loops below would otherwise re-invoke it 1-2x per
+        // column while scanning for run boundaries).
+        int[] colColor = new int[plotW];
         for (int col = 0; col < plotW; col++) {
-            int topY = colTopY[col];
-            int colX = plotX + col;
-            int fillColor = colorForColumn(entry, style, colSampleIdx[col]);
+            colColor[col] = colorForColumn(entry, style, colSampleIdx[col]);
+        }
+
+        // ── Filled area (2-band gradient-faded) ──────────────────────────
+        // Same visual result as filling column-by-column, but adjacent
+        // columns that share the same (topY, color) — extremely common,
+        // since norm is rounded to integer pixel heights and color only
+        // changes at threshold boundaries — are merged into a single wide
+        // fill() instead of N single-pixel-wide ones. For CURRENT_THRESHOLD/
+        // FIXED_ACCENT color modes (a single color for the whole graph) this
+        // collapses the entire top band to ~1 fill() call instead of plotW.
+        // This is the dominant cost of graph rendering: with several graphs
+        // enabled, per-column fills add up to hundreds of tiny draw calls
+        // per frame, which is CPU/driver-call-bound rather than GPU-bound.
+        int runStart = 0;
+        while (runStart < plotW) {
+            int topY = colTopY[runStart];
+            int fillColor = colColor[runStart];
+            int runEnd = runStart + 1;
+            while (runEnd < plotW && colTopY[runEnd] == topY && colColor[runEnd] == fillColor) {
+                runEnd++;
+            }
+            int runX0 = plotX + runStart;
+            int runX1 = plotX + runEnd;
 
             int bandH = baseY - topY;
             if (bandH > 0) {
                 int split = topY + Math.max(1, bandH / 2);
-                graphics.fill(colX, topY, colX + 1, Math.min(split, baseY), withAlpha(fillColor, 0xC8));
-                if (split < baseY) graphics.fill(colX, split, colX + 1, baseY, withAlpha(fillColor, 0x60));
+                graphics.fill(runX0, topY, runX1, Math.min(split, baseY), withAlpha(fillColor, 0xC8));
+                if (split < baseY) graphics.fill(runX0, split, runX1, baseY, withAlpha(fillColor, 0x60));
             }
+            runStart = runEnd;
         }
 
         // ── Stroke: a brighter 1px cap tracing the top edge ──────────────
         // Second pass so it sits on top of neighboring columns' fills.
+        // Same run-merging: adjacent columns at the same topY with the same
+        // stroke color become one wide 1px-tall fill instead of one per column.
+        int[] strokeColor = new int[plotW];
         for (int col = 0; col < plotW; col++) {
-            int topY = colTopY[col];
-            int colX = plotX + col;
-            int fillColor = colorForColumn(entry, style, colSampleIdx[col]);
-            graphics.fill(colX, topY, colX + 1, topY + 1, withAlpha(brighten(fillColor), 0xFF));
+            strokeColor[col] = withAlpha(brighten(colColor[col]), 0xFF);
+        }
+        runStart = 0;
+        while (runStart < plotW) {
+            int topY = colTopY[runStart];
+            int color = strokeColor[runStart];
+            int runEnd = runStart + 1;
+            while (runEnd < plotW && colTopY[runEnd] == topY && strokeColor[runEnd] == color) {
+                runEnd++;
+            }
+            graphics.fill(plotX + runStart, topY, plotX + runEnd, topY + 1, color);
+            runStart = runEnd;
         }
     }
 

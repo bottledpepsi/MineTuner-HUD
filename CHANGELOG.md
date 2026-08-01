@@ -132,6 +132,25 @@ All notable changes to MineTuner Statistics Server are documented in this file.
   - Speed is intentionally absent from this panel, matching its exclusion
     from `THRESHOLD_STATS` in the data model.
 
+### Fixed
+- **Graph rendering performance.** With several graphable stats enabled
+  (TPS, MSPT, FPS, CPU, Ping, Memory, Speed) and `renderAsGraph` on,
+  `MtssRenderer.drawPlotLine` was issuing two `graphics.fill()` calls per
+  horizontal pixel of every graph — one for each fill band — for both the
+  filled area and the stroke pass. For an 80px-wide graph that's roughly
+  320 draw calls per graph per frame; with 5-7 graphs enabled that's well
+  over a thousand tiny single-pixel-wide fills every frame, which is
+  driver/call-overhead bound rather than GPU-bound and was measured to cut
+  FPS by roughly two-thirds. Adjacent columns sharing the same top-Y and
+  color — extremely common, since sample height is rounded to whole pixels
+  and color only changes at threshold boundaries — are now merged into a
+  single wide `fill()` call instead of one call per column. Per-column
+  colors are also precomputed once up front rather than being
+  re-derived while scanning for run boundaries. For the common single-color
+  modes (`CURRENT_THRESHOLD`, `FIXED_ACCENT`) this collapses the fill pass
+  from `plotW` calls down to as few as 2-4. Purely an internal draw-call
+  reduction — the rendered pixels are identical to before.
+
 ## [1.1.0] - Unreleased
 
 ### Changed
