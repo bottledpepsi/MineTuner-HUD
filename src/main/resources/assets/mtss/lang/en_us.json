@@ -63,6 +63,13 @@
   "gui.mtss.stat_settings.show_prefix": "Show Prefix",
   "gui.mtss.stat_settings.decimals": "Decimals: %s",
   "gui.mtss.stat_settings.render_as_graph": "Render as Graph",
+  "gui.mtss.stat_settings.custom_thresholds": "Custom Thresholds \u00bb",
+  "gui.mtss.threshold.title": "Thresholds: %s",
+  "gui.mtss.threshold.use_custom": "Use Custom Thresholds",
+  "gui.mtss.threshold.good": "Good: %s",
+  "gui.mtss.threshold.warn": "Warn: %s",
+  "gui.mtss.threshold.higher_is_better": "(higher is better)",
+  "gui.mtss.threshold.lower_is_better": "(lower is better)",
   "mtss.toggle.on": "MineTuner Statistics Server overlay shown",
   "mtss.toggle.off": "MineTuner Statistics Server overlay hidden"
 }

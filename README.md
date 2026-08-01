@@ -53,7 +53,7 @@ While dragging, lists snap to the vertical and horizontal centre lines of your s
 ### Per-list stat control
 Right-click any list in the editor to open its context menu:
 - **Reorder / Toggle** — enable or disable individual stats, and move them up/down within the list
-- **Per-stat settings** — toggle the label prefix (e.g. hide "TPS: " and show just the value), and for numeric stats (TPS, MSPT, CPU, Speed) set the number of decimal places
+- **Per-stat settings** — toggle the label prefix (e.g. hide "TPS: " and show just the value), set decimal places for numeric stats (TPS, MSPT, CPU, Speed), switch graphable stats (TPS, MSPT, FPS, CPU, Ping, Memory, Speed) between text and a rolling history graph, and override the good/warn color thresholds for TPS, FPS, Ping, Memory, and CPU on a per-list basis
 - **Rename** — give each list a custom name
 - **Background** — toggle the semi-transparent dark background per list
 - **Text Shadow** — toggle text shadow per list
@@ -71,7 +71,7 @@ In addition to `/mtss gui`, a keybind (default: **H**) opens the editor directly
 A separate keybind (unbound by default, rebindable in **Options → Controls → Key Binds → MineTuner Statistics Server**) instantly shows or hides the live overlay without opening the editor — handy for streaming or screenshots. It's independent of the editor: opening the editor still works, and still shows list previews, even while the overlay is hidden.
 
 ### Color-coded values
-TPS, FPS, Ping, Memory, CPU, and Speed all render in context-aware colors (green / yellow / red) based on thresholds — you can tell at a glance whether something's wrong without reading the number.
+TPS, FPS, Ping, Memory, CPU, and Speed all render in context-aware colors (green / yellow / red) based on thresholds — you can tell at a glance whether something's wrong without reading the number. For TPS, FPS, Ping, Memory, and CPU, these thresholds can be customized per list via each stat's settings panel (⚙ → Custom Thresholds »); Speed uses its own fixed movement-based coloring instead.
 
 ### Zero overhead when not needed
 The HUD renderer is skipped entirely when the vanilla debug screen (F3) is open, and the overlay is suppressed while the editor GUI is active. Slow metrics (CPU, GC) are polled on a 500ms throttle to avoid hammering `OperatingSystemMXBean` every frame.
@@ -117,7 +117,15 @@ Press the **Toggle MineTuner Statistics Server Overlay** keybind (unbound by def
 Inside a list's context menu, click **Reorder / Toggle stats** to open the stat panel for that list:
 - Click a stat row to **toggle it on or off**
 - Click **▲ / ▼** to move a stat up or down in the display order
-- Click **⚙** to open per-stat settings — show/hide the label prefix, and for numeric stats (TPS, MSPT, CPU, Speed) adjust decimal places with **- / +**
+- Click **⚙** to open per-stat settings:
+  - **Show Prefix** — show/hide the label prefix (e.g. hide "TPS: " and show just the value)
+  - **Decimals** — for numeric stats (TPS, MSPT, CPU, Speed), adjust the number of decimal places with **- / +**
+  - **Render as Graph** — for graphable stats (TPS, MSPT, FPS, CPU, Ping, Memory, Speed), swap the text line for a rolling history graph
+  - **Custom Thresholds »** — for TPS, FPS, Ping, Memory, and CPU, opens a sub-panel to override that stat's green/yellow/red color cutoffs for this list only:
+    - **Use Custom Thresholds** toggle — when off, the stat falls back to its built-in default thresholds
+    - **Good** / **Warn** steppers — adjust with **- / +** (0.5 steps for TPS, whole-number steps for everything else). A subtitle under the stat name reminds you whether the stat is "(higher is better)" (TPS, FPS) or "(lower is better)" (Ping, Memory, CPU), since the two work opposite to each other
+    - The good/warn values are automatically kept in the correct order for that stat's direction, so you can't accidentally create an inverted range
+    - Click **◀ Back** to return to the per-stat settings panel
 - Click **✕ Close** to return to the context menu
 
 ### Color / Scale panel

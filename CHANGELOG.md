@@ -107,6 +107,30 @@ All notable changes to MineTuner Statistics Server are documented in this file.
     controls yet. A `// TODO(step 5)` marks where the editing panel will
     go, matching the same "data model now, GUI later" pattern already used
     for `GraphStyle` above.
+- **Custom Thresholds panel** for the five threshold-eligible stats (TPS,
+  FPS, Ping, Memory, CPU), resolving the `// TODO(step 5)` left by the
+  threshold data model above. Opened from each stat's settings panel (⚙ →
+  same panel as Show Prefix / Decimals / Render as Graph) via a new
+  **"Custom Thresholds »"** row, following the same nested-panel pattern
+  already used for the list context menu's **Color / Scale...** entry:
+  - A **Use Custom Thresholds** toggle flips `ThresholdSettings.enabled`;
+    when off, the stat keeps using its built-in default thresholds exactly
+    as before.
+  - **Good** / **Warn** rows let you step the two cutoffs up or down with
+    **- / +** (0.5 per click for TPS, whole numbers for FPS/Ping/Memory/CPU),
+    clamped to non-negative values.
+  - A small gray subtitle under the stat name reads "(higher is better)" for
+    TPS/FPS or "(lower is better)" for Ping/Memory/CPU, so the meaning of
+    "Good" and "Warn" is never ambiguous for the lower-is-better stats.
+  - Adjusting either cutoff automatically corrects the other if needed, so
+    Warn can never end up worse than Good for that stat's direction — no
+    more nonsensical inverted ranges.
+  - Changes apply immediately to the list preview in the same editor screen,
+    the same way `decimals` and `Render as Graph` already do, since the
+    editor's `MtssRenderer.tickCache()` call already re-derives the cached
+    lines every frame — no extra cache-invalidation call was needed.
+  - Speed is intentionally absent from this panel, matching its exclusion
+    from `THRESHOLD_STATS` in the data model.
 
 ## [1.1.0] - Unreleased
 

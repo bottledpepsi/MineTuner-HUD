@@ -89,6 +89,16 @@ public class MtssGuiScreen extends Screen {
 
     private boolean colorScaleOpen = false;
 
+    /** Whether the per-stat custom-threshold sub-panel is open (opened from the stat settings panel). */
+    private boolean thresholdPanelOpen = false;
+
+    // ── Threshold sub-panel row indices ───────────────────────────────────────
+    private static final int TH_USE_CUSTOM = 0;
+    private static final int TH_GOOD       = 1;
+    private static final int TH_WARN       = 2;
+    private static final int TH_BACK       = 3;
+    private static final int TH_COUNT      = 4;
+
     public MtssGuiScreen() {
         super(Component.translatable("gui.mtss.title"));
     }
@@ -133,6 +143,7 @@ public class MtssGuiScreen extends Screen {
         else if (menuKind == MenuKind.EMPTY_SPACE)    renderEmptySpaceMenu(g, font, mx, my);
         else if (menuKind == MenuKind.RENAME)          renderRenameBox(g, font);
         else if (colorScaleOpen)                       renderColorScalePanel(g, font, mx, my);
+        else if (reorderOpen && statSettingsStat != null && thresholdPanelOpen) renderThresholdPanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null) renderStatSettingsPanel(g, font, mx, my);
         else if (reorderOpen)                          renderReorderPanel(g, font, mx, my);
 
@@ -408,24 +419,40 @@ public class MtssGuiScreen extends Screen {
         return MtssConfig.GRAPHABLE_STATS.contains(stat);
     }
 
-    // TODO(step 5): GUI panel for editing statThresholds. MtssConfig.StatListConfig
-    // now exposes a per-stat Map<String, ThresholdSettings> (see MtssConfig.THRESHOLD_STATS /
-    // ThresholdSettings) with enabled/goodMin/warnMin per TPS, FPS, Ping, Memory, and CPU.
-    // This step deliberately only wires the data model + rendering; add a settings row
-    // here (alongside Show Prefix / Decimals / Render as Graph) that lets a user flip
-    // ThresholdSettings.enabled and edit goodMin/warnMin per stat, per list.
+    /** Stats that have a user-configurable good/warn color threshold (step 4's ThresholdSettings). */
+    private boolean supportsThresholds(MtssConfig.Stat stat) {
+        return MtssConfig.THRESHOLD_STATS.contains(stat);
+    }
+
+    /**
+     * True for stats where a HIGHER value is better (green at/above goodMin).
+     * False for stats where a LOWER value is better (green at/below goodMin).
+     * Must match the direction baked into MtssDataHolder's xColorFor(...) functions.
+     */
+    private boolean isHigherBetter(MtssConfig.Stat stat) {
+        return stat == MtssConfig.Stat.TPS || stat == MtssConfig.Stat.FPS;
+    }
+
+    /**
+     * Increment step size appropriate to each threshold stat's natural scale:
+     * whole numbers for Ping/Memory/FPS, 0.5 for TPS, 1.0 for CPU%.
+     */
+    private float thresholdStep(MtssConfig.Stat stat) {
+        return (stat == MtssConfig.Stat.TPS) ? 0.5f : 1.0f;
+    }
 
     /**
      * Row count for the stat settings panel: header + prefix + (optional
-     * decimals) + (optional graph toggle) + back. Shared by the render,
-     * click-handling, and hit-testing methods below so they can't drift out
-     * of sync with each other (see the reorder/toggle panel's history of the
-     * same bug, noted in the changelog).
+     * decimals) + (optional graph toggle) + (optional thresholds row) + back.
+     * Shared by the render, click-handling, and hit-testing methods below so
+     * they can't drift out of sync with each other (see the reorder/toggle
+     * panel's history of the same bug, noted in the changelog).
      */
     private int statSettingsPanelRows(MtssConfig.Stat stat) {
         int rows = 3; // header + prefix + back
-        if (supportsDecimals(stat)) rows++;
-        if (supportsGraph(stat))    rows++;
+        if (supportsDecimals(stat))    rows++;
+        if (supportsGraph(stat))       rows++;
+        if (supportsThresholds(stat))  rows++;
         return rows;
     }
 
@@ -488,6 +515,17 @@ public class MtssGuiScreen extends Screen {
             nextRow++;
         }
 
+        // Custom Thresholds sub-panel opener (only for threshold-eligible stats)
+        boolean thresholdsRow = supportsThresholds(statSettingsStat);
+        if (thresholdsRow) {
+            int ryTh = py + PANEL_PAD + ROW_H * nextRow;
+            if (isHoveringRow(mx, my, px, ryTh, PANEL_W, ROW_H))
+                g.fill(px + 1, ryTh, px + PANEL_W - 1, ryTh + ROW_H, 0x44FFFFFF);
+            g.text(font, "§f" + I18n.get("gui.mtss.stat_settings.custom_thresholds"),
+                    px + PANEL_PAD, ryTh + 2, 0xFFFFFFFF, false);
+            nextRow++;
+        }
+
         // Back button
         int ryBack = py + PANEL_PAD + ROW_H * nextRow;
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
@@ -500,8 +538,9 @@ public class MtssGuiScreen extends Screen {
                                               MtssConfig.StatListConfig lc) {
         if (statSettingsStat == null) return;
         MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
-        boolean decimalsRow = supportsDecimals(statSettingsStat);
-        boolean graphRow    = supportsGraph(statSettingsStat);
+        boolean decimalsRow   = supportsDecimals(statSettingsStat);
+        boolean graphRow      = supportsGraph(statSettingsStat);
+        boolean thresholdsRow = supportsThresholds(statSettingsStat);
 
         int rows = statSettingsPanelRows(statSettingsStat);
         int panelH = PANEL_PAD * 2 + ROW_H * rows;
@@ -541,10 +580,184 @@ public class MtssGuiScreen extends Screen {
             nextRow++;
         }
 
+        if (thresholdsRow) {
+            int ryTh = py + PANEL_PAD + ROW_H * nextRow;
+            if (isHoveringRow(mx, my, px, ryTh, PANEL_W, ROW_H)) {
+                thresholdPanelOpen = true;
+                return;
+            }
+            nextRow++;
+        }
+
         int ryBack = py + PANEL_PAD + ROW_H * nextRow;
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H)) {
             statSettingsStat = null; // back to reorder panel
         }
+    }
+
+    // ── Custom-threshold sub-panel ────────────────────────────────────────────
+    // Mirrors the LM_COLOR -> colorScaleOpen/renderColorScalePanel nesting
+    // pattern: a boolean flag opens a sibling sub-panel from within the stat
+    // settings panel, with its own render/click/hit-test methods below.
+
+    private void renderThresholdPanel(GuiGraphicsExtractor g,
+                                      net.minecraft.client.gui.Font font,
+                                      int mx, int my) {
+        MtssConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null || statSettingsStat == null) { thresholdPanelOpen = false; return; }
+
+        MtssConfig.ThresholdSettings ts = lc.getThreshold(statSettingsStat);
+        if (ts == null) { thresholdPanelOpen = false; return; }
+
+        boolean higherBetter = isHigherBetter(statSettingsStat);
+        String statLabel = I18n.get("stat.mtss." + statSettingsStat.name().toLowerCase());
+
+        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
+        g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
+
+        // Header + direction subtitle
+        g.text(font, "§e" + I18n.get("gui.mtss.threshold.title", statLabel),
+                px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+        String dirLabel = higherBetter ? I18n.get("gui.mtss.threshold.higher_is_better")
+                                        : I18n.get("gui.mtss.threshold.lower_is_better");
+        g.text(font, "§7" + dirLabel, px + PANEL_PAD, py + PANEL_PAD + font.lineHeight, 0xFF999999, false);
+
+        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+
+        // Row 0: Use custom thresholds toggle
+        int ry0 = rowTop + ROW_H * TH_USE_CUSTOM;
+        if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H))
+            g.fill(px + 1, ry0, px + PANEL_W - 1, ry0 + ROW_H, 0x44FFFFFF);
+        String useCustomLabel = I18n.get("gui.mtss.threshold.use_custom")
+                + (ts.enabled ? " §a" + I18n.get("gui.mtss.menu.on")
+                              : " §c" + I18n.get("gui.mtss.menu.off"));
+        g.text(font, "§f" + useCustomLabel, px + PANEL_PAD, ry0 + 2, 0xFFFFFFFF, false);
+
+        // Row 1: Good threshold stepper
+        int ry1 = rowTop + ROW_H * TH_GOOD;
+        boolean hoverGoodDown = isHoveringRow(mx, my, px, ry1, PANEL_W / 2, ROW_H);
+        boolean hoverGoodUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry1, PANEL_W / 2, ROW_H);
+        if (hoverGoodDown) g.fill(px + 1, ry1, px + PANEL_W / 2, ry1 + ROW_H, 0x44FFFFFF);
+        if (hoverGoodUp)   g.fill(px + PANEL_W / 2, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§f- " + I18n.get("gui.mtss.threshold.good", formatThreshold(ts.goodMin)),
+                px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
+        g.text(font, "§f+", px + PANEL_W - 14, ry1 + 2, 0xFFFFFFFF, false);
+
+        // Row 2: Warn threshold stepper
+        int ry2 = rowTop + ROW_H * TH_WARN;
+        boolean hoverWarnDown = isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H);
+        boolean hoverWarnUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H);
+        if (hoverWarnDown) g.fill(px + 1, ry2, px + PANEL_W / 2, ry2 + ROW_H, 0x44FFFFFF);
+        if (hoverWarnUp)   g.fill(px + PANEL_W / 2, ry2, px + PANEL_W - 1, ry2 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§f- " + I18n.get("gui.mtss.threshold.warn", formatThreshold(ts.warnMin)),
+                px + PANEL_PAD, ry2 + 2, 0xFFFFFFFF, false);
+        g.text(font, "§f+", px + PANEL_W - 14, ry2 + 2, 0xFFFFFFFF, false);
+
+        // Row 3: Back
+        int ry3 = rowTop + ROW_H * TH_BACK;
+        if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H))
+            g.fill(px + 1, ry3, px + PANEL_W - 1, ry3 + ROW_H, 0x44FFFFFF);
+        g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"),
+                px + PANEL_PAD, ry3 + 2, 0xFFFFFFFF, false);
+    }
+
+    /** Formats a threshold value without a trailing ".0" for whole-number steps. */
+    private String formatThreshold(float v) {
+        if (v == Math.floor(v)) return String.valueOf((int) v);
+        return String.format("%.1f", v);
+    }
+
+    private boolean isInsideThresholdPanel(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+
+    private void handleThresholdPanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
+        if (statSettingsStat == null) return;
+        MtssConfig.ThresholdSettings ts = lc.getThreshold(statSettingsStat);
+        if (ts == null) { thresholdPanelOpen = false; return; }
+
+        boolean higherBetter = isHigherBetter(statSettingsStat);
+        float step = thresholdStep(statSettingsStat);
+
+        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+
+        int ry0 = rowTop + ROW_H * TH_USE_CUSTOM;
+        int ry1 = rowTop + ROW_H * TH_GOOD;
+        int ry2 = rowTop + ROW_H * TH_WARN;
+        int ry3 = rowTop + ROW_H * TH_BACK;
+
+        MtssConfig root = MtssConfig.getInstance();
+
+        if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H)) {
+            ts.enabled = !ts.enabled;
+            root.save();
+            return;
+        }
+
+        if (isHoveringRow(mx, my, px, ry1, PANEL_W / 2, ROW_H)) {
+            ts.goodMin = Math.max(0f, roundStep(ts.goodMin - step));
+            clampThresholdOrder(ts, higherBetter, true);
+            root.save();
+            return;
+        } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ry1, PANEL_W / 2, ROW_H)) {
+            ts.goodMin = Math.max(0f, roundStep(ts.goodMin + step));
+            clampThresholdOrder(ts, higherBetter, true);
+            root.save();
+            return;
+        }
+
+        if (isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H)) {
+            ts.warnMin = Math.max(0f, roundStep(ts.warnMin - step));
+            clampThresholdOrder(ts, higherBetter, false);
+            root.save();
+            return;
+        } else if (isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H)) {
+            ts.warnMin = Math.max(0f, roundStep(ts.warnMin + step));
+            clampThresholdOrder(ts, higherBetter, false);
+            root.save();
+            return;
+        }
+
+        if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H)) {
+            thresholdPanelOpen = false;
+        }
+    }
+
+    /**
+     * Enforces goodMin/warnMin ordering after an adjustment so a user can't
+     * create an inverted range: for higher-is-better stats, warnMin must stay
+     * <= goodMin; for lower-is-better stats, warnMin must stay >= goodMin.
+     * `adjustedGood` tells us which field was just moved, so the other field
+     * is the one pulled back into line.
+     */
+    private void clampThresholdOrder(MtssConfig.ThresholdSettings ts, boolean higherBetter, boolean adjustedGood) {
+        if (higherBetter) {
+            if (adjustedGood) {
+                if (ts.warnMin > ts.goodMin) ts.warnMin = ts.goodMin;
+            } else {
+                if (ts.warnMin > ts.goodMin) ts.goodMin = ts.warnMin;
+            }
+        } else {
+            if (adjustedGood) {
+                if (ts.warnMin < ts.goodMin) ts.warnMin = ts.goodMin;
+            } else {
+                if (ts.warnMin < ts.goodMin) ts.goodMin = ts.warnMin;
+            }
+        }
+    }
+
+    /** Rounds to the nearest 0.1 to avoid float drift from repeated +/- 0.5 steps. */
+    private float roundStep(float v) {
+        return Math.round(v * 10f) / 10f;
     }
 
     // ── Shared panel drawing helper ───────────────────────────────────────────
@@ -599,7 +812,11 @@ public class MtssGuiScreen extends Screen {
         }
         if (reorderOpen) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && statSettingsStat != null) {
+            if (lc != null && statSettingsStat != null && thresholdPanelOpen) {
+                // Threshold sub-panel is open — check bounds and route
+                if (isInsideThresholdPanel(mx, my)) handleThresholdPanelClick(mx, my, lc);
+                else { thresholdPanelOpen = false; } // click outside → back to stat settings
+            } else if (lc != null && statSettingsStat != null) {
                 // Stat settings panel is open — check bounds and route
                 if (isInsideStatSettingsPanel(mx, my)) handleStatSettingsPanelClick(mx, my, lc);
                 else { statSettingsStat = null; } // click outside → back to reorder
@@ -746,7 +963,7 @@ public class MtssGuiScreen extends Screen {
             case LM_SHADOW    -> { lc.textShadow     = !lc.textShadow;     root.save(); }
             case LM_COLOR     -> colorScaleOpen = true;
             case LM_DUPLICATE -> { root.duplicateList(lc.id); root.save(); }
-            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; }
+            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; }
         }
     }
 
@@ -769,7 +986,7 @@ public class MtssGuiScreen extends Screen {
         int rowTop = py + PANEL_PAD + ROW_H;
 
         int closeY = rowTop + all.size() * ROW_H;
-        if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H)) { reorderOpen = false; statSettingsStat = null; return; }
+        if (isHoveringRow(mx, my, px, closeY, PANEL_W, ROW_H)) { reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; return; }
 
         for (int i = 0; i < all.size(); i++) {
             MtssConfig.Stat stat = all.get(i);
