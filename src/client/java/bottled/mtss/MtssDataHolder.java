@@ -141,44 +141,59 @@ public final class MtssDataHolder {
     public static float[] getSpeedHistory() { return speedHistory.snapshot(); }
 
     // ── Color helpers ─────────────────────────────────────────────────────────
+    // Each getXColor() reads live global state and delegates to a value-based
+    // xColorFor(value) sibling. The value-based variants exist so graph mode
+    // (MtssRenderer) can color individual historical samples (PER_SEGMENT_THRESHOLD)
+    // using the exact same thresholds as classic text mode, without duplicating
+    // the threshold numbers in a second place. TODO(step 4): if ThresholdSettings
+    // lands, feed its per-stat custom thresholds into these instead of the
+    // hardcoded bands below, updating both the live and value-based callers together.
 
     public static float getTps() {
         if (mspt > 0f) return Math.min(tickRate, 1000f / mspt);
         return tickRate;
     }
-    public static int getTpsColor() {
-        float t = getTps();
-        if (t >= 18f) return 0xFF55FF55;
-        if (t >= 14f) return 0xFFFFFF55;
+    public static int getTpsColor() { return tpsColorFor(getTps()); }
+    public static int tpsColorFor(float tps) {
+        if (tps >= 18f) return 0xFF55FF55;
+        if (tps >= 14f) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getFpsColor() {
-        if (fps >= 60) return 0xFF55FF55;
-        if (fps >= 30) return 0xFFFFFF55;
+    public static int getFpsColor() { return fpsColorFor(fps); }
+    public static int fpsColorFor(float fpsValue) {
+        if (fpsValue >= 60) return 0xFF55FF55;
+        if (fpsValue >= 30) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getPingColor() {
-        if (ping < 0)    return 0xFFFFFFFF;
-        if (ping <= 80)  return 0xFF55FF55;
-        if (ping <= 150) return 0xFFFFFF55;
+    public static int getPingColor() { return pingColorFor(ping); }
+    public static int pingColorFor(float pingValue) {
+        if (pingValue < 0)    return 0xFFFFFFFF;
+        if (pingValue <= 80)  return 0xFF55FF55;
+        if (pingValue <= 150) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
     public static int getMemColor() {
         if (memMaxMb <= 0) return 0xFFFFFFFF;
-        double pct = (double) memUsedMb / memMaxMb;
+        return memColorForPercent(100.0 * memUsedMb / memMaxMb);
+    }
+    /** For graph mode, where history is already stored as a used/max percentage (see updateFastMetrics). */
+    public static int memColorForPercent(double pct100) {
+        double pct = pct100 / 100.0;
         if (pct < 0.6)  return 0xFF55FF55;
         if (pct < 0.85) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getCpuColor() {
-        if (cpuPercent < 0)  return 0xFFFFFFFF;
-        if (cpuPercent < 50) return 0xFF55FF55;
-        if (cpuPercent < 80) return 0xFFFFFF55;
+    public static int getCpuColor() { return cpuColorFor(cpuPercent); }
+    public static int cpuColorFor(double cpuValue) {
+        if (cpuValue < 0)  return 0xFFFFFFFF;
+        if (cpuValue < 50) return 0xFF55FF55;
+        if (cpuValue < 80) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getSpeedColor() {
-        if (speedBps < 0.01f) return 0xFFAAAAAA;
-        if (speedBps > 20f)   return 0xFFFFFF55;
+    public static int getSpeedColor() { return speedColorFor(speedBps); }
+    public static int speedColorFor(float speedValue) {
+        if (speedValue < 0.01f) return 0xFFAAAAAA;
+        if (speedValue > 20f)   return 0xFFFFFF55;
         return 0xFFFFFFFF;
     }
 

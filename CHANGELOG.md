@@ -37,6 +37,39 @@ All notable changes to MineTuner Statistics Server are documented in this file.
   on or off per-stat without editing `mtss.json` by hand. Only shown for
   the seven graphable stats above — other stats' settings panels are
   unchanged.
+- **Graph visual & UX overhaul.** Every graph now renders as a proper
+  layered mini perf-monitor widget instead of flat single-tone bars:
+  - A gradient-faded area fill (more opaque near the top edge, fading
+    toward the baseline) with a brighter 1px stroke tracing the top edge,
+    so the trend reads as a line rather than a bar-chart silhouette — the
+    single biggest visual upgrade in this pass.
+  - Low-contrast horizontal gridlines at 25/50/75% of the current scale
+    (auto-hidden on very short graphs where they'd just be noise).
+  - Peak/min markers: small ticks at the highest and lowest points
+    currently visible, so spikes and dips are identifiable at a glance.
+  - Optional smoothing (0/2/3/4-sample moving average) computed at render
+    time from the raw history — the underlying ring buffer is never
+    mutated, so other consumers still see raw samples.
+  - Auto-scale (default) now pads the visible range by 10% headroom so the
+    line doesn't touch the very top/bottom edge; a fixed min/max mode is
+    also available for a stable reference scale (e.g. always show TPS
+    0–20) that doesn't recompute bounds every frame.
+  - Four selectable color modes: the original whole-graph "current value"
+    threshold color, a new per-segment mode that colors each historical
+    sample by its own threshold at the time, a fixed single accent color
+    for users who find threshold flashing distracting, and a smooth
+    blue→green→yellow→red gradient across the visible range.
+  - Per-graph width/height, panel background, gridlines, peak markers, and
+    value-readout mode (none / current value / current + min + max) are
+    all configurable via a new `GraphStyle` object nested in each stat's
+    settings (data model only in this pass — GUI controls for these follow
+    in a later step, matching how step 1 deferred its own GUI wiring).
+  Old configs without `GraphStyle` continue to load and backfill to
+  defaults that reproduce the pre-overhaul look (80×28, current-value
+  threshold coloring, gridlines and peak markers on) — see the PR
+  description for the two visual details where "defaults reproduce the
+  old look" and "ship the new features on by default" were in tension and
+  how that was resolved.
 
 ## [1.1.0] - Unreleased
 

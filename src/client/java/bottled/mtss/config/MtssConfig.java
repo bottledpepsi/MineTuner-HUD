@@ -48,6 +48,23 @@ public class MtssConfig {
         BIOME, LIGHT_LEVEL, DIMENSION
     }
 
+    /** How much of the graph's current/min/max value readout is drawn. */
+    public enum GraphValueDisplay {
+        NONE, CURRENT, MIN_CURRENT_MAX
+    }
+
+    /** How a graph's plot is colored. */
+    public enum GraphColorMode {
+        /** Step 1's original behavior: whole graph tinted by the current value's threshold color. */
+        CURRENT_THRESHOLD,
+        /** Each historical sample colored by its own threshold value at the time it was recorded. */
+        PER_SEGMENT_THRESHOLD,
+        /** Ignore threshold coloring; use a single user-chosen accent color for the whole graph. */
+        FIXED_ACCENT,
+        /** Smooth color interpolation across the visible value range (blue→green→yellow→red). */
+        GRADIENT
+    }
+
     // ── Root config ───────────────────────────────────────────────────────────
     public int                  nextId = 1;
     public List<StatListConfig> lists  = new ArrayList<>();
@@ -62,6 +79,56 @@ public class MtssConfig {
         public int decimals = 1;
         /** Render graph. */
         public boolean renderAsGraph = false;
+        /**
+         * Visual styling for this stat's graph, used only when renderAsGraph is
+         * true. Lazily backfilled (see backFill()/getGraphStyle()) so configs
+         * written before this field existed still load cleanly.
+         */
+        public GraphStyle graphStyle = new GraphStyle();
+    }
+
+    /**
+     * Per-graph visual settings: panel background, gridlines, peak markers,
+     * value readout, smoothing, scale mode, size, and color mode. All fields
+     * default to reproducing step 1's original look exactly (flat 80x28
+     * single-tone fill colored by current-value threshold) so a user who
+     * never opens the (future) styling GUI sees zero behavior change.
+     */
+    public static class GraphStyle {
+        public boolean showPanelBackground = true;
+        public boolean showGridlines = true;
+        public boolean showPeakMarkers = true;
+        public GraphValueDisplay valueDisplay = GraphValueDisplay.CURRENT; // NONE, CURRENT, MIN_CURRENT_MAX
+        public int smoothing = 0; // 0 = off, else moving-average window size (2/3/4)
+        public boolean autoScale = true;
+        public float fixedMin = 0f;
+        public float fixedMax = 100f;
+        // NOTE: 80x28 (not a generic 60x20) because that's what this codebase's
+        // step 1 actually shipped as MtssRenderer.GRAPH_W/GRAPH_H — defaults
+        // here must reproduce the *existing* look exactly.
+        public int width = 80;   // px, replaces step 1's hardcoded GRAPH_W constant
+        public int height = 28;  // px, replaces step 1's hardcoded GRAPH_H constant
+        public GraphColorMode colorMode = GraphColorMode.CURRENT_THRESHOLD; // CURRENT_THRESHOLD, PER_SEGMENT_THRESHOLD, FIXED_ACCENT, GRADIENT
+        public int accentColor = 0xFF55FF55; // used when colorMode == FIXED_ACCENT
+
+        public GraphStyle() {}
+
+        public GraphStyle copy() {
+            GraphStyle c = new GraphStyle();
+            c.showPanelBackground = this.showPanelBackground;
+            c.showGridlines       = this.showGridlines;
+            c.showPeakMarkers     = this.showPeakMarkers;
+            c.valueDisplay        = this.valueDisplay;
+            c.smoothing           = this.smoothing;
+            c.autoScale           = this.autoScale;
+            c.fixedMin            = this.fixedMin;
+            c.fixedMax            = this.fixedMax;
+            c.width                = this.width;
+            c.height               = this.height;
+            c.colorMode            = this.colorMode;
+            c.accentColor          = this.accentColor;
+            return c;
+        }
     }
 
     /** Stats for which the rolling graph render mode is available. */
@@ -145,7 +212,9 @@ public class MtssConfig {
 
         /** Gets (or lazily creates) the settings for a stat. */
         public StatSettings getStatSettings(Stat stat) {
-            return statSettings.computeIfAbsent(stat.name(), k -> new StatSettings());
+            StatSettings ss = statSettings.computeIfAbsent(stat.name(), k -> new StatSettings());
+            if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
+            return ss;
         }
 
         /** Back-fill any stats added since this config was written. */
@@ -155,7 +224,8 @@ public class MtssConfig {
             for (Stat s : Stat.values()) {
                 statEnabled.putIfAbsent(s.name(), false);
                 if (!statOrder.contains(s.name())) statOrder.add(s.name());
-                statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
+                StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
+                if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
             }
         }
 
@@ -177,6 +247,7 @@ public class MtssConfig {
                 dst.showPrefix    = src.showPrefix;
                 dst.decimals      = src.decimals;
                 dst.renderAsGraph = src.renderAsGraph;
+                dst.graphStyle    = (src.graphStyle != null ? src.graphStyle : new GraphStyle()).copy();
                 copy.statSettings.put(e.getKey(), dst);
             }
             copy.anchorCorner   = this.anchorCorner;
