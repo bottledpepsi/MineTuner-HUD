@@ -2,6 +2,7 @@ package bottled.mtss.gui;
 
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.hud.MtssRenderer;
+import bottled.mtss.hud.TemplateEngine;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -38,7 +39,7 @@ public class MtssGuiScreen extends Screen {
     private MtssConfig.SnapY dragSnapY = MtssConfig.SnapY.NONE;
 
     // ── Menu / panel state ────────────────────────────────────────────────────
-    private enum MenuKind { NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME }
+    private enum MenuKind { NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT }
     private MenuKind menuKind   = MenuKind.NONE;
     private int      menuListId = -1;
     private int      menuX, menuY;
@@ -46,6 +47,19 @@ public class MtssGuiScreen extends Screen {
     /** Which stat's settings panel is open (null = reorder panel showing). */
     private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
+
+    // ── Template line editor state (step 6) ───────────────────────────────────
+    /** Whether the "Edit Template Lines" list (one row per templateLines entry + add/remove/back) is open. */
+    private boolean templateListOpen = false;
+    /**
+     * Index into templateLines currently being text-edited via
+     * MenuKind.TEMPLATE_EDIT, or -1 when the template-line list itself is
+     * showing (not editing a specific line). Mirrors the RENAME flow's
+     * renameBuffer pattern, generalized to edit one templateLines entry
+     * at a time rather than the list's name.
+     */
+    private int templateEditIndex = -1;
+    private StringBuilder templateEditBuffer = new StringBuilder();
 
     // ── Layout constants ──────────────────────────────────────────────────────
     private static final int ROW_H     = 13;
@@ -58,14 +72,26 @@ public class MtssGuiScreen extends Screen {
     private static final int SNAP_TICK      = 6;
 
     // ── Context menu item indices ─────────────────────────────────────────────
-    private static final int LM_REORDER    = 0;
+    // Row 0 is "Reorder / Toggle stats" in classic mode, or "Edit Template
+    // Lines" in template mode — same index, different action/label, chosen
+    // in renderListContextMenu/handleListContextMenuClick based on
+    // lc.useTemplate. LM_TEMPLATE_MODE is the new toggle row appended after
+    // the original set.
+    private static final int LM_REORDER    = 0; // also serves as LM_EDIT_TEMPLATE when useTemplate is true
     private static final int LM_RENAME     = 1;
     private static final int LM_BG         = 2;
     private static final int LM_SHADOW     = 3;
     private static final int LM_COLOR      = 4;
     private static final int LM_DUPLICATE  = 5;
     private static final int LM_DELETE     = 6;
-    private static final int LM_COUNT      = 7;
+    private static final int LM_TEMPLATE_MODE = 7;
+    private static final int LM_COUNT      = 8;
+
+    // ── Template line list sub-panel row indices ──────────────────────────────
+    // Rendered as: header, one row per templateLines entry, "+ Add line", "Back".
+    // Row count is dynamic (depends on templateLines.size()), computed by
+    // templateListPanelHeight()/templateListRowCount() below, mirroring the
+    // reorder panel's own dynamic-height pattern.
 
     // ── Color/scale sub-panel row indices ─────────────────────────────────────
     private static final int CS_USE_CUSTOM = 0;
@@ -142,10 +168,12 @@ public class MtssGuiScreen extends Screen {
         if      (menuKind == MenuKind.LIST_CONTEXT)   renderListContextMenu(g, font, mx, my);
         else if (menuKind == MenuKind.EMPTY_SPACE)    renderEmptySpaceMenu(g, font, mx, my);
         else if (menuKind == MenuKind.RENAME)          renderRenameBox(g, font);
+        else if (menuKind == MenuKind.TEMPLATE_EDIT)   renderTemplateEditBox(g, font);
         else if (colorScaleOpen)                       renderColorScalePanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null && thresholdPanelOpen) renderThresholdPanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null) renderStatSettingsPanel(g, font, mx, my);
         else if (reorderOpen)                          renderReorderPanel(g, font, mx, my);
+        else if (templateListOpen)                     renderTemplateListPanel(g, font, mx, my);
 
         super.extractRenderState(g, mx, my, partial);
     }
@@ -229,15 +257,21 @@ public class MtssGuiScreen extends Screen {
                                               : " §c" + I18n.get("gui.mtss.menu.off");
         String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.mtss.menu.on")
                                               : " §c" + I18n.get("gui.mtss.menu.off");
+        String onOff_tpl = lc.useTemplate    ? " §a" + I18n.get("gui.mtss.menu.on")
+                                              : " §c" + I18n.get("gui.mtss.menu.off");
 
         String[] labels = new String[LM_COUNT];
-        labels[LM_REORDER]   = "§f" + I18n.get("gui.mtss.menu.reorder");
+        // Row 0: "Reorder / Toggle stats" in classic mode, "Edit Template Lines" in template mode
+        labels[LM_REORDER]   = lc.useTemplate
+                ? "§f" + I18n.get("gui.mtss.menu.edit_template")
+                : "§f" + I18n.get("gui.mtss.menu.reorder");
         labels[LM_RENAME]    = "§e" + I18n.get("gui.mtss.menu.rename");
         labels[LM_BG]        = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
         labels[LM_SHADOW]    = "§f" + I18n.get("gui.mtss.menu.shadow")     + onOff_sh;
         labels[LM_COLOR]     = "§f" + I18n.get("gui.mtss.menu.color_scale");
         labels[LM_DUPLICATE] = "§b" + I18n.get("gui.mtss.menu.duplicate");
         labels[LM_DELETE]    = "§c" + I18n.get("gui.mtss.menu.delete");
+        labels[LM_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOff_tpl;
 
         drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
     }
@@ -404,6 +438,137 @@ public class MtssGuiScreen extends Screen {
             g.fill(px + 1, closeY, px + PANEL_W - 1, closeY + ROW_H, 0x44FFFFFF);
         g.text(font, "§7" + I18n.get("gui.mtss.reorder.close"),
                 px + PANEL_PAD, closeY + 2, 0xFFFFFFFF, false);
+    }
+
+    // ── Template line editor (step 6) ─────────────────────────────────────────
+    // Intentionally minimal per the spec: a flat list of templateLines
+    // entries with add/remove/edit, reusing the RENAME text-entry pattern
+    // (see templateEditBuffer / MenuKind.TEMPLATE_EDIT below) generalized to
+    // one templateLines entry at a time. Full multi-line editing UX is
+    // explicitly out of scope for this step.
+
+    /** Row count for the template line list panel: header + one row per templateLines entry + "+ Add line" + "Back". */
+    private int templateListRowCount(MtssConfig.StatListConfig lc) {
+        return 1 + lc.templateLines.size() + 2; // header + lines + add + back
+    }
+
+    private int templateListPanelHeight(MtssConfig.StatListConfig lc) {
+        return PANEL_PAD * 2 + ROW_H * templateListRowCount(lc);
+    }
+
+    private void renderTemplateListPanel(GuiGraphicsExtractor g,
+                                         net.minecraft.client.gui.Font font,
+                                         int mx, int my) {
+        MtssConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null) { templateListOpen = false; return; }
+
+        int panelH = templateListPanelHeight(lc);
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + PANEL_W, py + panelH, 0xEE111111);
+        g.outline(px, py, PANEL_W, panelH, 0xFFFFAA00);
+        g.text(font, "§e" + I18n.get("gui.mtss.template.title"),
+                px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+
+        int rowTop = py + PANEL_PAD + ROW_H;
+        for (int i = 0; i < lc.templateLines.size(); i++) {
+            int ry = rowTop + i * ROW_H;
+            if (isHoveringRow(mx, my, px, ry, PANEL_W, ROW_H))
+                g.fill(px + 1, ry, px + PANEL_W - 1, ry + ROW_H, 0x44FFFFFF);
+
+            String raw = lc.templateLines.get(i);
+            String preview = raw.isEmpty() ? "§7" + I18n.get("gui.mtss.template.empty_line")
+                                            : "§f" + truncateForRow(font, raw, PANEL_W - PANEL_PAD - 24);
+            g.text(font, I18n.get("gui.mtss.template.line_number", i + 1) + " " + preview,
+                    px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+
+            // ✕ remove button, right-aligned
+            boolean removeHovered = isHoveringRow(mx, my, px + PANEL_W - 12, ry, 10, ROW_H);
+            g.text(font, removeHovered ? "§c✕" : "§7✕", px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
+        }
+
+        int addY = rowTop + lc.templateLines.size() * ROW_H;
+        if (isHoveringRow(mx, my, px, addY, PANEL_W, ROW_H))
+            g.fill(px + 1, addY, px + PANEL_W - 1, addY + ROW_H, 0x44FFFFFF);
+        g.text(font, "§a" + I18n.get("gui.mtss.template.add_line"),
+                px + PANEL_PAD, addY + 2, 0xFFFFFFFF, false);
+
+        int backY = addY + ROW_H;
+        if (isHoveringRow(mx, my, px, backY, PANEL_W, ROW_H))
+            g.fill(px + 1, backY, px + PANEL_W - 1, backY + ROW_H, 0x44FFFFFF);
+        g.text(font, "§7" + I18n.get("gui.mtss.reorder.close"),
+                px + PANEL_PAD, backY + 2, 0xFFFFFFFF, false);
+    }
+
+    /** Truncates a template line preview to fit the panel row, appending an ellipsis marker when cut. */
+    private String truncateForRow(net.minecraft.client.gui.Font font, String s, int maxWidth) {
+        if (font.width(s) <= maxWidth) return s;
+        String ellipsis = "...";
+        int lo = 0, hi = s.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid; else hi = mid - 1;
+        }
+        return s.substring(0, lo) + ellipsis;
+    }
+
+    private boolean isInsideTemplateListPanel(int mx, int my, MtssConfig.StatListConfig lc) {
+        int panelH = templateListPanelHeight(lc);
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+
+    private void handleTemplateListPanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
+        int panelH = templateListPanelHeight(lc);
+        int px = clampX(menuX, PANEL_W);
+        int py = clampY(menuY, panelH);
+        int rowTop = py + PANEL_PAD + ROW_H;
+
+        int addY  = rowTop + lc.templateLines.size() * ROW_H;
+        int backY = addY + ROW_H;
+
+        if (isHoveringRow(mx, my, px, backY, PANEL_W, ROW_H)) { templateListOpen = false; return; }
+
+        if (isHoveringRow(mx, my, px, addY, PANEL_W, ROW_H)) {
+            lc.templateLines.add("");
+            MtssConfig.getInstance().save();
+            TemplateEngine.invalidate(lc.id);
+            return;
+        }
+
+        for (int i = 0; i < lc.templateLines.size(); i++) {
+            int ry = rowTop + i * ROW_H;
+            if (my < ry || my >= ry + ROW_H) continue;
+            if (mx >= px + PANEL_W - 12) {
+                // ✕ remove this line
+                lc.templateLines.remove(i);
+                MtssConfig.getInstance().save();
+                TemplateEngine.invalidate(lc.id);
+            } else {
+                // Open the text-entry box for this line
+                templateEditIndex  = i;
+                templateEditBuffer = new StringBuilder(lc.templateLines.get(i));
+                menuKind = MenuKind.TEMPLATE_EDIT;
+            }
+            return;
+        }
+    }
+
+    /** Text-entry box for a single templateLines entry — same visual/interaction pattern as renderRenameBox, generalized to a wider box since template strings run longer than list names. */
+    private void renderTemplateEditBox(GuiGraphicsExtractor g,
+                                       net.minecraft.client.gui.Font font) {
+        String prompt  = "§e" + I18n.get("gui.mtss.template.edit_prompt", templateEditIndex + 1);
+        String display = templateEditBuffer.toString() + "§7|";
+        int panelW = Math.max(PANEL_W + 40, Math.min(300, font.width(display) + PANEL_PAD * 2));
+        int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2;
+        int px = clampX(menuX, panelW);
+        int py = clampY(menuY, panelH);
+
+        g.fill(px, py, px + panelW, py + panelH, 0xEE111111);
+        g.outline(px, py, panelW, panelH, 0xFFFFAA00);
+        g.text(font, prompt,  px + PANEL_PAD, py + PANEL_PAD,             0xFFFFFFFF, false);
+        g.text(font, display, px + PANEL_PAD, py + PANEL_PAD + ROW_H + 2, 0xFFFFFFFF, false);
     }
 
     // ── Per-stat settings panel ───────────────────────────────────────────────
@@ -793,6 +958,13 @@ public class MtssGuiScreen extends Screen {
             menuKind = MenuKind.NONE;
             return true;
         }
+        if (menuKind == MenuKind.TEMPLATE_EDIT) {
+            // Click anywhere outside the text box cancels, same as RENAME —
+            // Enter (in keyPressed) is the confirm path.
+            menuKind = MenuKind.NONE;
+            templateEditIndex = -1;
+            return true;
+        }
         if (menuKind == MenuKind.LIST_CONTEXT) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc != null && isInsideListContextMenu(mx, my)) handleListContextMenuClick(mx, my, lc);
@@ -802,6 +974,12 @@ public class MtssGuiScreen extends Screen {
         if (menuKind == MenuKind.EMPTY_SPACE) {
             if (isInsideEmptySpaceMenu(mx, my)) handleEmptySpaceMenuClick(mx, my, root);
             else menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (templateListOpen) {
+            MtssConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && isInsideTemplateListPanel(mx, my, lc)) handleTemplateListPanelClick(mx, my, lc);
+            else templateListOpen = false;
             return true;
         }
         if (colorScaleOpen) {
@@ -925,6 +1103,31 @@ public class MtssGuiScreen extends Screen {
             }
             return true;
         }
+        if (menuKind == MenuKind.TEMPLATE_EDIT) {
+            if (keyCode == 256) { // Escape — cancel, discard edits to this line
+                menuKind = MenuKind.NONE;
+                templateEditIndex = -1;
+                templateListOpen = true; // return to the line list, not the raw canvas
+                return true;
+            }
+            if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter — confirm
+                MtssConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && templateEditIndex >= 0 && templateEditIndex < lc.templateLines.size()) {
+                    lc.templateLines.set(templateEditIndex, templateEditBuffer.toString());
+                    MtssConfig.getInstance().save();
+                    TemplateEngine.invalidate(lc.id);
+                }
+                menuKind = MenuKind.NONE;
+                templateEditIndex = -1;
+                templateListOpen = true; // return to the line list to keep editing other lines
+                return true;
+            }
+            if (keyCode == 259 && !templateEditBuffer.isEmpty()) { // Backspace
+                templateEditBuffer.deleteCharAt(templateEditBuffer.length() - 1);
+                return true;
+            }
+            return true;
+        }
         if (keyCode == 256) { onClose(); return true; }
         return super.keyPressed(event);
     }
@@ -935,6 +1138,16 @@ public class MtssGuiScreen extends Screen {
             char ch = (char) event.codepoint();
             if (ch >= 32 && renameBuffer.length() < 32)
                 renameBuffer.append(ch);
+            return true;
+        }
+        if (menuKind == MenuKind.TEMPLATE_EDIT) {
+            char ch = (char) event.codepoint();
+            // Template strings are meaningfully longer than a list name (they're
+            // full lines of mixed literal text + tokens), so this cap is much
+            // higher than renameBuffer's 32 — generous but still bounded so a
+            // single template line can't grow unboundedly.
+            if (ch >= 32 && templateEditBuffer.length() < 200)
+                templateEditBuffer.append(ch);
             return true;
         }
         return super.charTyped(event);
@@ -957,13 +1170,17 @@ public class MtssGuiScreen extends Screen {
         menuKind = MenuKind.NONE;
 
         switch (idx) {
-            case LM_REORDER   -> reorderOpen = true;
+            case LM_REORDER   -> {
+                if (lc.useTemplate) { templateListOpen = true; templateEditIndex = -1; }
+                else reorderOpen = true;
+            }
             case LM_RENAME    -> { menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
             case LM_BG        -> { lc.showBackground = !lc.showBackground; root.save(); }
             case LM_SHADOW    -> { lc.textShadow     = !lc.textShadow;     root.save(); }
             case LM_COLOR     -> colorScaleOpen = true;
             case LM_DUPLICATE -> { root.duplicateList(lc.id); root.save(); }
-            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; }
+            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; templateListOpen = false; }
+            case LM_TEMPLATE_MODE -> { lc.useTemplate = !lc.useTemplate; root.save(); }
         }
     }
 

@@ -79,6 +79,9 @@ The HUD renderer is skipped entirely when the vanilla debug screen (F3) is open,
 ### Frame-coherent line cache
 All stat string building is cached per-frame in a generation-keyed `HashMap`. The renderer and the editor GUI share the same cache, so the same strings are never built twice in one frame.
 
+### Template Mode
+Every list defaults to **classic mode** — one stat per line, exactly as MineTuner Statistics Server has always worked. Flip a list into **Template Mode** and you take direct control of its lines instead: write your own text and drop in stat tokens like `{tps}` or `{fps}` anywhere you want, mixing multiple stats and literal text on a single line (e.g. `FPS: {fps} | TPS: {tps:2} | {ping}ms`). See the [Template Mode](#template-mode-1) section under Usage for the full token table and editing flow.
+
 ---
 
 ## Installation
@@ -133,6 +136,58 @@ Inside a list's context menu, click **Color / Scale...** to:
 - Toggle **Use Custom Color** to override the normal threshold-based coloring
 - Click **Cycle Color** to step through a curated color palette
 - Use **- / +** to adjust the list's text scale between 0.5x and 2.0x
+
+### Template Mode
+Classic mode (the default) renders one line per enabled stat, in `statOrder` order, exactly as described above. **Template Mode** is an opt-in alternative for a list: instead of a fixed list of stat rows, you write your own line(s) of text with stat tokens interpolated in — closer to a small hypertext markup than a strict stat list. This is entirely per-list; a list not in Template Mode behaves identically to every prior version.
+
+#### Turning it on
+Right-click a list → **Template Mode** to toggle it on for that list. Once on, the context menu's first row changes from **Reorder / Toggle stats** to **Edit Template Lines**.
+
+#### Editing template lines
+Click **Edit Template Lines** to open the line list for that list:
+- Click an existing line to open a text-entry box for it — type your template, press **Enter** to confirm, or **Esc** to cancel and keep the previous text
+- Click **✕** next to a line to delete it
+- Click **+ Add line** to append a new (initially empty) line, then click it to edit
+- Click **✕ Close** to return to the context menu
+
+Each `templateLines` entry becomes one rendered line, in list order.
+
+#### Token syntax
+Wrap a stat's token name in curly braces to interpolate it: `{tps}` inserts the current TPS value using its default decimal count. Everything else in a template line is literal text, rendered exactly as typed.
+
+| Token | Stat | Notes |
+|---|---|---|
+| `{tps}` | TPS | Supports `:N` decimals suffix |
+| `{mspt}` | MSPT | Supports `:N` decimals suffix; renders nothing on remote servers, same as classic mode |
+| `{fps}` | FPS | — |
+| `{ping}` | Ping | — |
+| `{mem}` | Memory | — |
+| `{cpu}` | CPU | Supports `:N` decimals suffix |
+| `{entities}` | Entities | — |
+| `{chunks}` | Chunks | — |
+| `{rendered}` | Rendered Sections | — |
+| `{coords}` | Coords | — |
+| `{facing}` | Facing | — |
+| `{speed}` | Speed | Supports `:N` decimals suffix |
+| `{gc}` | GC Time | — |
+| `{biome}` | Biome | — |
+| `{light}` | Light Level | — |
+| `{dimension}` | Dimension | — |
+
+Add `:N` after any decimals-capable token to override its decimal places, e.g. `{tps:2}` for two decimal places, `{cpu:0}` for a whole number. Omit it to use that stat's normal default (the same default classic mode uses).
+
+Example: `FPS: {fps} | TPS: {tps:2} | {ping}ms` might render as `FPS: 144 | TPS: 19.86 | 42ms`.
+
+#### Literal braces
+To show a literal `{` or `}` in a template line (rather than starting a token), double it: `{{` renders as `{`, and `}}` renders as `}`.
+
+#### Unrecognized tokens
+A typo'd or unknown token — `{tsp}`, `{ping:2}` (Ping has no decimals), `{tps:abc}` — is not silently dropped or treated as an error. It renders back out as literal text (braces included, e.g. `{tsp}` shows up on screen exactly like that), so a mistake is visible and easy to spot and fix rather than quietly disappearing.
+
+#### Coloring and current limitations
+Template lines render in a single flat color per line — either the list's custom color (**Color / Scale... → Use Custom Color**) if enabled, or plain white otherwise. Per-token inline coloring (so different parts of the same line could show their own threshold color) is **not yet supported** — it's a natural follow-up but out of scope for the current version. Classic mode's per-stat threshold coloring and Show Prefix setting don't apply in Template Mode either; since you're writing the literal text yourself, you simply don't type a label if you don't want one.
+
+Template lines are always plain text rows — Template Mode does not currently support rendering a template line as a rolling graph.
 
 ### Config file
 Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually — the in-game GUI covers everything.

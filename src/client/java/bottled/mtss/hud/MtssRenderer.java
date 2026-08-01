@@ -132,6 +132,46 @@ public class MtssRenderer {
     public static void buildLines(MtssConfig.StatListConfig cfg,
                                   List<String> lines, List<Integer> colors,
                                   List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
+        // Step 6: template mode is an entirely separate rendering path, opt-in
+        // per list via cfg.useTemplate. This is a single if/else at the very
+        // top of the method — classic mode's loop below is completely
+        // untouched code, not interleaved with template logic in any way.
+        if (cfg.useTemplate) {
+            buildTemplateLines(cfg, lines, colors, rowKinds);
+            return;
+        }
+        buildClassicLines(cfg, lines, colors, graphEntries, rowKinds);
+    }
+
+    /**
+     * Template mode (step 6): renders {@code cfg.templateLines} through
+     * {@link TemplateEngine} instead of the classic per-Stat switch. No
+     * graph rows are ever produced here — template lines are always TEXT
+     * rows, since a template line can freely mix multiple stats and doesn't
+     * correspond to any single Stat the way a graph row does.
+     * <p>
+     * Per the spec, per-token inline coloring is out of scope for this step:
+     * every template line renders in a single flat color — the list's
+     * {@code overrideColor} when {@code useCustomColor} is set, or plain
+     * white otherwise. Per-token color tags (RTSS-style) are a natural
+     * follow-up, not built here.
+     */
+    private static void buildTemplateLines(MtssConfig.StatListConfig cfg,
+                                           List<String> lines, List<Integer> colors,
+                                           List<RowKind> rowKinds) {
+        int color = cfg.useCustomColor ? cfg.overrideColor : 0xFFFFFFFF;
+        List<List<TemplateEngine.Token>> parsedLines = TemplateEngine.getParsedLines(cfg);
+        for (List<TemplateEngine.Token> tokens : parsedLines) {
+            lines.add(TemplateEngine.render(tokens));
+            colors.add(color);
+            rowKinds.add(RowKind.TEXT);
+        }
+    }
+
+    /** Classic mode (steps 1-5): unchanged per-Stat line building, exactly as it always has been. */
+    private static void buildClassicLines(MtssConfig.StatListConfig cfg,
+                                  List<String> lines, List<Integer> colors,
+                                  List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
             // Graph mode only applies to the graphable stats; getStatSettings()
             // lazily creates settings for any stat, so this is safe even for

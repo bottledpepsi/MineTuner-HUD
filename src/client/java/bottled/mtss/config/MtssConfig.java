@@ -237,6 +237,24 @@ public class MtssConfig {
         public SnapX snapX = SnapX.NONE;
         public SnapY snapY = SnapY.NONE;
 
+        // ── Template mode (step 6) ──────────────────────────────────────────
+        /**
+         * false (default) = classic per-stat-line mode, unchanged from every
+         * prior step. true = render {@link #templateLines} instead of the
+         * per-Stat switch in {@code MtssRenderer.buildLines}. Existing configs
+         * that predate this field load as false via backFill()/load() below,
+         * so nothing changes for anyone who doesn't opt in.
+         */
+        public boolean useTemplate = false;
+        /**
+         * One raw markup string per rendered line, only consulted when
+         * {@link #useTemplate} is true. See {@code TemplateEngine} for the
+         * token grammar (e.g. {@code "{tps}"}, {@code "{tps:2}"}, and
+         * doubled-brace escapes) and the README's "Template Mode" section
+         * for the full token table.
+         */
+        public List<String> templateLines = new ArrayList<>();
+
         public StatListConfig() {}
 
         public StatListConfig(int id) {
@@ -302,6 +320,14 @@ public class MtssConfig {
             if (name == null) name = "List " + id;
             if (statSettings == null) statSettings = new LinkedHashMap<>();
             if (statThresholds == null) statThresholds = new LinkedHashMap<>();
+            // Step 6: pre-template configs have no templateLines key at all —
+            // Gson leaves the field null rather than running the field
+            // initializer, so this must never be skipped. useTemplate is a
+            // primitive boolean and always deserializes to false when absent,
+            // which is already the correct "classic mode" default, so it
+            // needs no backfill of its own.
+            if (templateLines == null) templateLines = new ArrayList<>();
+
             for (Stat s : Stat.values()) {
                 statEnabled.putIfAbsent(s.name(), false);
                 if (!statOrder.contains(s.name())) statOrder.add(s.name());
@@ -351,6 +377,8 @@ public class MtssConfig {
             copy.textScale      = this.textScale;
             copy.snapX          = this.snapX;
             copy.snapY          = this.snapY;
+            copy.useTemplate    = this.useTemplate;
+            copy.templateLines  = new ArrayList<>(this.templateLines);
             return copy;
         }
     }
@@ -411,6 +439,12 @@ public class MtssConfig {
                         // statThresholds (step 4): null for any config written before this
                         // field existed — backFill() below populates THRESHOLD_STATS defaults.
                         if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
+                        // templateLines (step 6): null for any config written before this
+                        // field existed. backFill() below also guards this, but it's set
+                        // here too to match the existing explicit-null-check pattern for
+                        // every other collection field on this class.
+                        if (list.templateLines == null) list.templateLines = new ArrayList<>();
+
                         // anchorCorner field renamed from alignment — treat null as TOP_LEFT
                         if (list.anchorCorner == null) list.anchorCorner = Corner.TOP_LEFT;
                         list.backFill();

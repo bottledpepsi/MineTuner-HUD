@@ -5,6 +5,49 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Template Mode** — an opt-in, per-list alternative to classic per-stat-line
+  rendering. Instead of a fixed list of stat rows, a list in Template Mode
+  renders freeform lines of your own text with stat tokens interpolated in
+  (e.g. `FPS: {fps} | TPS: {tps:2} | {ping}ms`), letting you combine multiple
+  stats and literal text on a single line — something the previous strictly-
+  ordered stat-list model couldn't do. Backed by two new `StatListConfig`
+  fields, `useTemplate` (default `false`) and `templateLines` (default empty
+  list); both backfill safely on old configs, so every pre-existing list
+  keeps rendering exactly as it always has unless you explicitly opt in.
+  - New `TemplateEngine` class (in the `hud` package) hand-rolls a small
+    parser/renderer for the token grammar: `{tps}`, `{fps}`, `{ping}`, `{mem}`,
+    `{cpu}`, `{entities}`, `{chunks}`, `{rendered}`, `{coords}`, `{facing}`,
+    `{speed}`, `{gc}`, `{biome}`, `{light}`, `{dimension}`, `{mspt}` — one
+    token per existing `Stat`. Numeric stats that already support a decimals
+    setting (TPS, MSPT, CPU, Speed) accept an optional `:N` suffix, e.g.
+    `{tps:2}`, defaulting to that stat's normal decimal count when omitted.
+    `{{` / `}}` escape literal brace characters. All interpolation reuses the
+    exact same `MtssDataHolder.getFormattedX(decimals)` calls classic mode
+    already uses — no formatting logic is duplicated.
+  - Malformed or typo'd tokens (e.g. `{tsp}`, `{ping:2}`) never throw and
+    never silently vanish — they render back out as literal text unchanged,
+    with a one-time-per-list warning to the client log the first time each
+    bad token is seen, so a mistake is visible and fixable rather than
+    quietly eating a line.
+  - Parsed token lists are cached per list, keyed by the template's own
+    content, so parsing only happens once per edit rather than once per
+    frame — the hot render path just replays the cached token list through
+    `MtssDataHolder`, with no regex and no per-frame parsing.
+  - Template lines render in a single flat color per line (the list's custom
+    color when set, otherwise white); per-token inline color tags and
+    graph-mode template lines are explicitly out of scope for this pass —
+    noted as natural follow-ups in code comments.
+  - `MtssRenderer.buildLines` branches to the new template path via a single
+    `if (cfg.useTemplate)` at the top of the method — the existing classic-
+    mode line-building loop is untouched, not interleaved with the new logic.
+  - **Editor GUI:** a new **Template Mode** toggle in each list's context
+    menu; when on, the context menu's first row becomes **Edit Template
+    Lines**, opening a minimal line list (click a line to edit its text,
+    **✕** to remove it, **+ Add line** to append one) that reuses the
+    existing Rename flow's text-entry pattern. Full multi-line editing UX is
+    intentionally out of scope for this pass — this is a "one line at a
+    time" flow.
+
 - **Toggle-overlay keybind** (`key.mtss.toggle_overlay`, unbound by default)
   that instantly shows or hides the entire live HUD without opening the
   editor — separate from the existing open-editor keybind (`key.mtss.open_gui`,
