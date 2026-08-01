@@ -1,5 +1,7 @@
 package bottled.mtss;
 
+import bottled.mtss.config.MtssConfig.ThresholdSettings;
+
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -145,51 +147,112 @@ public final class MtssDataHolder {
     // xColorFor(value) sibling. The value-based variants exist so graph mode
     // (MtssRenderer) can color individual historical samples (PER_SEGMENT_THRESHOLD)
     // using the exact same thresholds as classic text mode, without duplicating
-    // the threshold numbers in a second place. TODO(step 4): if ThresholdSettings
-    // lands, feed its per-stat custom thresholds into these instead of the
-    // hardcoded bands below, updating both the live and value-based callers together.
+    // the threshold numbers in a second place.
+    //
+    // Step 4: every xColorFor(value) now takes an optional ThresholdSettings
+    // (custom). When custom == null or custom.enabled == false, behavior is
+    // byte-for-byte identical to the pre-step-4 hardcoded bands below — this
+    // is what keeps MtssDataHolder usable/testable standalone and keeps
+    // backward compatibility for any other caller. The old no-arg/1-arg
+    // overloads are preserved, delegating to the threshold-accepting versions
+    // with null, so nothing else in the codebase breaks.
 
     public static float getTps() {
         if (mspt > 0f) return Math.min(tickRate, 1000f / mspt);
         return tickRate;
     }
-    public static int getTpsColor() { return tpsColorFor(getTps()); }
-    public static int tpsColorFor(float tps) {
+
+    public static int getTpsColor() { return getTpsColor(null); }
+    public static int getTpsColor(ThresholdSettings custom) { return tpsColorFor(getTps(), custom); }
+
+    public static int tpsColorFor(float tps) { return tpsColorFor(tps, null); }
+    /** TPS is higher-is-better: at/above goodMin -> green, at/above warnMin -> yellow, else red. */
+    public static int tpsColorFor(float tps, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (tps >= custom.goodMin) return 0xFF55FF55;
+            if (tps >= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
         if (tps >= 18f) return 0xFF55FF55;
         if (tps >= 14f) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getFpsColor() { return fpsColorFor(fps); }
-    public static int fpsColorFor(float fpsValue) {
+
+    public static int getFpsColor() { return getFpsColor(null); }
+    public static int getFpsColor(ThresholdSettings custom) { return fpsColorFor(fps, custom); }
+
+    public static int fpsColorFor(float fpsValue) { return fpsColorFor(fpsValue, null); }
+    /** FPS is higher-is-better: at/above goodMin -> green, at/above warnMin -> yellow, else red. */
+    public static int fpsColorFor(float fpsValue, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (fpsValue >= custom.goodMin) return 0xFF55FF55;
+            if (fpsValue >= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
         if (fpsValue >= 60) return 0xFF55FF55;
         if (fpsValue >= 30) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getPingColor() { return pingColorFor(ping); }
-    public static int pingColorFor(float pingValue) {
-        if (pingValue < 0)    return 0xFFFFFFFF;
+
+    public static int getPingColor() { return getPingColor(null); }
+    public static int getPingColor(ThresholdSettings custom) { return pingColorFor(ping, custom); }
+
+    public static int pingColorFor(float pingValue) { return pingColorFor(pingValue, null); }
+    /** Ping is lower-is-better: at/below goodMin -> green, at/below warnMin -> yellow, else red. goodMin/warnMin act as upper bounds. */
+    public static int pingColorFor(float pingValue, ThresholdSettings custom) {
+        if (pingValue < 0) return 0xFFFFFFFF;
+        if (custom != null && custom.enabled) {
+            if (pingValue <= custom.goodMin) return 0xFF55FF55;
+            if (pingValue <= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
         if (pingValue <= 80)  return 0xFF55FF55;
         if (pingValue <= 150) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getMemColor() {
+
+    public static int getMemColor() { return getMemColor(null); }
+    public static int getMemColor(ThresholdSettings custom) {
         if (memMaxMb <= 0) return 0xFFFFFFFF;
-        return memColorForPercent(100.0 * memUsedMb / memMaxMb);
+        return memColorForPercent(100.0 * memUsedMb / memMaxMb, custom);
     }
+
     /** For graph mode, where history is already stored as a used/max percentage (see updateFastMetrics). */
-    public static int memColorForPercent(double pct100) {
+    public static int memColorForPercent(double pct100) { return memColorForPercent(pct100, null); }
+    /** Memory (used %) is lower-is-better: at/below goodMin -> green, at/below warnMin -> yellow, else red. */
+    public static int memColorForPercent(double pct100, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (pct100 <= custom.goodMin) return 0xFF55FF55;
+            if (pct100 <= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
         double pct = pct100 / 100.0;
         if (pct < 0.6)  return 0xFF55FF55;
         if (pct < 0.85) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
-    public static int getCpuColor() { return cpuColorFor(cpuPercent); }
-    public static int cpuColorFor(double cpuValue) {
-        if (cpuValue < 0)  return 0xFFFFFFFF;
+
+    public static int getCpuColor() { return getCpuColor(null); }
+    public static int getCpuColor(ThresholdSettings custom) { return cpuColorFor(cpuPercent, custom); }
+
+    public static int cpuColorFor(double cpuValue) { return cpuColorFor(cpuValue, null); }
+    /** CPU is lower-is-better: at/below goodMin -> green, at/below warnMin -> yellow, else red. */
+    public static int cpuColorFor(double cpuValue, ThresholdSettings custom) {
+        if (cpuValue < 0) return 0xFFFFFFFF;
+        if (custom != null && custom.enabled) {
+            if (cpuValue <= custom.goodMin) return 0xFF55FF55;
+            if (cpuValue <= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
         if (cpuValue < 50) return 0xFF55FF55;
         if (cpuValue < 80) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
+
+    // Speed is intentionally NOT part of the ThresholdSettings system — its
+    // "gray when stationary / yellow above 20 bps / white otherwise" logic
+    // isn't a good/warn/bad scale, so no threshold-accepting overload exists
+    // here. See the Speed-stat decision note in the PR description / CHANGELOG.
     public static int getSpeedColor() { return speedColorFor(speedBps); }
     public static int speedColorFor(float speedValue) {
         if (speedValue < 0.01f) return 0xFFAAAAAA;

@@ -70,6 +70,43 @@ All notable changes to MineTuner Statistics Server are documented in this file.
   description for the two visual details where "defaults reproduce the
   old look" and "ship the new features on by default" were in tension and
   how that was resolved.
+- **User-configurable per-stat color thresholds (data model + rendering).**
+  TPS, FPS, Ping, Memory, and CPU each now have a per-list `ThresholdSettings`
+  entry (`enabled`, `goodMin`, `warnMin`) that can override that stat's
+  green/yellow/red cutoffs — e.g. "TPS goes yellow below 17 instead of 14" —
+  independently of every other list showing that same stat. Previously the
+  only per-list color customization was a single blanket override color
+  that replaced threshold coloring entirely for every stat in the list;
+  this adds fine-grained control without touching that existing behavior.
+  - New `MtssConfig.ThresholdSettings` class and `StatListConfig.statThresholds`
+    map (keyed by stat name), defaulting to `enabled = false` with
+    `goodMin`/`warnMin` matching the exact pre-existing hardcoded values
+    (TPS 18/14, FPS 60/30, Ping 80/150, Memory 60%/85%, CPU 50/80) — so
+    **zero visual change** for any existing config until a threshold is
+    explicitly enabled and edited.
+  - `MtssDataHolder`'s six threshold-based color functions
+    (`getTpsColor`/`tpsColorFor`, `getFpsColor`/`fpsColorFor`,
+    `getPingColor`/`pingColorFor`, `getMemColor`/`memColorForPercent`,
+    `getCpuColor`/`cpuColorFor`) now have overloads accepting an optional
+    `ThresholdSettings`, falling back to the original hardcoded bands when
+    absent or disabled. The old no-arg/value-only overloads are preserved
+    and simply delegate with `null`, so no other caller in the codebase
+    needed to change.
+  - `MtssRenderer.buildLines` looks up each stat's custom threshold and
+    passes it through for both classic text-mode coloring and graph mode
+    (current-value color and, for the `PER_SEGMENT_THRESHOLD` graph color
+    mode, every individual historical sample). The existing precedence is
+    unchanged: per-list custom color override still beats per-stat
+    thresholds, which still beat the built-in defaults.
+  - Speed is **not** part of this system — its existing coloring (gray when
+    nearly stationary, yellow above 20 bps, white otherwise) isn't a
+    good/warn/bad scale, so folding it in would silently change its
+    meaning rather than just make it configurable. See the PR description
+    for the full rationale.
+  - This step intentionally ships data model + rendering only — no GUI
+    controls yet. A `// TODO(step 5)` marks where the editing panel will
+    go, matching the same "data model now, GUI later" pattern already used
+    for `GraphStyle` above.
 
 ## [1.1.0] - Unreleased
 

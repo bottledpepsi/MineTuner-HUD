@@ -136,6 +136,66 @@ public class MtssConfig {
             Stat.TPS, Stat.MSPT, Stat.FPS, Stat.CPU, Stat.PING, Stat.MEMORY, Stat.SPEED
     );
 
+    public static final java.util.Set<Stat> THRESHOLD_STATS = java.util.Set.of(
+            Stat.TPS, Stat.FPS, Stat.PING, Stat.MEMORY, Stat.CPU
+    );
+
+    /**
+     * A user-configurable two-cutoff threshold for a single stat's
+     * green/yellow/red coloring (step 4), replacing the previously-hardcoded
+     * bands in MtssDataHolder on a per-stat, per-list basis.
+     *
+     * Direction matters: for "higher is better" stats (TPS, FPS) green is
+     * the HIGH end and red is the LOW end. For "lower is better" stats
+     * (Ping, Memory used-%, CPU) green is the LOW end and red is the HIGH
+     * end -- the comparisons in the color functions flip accordingly even
+     * though the field names (goodMin/warnMin) stay the same shape.
+     *
+     * Defaults (set in MtssConfig.defaultThresholds(), matching the exact
+     * pre-existing hardcoded values so nothing changes visually until a user
+     * opts in):
+     *   TPS    higher-is-better  goodMin=18   warnMin=14
+     *   FPS    higher-is-better  goodMin=60   warnMin=30
+     *   Ping   lower-is-better   goodMin=80   warnMin=150   (upper bounds)
+     *   Memory lower-is-better   goodMin=60   warnMin=85    (used %, upper bounds)
+     *   CPU    lower-is-better   goodMin=50   warnMin=80    (upper bounds)
+     *
+     * Speed is intentionally NOT part of this system -- see the Speed-stat
+     * decision note in the PR description / CHANGELOG. Its existing
+     * "gray when stationary / yellow above 20 bps / white otherwise" logic
+     * isn't a good/warn/bad scale, so it keeps its old hardcoded behavior.
+     */
+    public static class ThresholdSettings {
+        /** false = ignore goodMin/warnMin entirely and use the built-in default thresholds. */
+        public boolean enabled = false;
+        /** Higher-is-better: value at/above this is "good" (green). Lower-is-better: value at/below this is "good" (green). */
+        public float goodMin;
+        /** Higher-is-better: value at/above this (below goodMin) is "warning" (yellow), below is "bad" (red). Lower-is-better: mirrored. */
+        public float warnMin;
+
+        public ThresholdSettings() {}
+
+        public ThresholdSettings(boolean enabled, float goodMin, float warnMin) {
+            this.enabled = enabled;
+            this.goodMin = goodMin;
+            this.warnMin = warnMin;
+        }
+
+        public ThresholdSettings copy() {
+            return new ThresholdSettings(this.enabled, this.goodMin, this.warnMin);
+        }
+    }
+
+    private static Map<String, ThresholdSettings> defaultThresholds() {
+        Map<String, ThresholdSettings> m = new LinkedHashMap<>();
+        m.put(Stat.TPS.name(),    new ThresholdSettings(false, 18f, 14f));
+        m.put(Stat.FPS.name(),    new ThresholdSettings(false, 60f, 30f));
+        m.put(Stat.PING.name(),   new ThresholdSettings(false, 80f, 150f));
+        m.put(Stat.MEMORY.name(), new ThresholdSettings(false, 60f, 85f));
+        m.put(Stat.CPU.name(),    new ThresholdSettings(false, 50f, 80f));
+        return m;
+    }
+
     // ── Per-list config ───────────────────────────────────────────────────────
     public static class StatListConfig {
         /** Unique identifier, starts from 0. */
@@ -147,6 +207,14 @@ public class MtssConfig {
         public Map<String, Boolean>      statEnabled  = defaultEnabledMap();
         public List<String>              statOrder    = defaultOrder();
         public Map<String, StatSettings> statSettings = new LinkedHashMap<>();
+        /**
+         * Per-stat custom color thresholds (step 4), keyed by Stat.name().
+         * Only entries for stats in THRESHOLD_STATS are meaningful; populated
+         * with disabled defaults matching the hardcoded values so existing
+         * configs render identically until a user opts in. See
+         * ThresholdSettings for the enabled/goodMin/warnMin semantics.
+         */
+        public Map<String, ThresholdSettings> statThresholds = defaultThresholds();
 
         // Position — corner anchor + pixel offsets
         public Corner anchorCorner = Corner.TOP_LEFT;
@@ -217,15 +285,34 @@ public class MtssConfig {
             return ss;
         }
 
+        /**
+         * Gets the custom threshold for a stat, or null if this stat isn't a
+         * threshold-colorable stat (i.e. not in THRESHOLD_STATS) or has no
+         * entry. Callers should treat both "null" and "enabled == false" as
+         * "use the built-in default" — MtssDataHolder's threshold-accepting
+         * overloads already do this.
+         */
+        public ThresholdSettings getThreshold(Stat stat) {
+            if (!THRESHOLD_STATS.contains(stat)) return null;
+            return statThresholds.get(stat.name());
+        }
+
         /** Back-fill any stats added since this config was written. */
         public void backFill() {
             if (name == null) name = "List " + id;
             if (statSettings == null) statSettings = new LinkedHashMap<>();
+            if (statThresholds == null) statThresholds = new LinkedHashMap<>();
             for (Stat s : Stat.values()) {
                 statEnabled.putIfAbsent(s.name(), false);
                 if (!statOrder.contains(s.name())) statOrder.add(s.name());
                 StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
                 if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
+            }
+            // Only THRESHOLD_STATS get entries — matches defaultThresholds()'s
+            // scope, so a config missing statThresholds entirely (pre-step-4)
+            // ends up identical to one freshly created by createList().
+            for (Stat s : THRESHOLD_STATS) {
+                statThresholds.computeIfAbsent(s.name(), k -> defaultThresholds().get(k));
             }
         }
 
@@ -249,6 +336,10 @@ public class MtssConfig {
                 dst.renderAsGraph = src.renderAsGraph;
                 dst.graphStyle    = (src.graphStyle != null ? src.graphStyle : new GraphStyle()).copy();
                 copy.statSettings.put(e.getKey(), dst);
+            }
+            copy.statThresholds = new LinkedHashMap<>();
+            for (Map.Entry<String, ThresholdSettings> e : this.statThresholds.entrySet()) {
+                copy.statThresholds.put(e.getKey(), e.getValue().copy());
             }
             copy.anchorCorner   = this.anchorCorner;
             copy.anchorDx       = this.anchorDx + 12;
@@ -317,6 +408,9 @@ public class MtssConfig {
                     for (StatListConfig list : cfg.lists) {
                         if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
                         if (list.statOrder   == null) list.statOrder   = new ArrayList<>();
+                        // statThresholds (step 4): null for any config written before this
+                        // field existed — backFill() below populates THRESHOLD_STATS defaults.
+                        if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
                         // anchorCorner field renamed from alignment — treat null as TOP_LEFT
                         if (list.anchorCorner == null) list.anchorCorner = Corner.TOP_LEFT;
                         list.backFill();

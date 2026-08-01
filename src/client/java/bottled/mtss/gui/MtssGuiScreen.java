@@ -408,6 +408,13 @@ public class MtssGuiScreen extends Screen {
         return MtssConfig.GRAPHABLE_STATS.contains(stat);
     }
 
+    // TODO(step 5): GUI panel for editing statThresholds. MtssConfig.StatListConfig
+    // now exposes a per-stat Map<String, ThresholdSettings> (see MtssConfig.THRESHOLD_STATS /
+    // ThresholdSettings) with enabled/goodMin/warnMin per TPS, FPS, Ping, Memory, and CPU.
+    // This step deliberately only wires the data model + rendering; add a settings row
+    // here (alongside Show Prefix / Decimals / Render as Graph) that lets a user flip
+    // ThresholdSettings.enabled and edit goodMin/warnMin per stat, per list.
+
     /**
      * Row count for the stat settings panel: header + prefix + (optional
      * decimals) + (optional graph toggle) + back. Shared by the render,

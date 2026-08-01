@@ -32,7 +32,7 @@ public class MtssRenderer {
     public record GraphEntry(MtssConfig.Stat stat, float[] rawHistory, float[] displayHistory,
                              int color, String label, String minValueLabel, String maxValueLabel,
                              float scaleMin, float scaleMax, int peakMinIdx, int peakMaxIdx,
-                             MtssConfig.GraphStyle style) {}
+                             MtssConfig.GraphStyle style, MtssConfig.ThresholdSettings threshold) {}
 
     /** Which underlying list a given display row pulls from. */
     public enum RowKind { TEXT, GRAPH }
@@ -168,16 +168,22 @@ public class MtssRenderer {
 
                 // Current-value color (used for CURRENT_THRESHOLD and as the
                 // current-value label's color regardless of colorMode).
+                // Per-stat custom thresholds (step 4) are looked up per stat and
+                // passed to the relevant color function; MSPT and Speed have no
+                // entry in THRESHOLD_STATS so getThreshold() returns null for
+                // them, which is exactly the "use built-in default" signal.
                 int currentColor = switch (stat) {
-                    case TPS   -> MtssDataHolder.getTpsColor();
-                    case MSPT  -> MtssDataHolder.getTpsColor(); // MSPT has no dedicated color helper; TPS's threshold covers the same underlying tick-time signal
-                    case FPS   -> MtssDataHolder.getFpsColor();
-                    case CPU   -> MtssDataHolder.getCpuColor();
-                    case PING  -> MtssDataHolder.getPingColor();
-                    case MEMORY-> MtssDataHolder.getMemColor();
+                    case TPS   -> MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS));
+                    case MSPT  -> MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS)); // MSPT has no dedicated color helper; TPS's threshold covers the same underlying tick-time signal
+                    case FPS   -> MtssDataHolder.getFpsColor(cfg.getThreshold(MtssConfig.Stat.FPS));
+                    case CPU   -> MtssDataHolder.getCpuColor(cfg.getThreshold(MtssConfig.Stat.CPU));
+                    case PING  -> MtssDataHolder.getPingColor(cfg.getThreshold(MtssConfig.Stat.PING));
+                    case MEMORY-> MtssDataHolder.getMemColor(cfg.getThreshold(MtssConfig.Stat.MEMORY));
                     case SPEED -> MtssDataHolder.getSpeedColor();
                     default    -> 0xFFFFFFFF;
                 };
+                // Per-list color override still wins over everything, exactly as
+                // today: per-list custom color > per-stat threshold > built-in default.
                 if (cfg.useCustomColor) currentColor = cfg.overrideColor;
 
                 // Current-value label uses the same formatted string (and the
@@ -247,8 +253,15 @@ public class MtssRenderer {
                 String minValueLabel = rawHistory.length >= 2 ? formatAxisValue(stat, displayHistory[peakMinIdx]) : "";
                 String maxValueLabel = rawHistory.length >= 2 ? formatAxisValue(stat, displayHistory[peakMaxIdx]) : "";
 
+                // Same threshold used for currentColor above, carried onto the
+                // entry so PER_SEGMENT_THRESHOLD graph coloring (colorForColumn /
+                // thresholdColorForSample) colors each historical sample with the
+                // same custom cutoffs, not just the current-value label.
+                MtssConfig.ThresholdSettings entryThreshold = MtssConfig.THRESHOLD_STATS.contains(stat)
+                        ? cfg.getThreshold(stat) : null;
+
                 graphEntries.add(new GraphEntry(stat, rawHistory, displayHistory, currentColor, label,
-                        minValueLabel, maxValueLabel, scaleMin, scaleMax, peakMinIdx, peakMaxIdx, style));
+                        minValueLabel, maxValueLabel, scaleMin, scaleMax, peakMinIdx, peakMaxIdx, style, entryThreshold));
                 rowKinds.add(RowKind.GRAPH);
                 continue;
             }
@@ -257,12 +270,12 @@ public class MtssRenderer {
             int    color = 0xFFFFFFFF;
             int    decimals = cfg.getStatSettings(stat).decimals;
             switch (stat) {
-                case TPS   -> { text = MtssDataHolder.getFormattedTps(decimals);   color = MtssDataHolder.getTpsColor(); }
+                case TPS   -> { text = MtssDataHolder.getFormattedTps(decimals);   color = MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS)); }
                 case MSPT  -> { text = MtssDataHolder.getFormattedMspt(decimals); /* empty on remote servers */ }
-                case FPS   -> { text = MtssDataHolder.getFormattedFps();      color = MtssDataHolder.getFpsColor(); }
-                case PING  -> { text = MtssDataHolder.getFormattedPing();     color = MtssDataHolder.getPingColor(); }
-                case MEMORY-> { text = MtssDataHolder.getFormattedMem();      color = MtssDataHolder.getMemColor(); }
-                case CPU   -> { text = MtssDataHolder.getFormattedCpu(decimals);   color = MtssDataHolder.getCpuColor(); }
+                case FPS   -> { text = MtssDataHolder.getFormattedFps();      color = MtssDataHolder.getFpsColor(cfg.getThreshold(MtssConfig.Stat.FPS)); }
+                case PING  -> { text = MtssDataHolder.getFormattedPing();     color = MtssDataHolder.getPingColor(cfg.getThreshold(MtssConfig.Stat.PING)); }
+                case MEMORY-> { text = MtssDataHolder.getFormattedMem();      color = MtssDataHolder.getMemColor(cfg.getThreshold(MtssConfig.Stat.MEMORY)); }
+                case CPU   -> { text = MtssDataHolder.getFormattedCpu(decimals);   color = MtssDataHolder.getCpuColor(cfg.getThreshold(MtssConfig.Stat.CPU)); }
                 case ENTITIES         -> { text = MtssDataHolder.getFormattedEntities(); }
                 case CHUNKS           -> { text = MtssDataHolder.getFormattedChunks(); }
                 case RENDERED_SECTIONS-> { text = MtssDataHolder.getFormattedRendered(); }
@@ -625,18 +638,19 @@ public class MtssRenderer {
         return switch (style.colorMode) {
             case CURRENT_THRESHOLD -> entry.color();
             case FIXED_ACCENT -> style.accentColor;
-            case PER_SEGMENT_THRESHOLD -> thresholdColorForSample(entry.stat(), entry.displayHistory()[sampleIdx]);
+            case PER_SEGMENT_THRESHOLD -> thresholdColorForSample(entry.stat(), entry.displayHistory()[sampleIdx], entry.threshold());
             case GRADIENT -> gradientColorForValue(entry.displayHistory()[sampleIdx], entry.scaleMin(), entry.scaleMax());
         };
     }
 
-    private static int thresholdColorForSample(MtssConfig.Stat stat, float value) {
+    /** custom is the per-list, per-stat ThresholdSettings resolved once in buildLines (null for MSPT/Speed/non-threshold stats — falls back to built-in defaults). */
+    private static int thresholdColorForSample(MtssConfig.Stat stat, float value, MtssConfig.ThresholdSettings custom) {
         return switch (stat) {
-            case TPS, MSPT -> MtssDataHolder.tpsColorFor(value);
-            case FPS       -> MtssDataHolder.fpsColorFor(value);
-            case PING      -> MtssDataHolder.pingColorFor(value);
-            case MEMORY    -> MtssDataHolder.memColorForPercent(value);
-            case CPU       -> MtssDataHolder.cpuColorFor(value);
+            case TPS, MSPT -> MtssDataHolder.tpsColorFor(value, custom);
+            case FPS       -> MtssDataHolder.fpsColorFor(value, custom);
+            case PING      -> MtssDataHolder.pingColorFor(value, custom);
+            case MEMORY    -> MtssDataHolder.memColorForPercent(value, custom);
+            case CPU       -> MtssDataHolder.cpuColorFor(value, custom);
             case SPEED     -> MtssDataHolder.speedColorFor(value);
             default        -> 0xFFFFFFFF;
         };
