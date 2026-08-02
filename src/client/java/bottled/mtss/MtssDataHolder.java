@@ -95,11 +95,9 @@ public final class MtssDataHolder {
         memUsedMb = used / (1024 * 1024);
         memMaxMb  = max  / (1024 * 1024);
 
-        // Sample the graphable stats once per frame. CPU is skipped when -1
-        // (unsupported JVM vendor) and Ping when -1 (not connected / no info
-        // yet) so unsupported/unavailable readings don't pollute the buffer
-        // with a flat line at -1. Memory is skipped if memMaxMb isn't known
-        // yet (0 on the very first frame before any heap read has happened).
+        // Sample each graphable stat once per frame. Skip values that aren't
+        // available yet (CPU/Ping at -1, Memory before the first heap read)
+        // so the buffer doesn't fill with flat -1 lines.
         tpsHistory.push(getTps());
         if (mspt >= 0f) msptHistory.push(mspt);
         fpsHistory.push(fps);
@@ -114,9 +112,7 @@ public final class MtssDataHolder {
         if (now - lastSlowUpdateMs < SLOW_MS) return;
         lastSlowUpdateMs = now;
 
-        // com.sun.management.OperatingSystemMXBean is a HotSpot/OpenJDK-specific internal API.
-        // On other JVM vendors this instanceof check simply fails and cpuPercent stays -1,
-        // which getFormattedCpu() reports as "N/A" — no crash, just reduced functionality.
+        // HotSpot-only API. On other JVMs cpuPercent just stays -1, shown as "N/A".
         if (OS_BEAN instanceof com.sun.management.OperatingSystemMXBean sun) {
             double raw = sun.getProcessCpuLoad();
             cpuPercent = raw >= 0 ? raw * 100.0 : -1.0;
@@ -131,8 +127,7 @@ public final class MtssDataHolder {
     }
 
     // ── History accessors ─────────────────────────────────────────────────────
-    // Each returns a fresh copy in oldest-to-newest order; callers (renderers)
-    // must not be able to mutate the backing ring buffer.
+    // Returns a copy each time so callers can't mutate the backing buffer.
 
     public static float[] getTpsHistory()   { return tpsHistory.snapshot(); }
     public static float[] getMsptHistory()  { return msptHistory.snapshot(); }
@@ -143,19 +138,11 @@ public final class MtssDataHolder {
     public static float[] getSpeedHistory() { return speedHistory.snapshot(); }
 
     // ── Color helpers ─────────────────────────────────────────────────────────
-    // Each getXColor() reads live global state and delegates to a value-based
-    // xColorFor(value) sibling. The value-based variants exist so graph mode
-    // (MtssRenderer) can color individual historical samples (PER_SEGMENT_THRESHOLD)
-    // using the exact same thresholds as classic text mode, without duplicating
-    // the threshold numbers in a second place.
-    //
-    // Step 4: every xColorFor(value) now takes an optional ThresholdSettings
-    // (custom). When custom == null or custom.enabled == false, behavior is
-    // byte-for-byte identical to the pre-step-4 hardcoded bands below — this
-    // is what keeps MtssDataHolder usable/testable standalone and keeps
-    // backward compatibility for any other caller. The old no-arg/1-arg
-    // overloads are preserved, delegating to the threshold-accepting versions
-    // with null, so nothing else in the codebase breaks.
+    // Each getXColor() reads live state and calls the matching xColorFor(value),
+    // so graph mode can color historical samples with the same thresholds as
+    // classic text mode. xColorFor(value, custom) accepts an optional
+    // ThresholdSettings override; pass null (or use the overload without it)
+    // for the default hardcoded bands.
 
     public static float getTps() {
         if (mspt > 0f) return Math.min(tickRate, 1000f / mspt);
@@ -249,10 +236,8 @@ public final class MtssDataHolder {
         return 0xFFFF5555;
     }
 
-    // Speed is intentionally NOT part of the ThresholdSettings system — its
-    // "gray when stationary / yellow above 20 bps / white otherwise" logic
-    // isn't a good/warn/bad scale, so no threshold-accepting overload exists
-    // here. See the Speed-stat decision note in the PR description / CHANGELOG.
+    // Speed isn't part of the ThresholdSettings system — its gray/yellow/white
+    // logic isn't a good/warn/bad scale, so there's no threshold override here.
     public static int getSpeedColor() { return speedColorFor(speedBps); }
     public static int speedColorFor(float speedValue) {
         if (speedValue < 0.01f) return 0xFFAAAAAA;

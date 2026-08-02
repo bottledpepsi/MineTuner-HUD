@@ -17,28 +17,27 @@ import java.util.Map;
 public class MtssConfig {
 
     /**
-     * Which screen corner a list is anchored to.
-     * anchorDx/anchorDy are pixel offsets FROM that corner, so the list
-     * moves with its corner on window resize, keeping inter-list gaps stable.
+     * Which screen corner a list is anchored to. anchorDx/anchorDy are
+     * pixel offsets from that corner, so the list moves with it on resize.
      */
     public enum Corner {
         TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT
     }
 
-    /** How this list is anchored to the vertical centre line (x-axis snap). */
+    /** How this list snaps to the vertical centre line (x-axis). */
     public enum SnapX {
         NONE,
-        LEFT_ON_CENTER,    // list's left  edge on the vertical centre line
-        CENTER_ON_CENTER,  // list's centre     on the vertical centre line
-        RIGHT_ON_CENTER    // list's right edge on the vertical centre line
+        LEFT_ON_CENTER,    // left edge on the centre line
+        CENTER_ON_CENTER,  // centre on the centre line
+        RIGHT_ON_CENTER    // right edge on the centre line
     }
 
-    /** How this list is anchored to the horizontal centre line (y-axis snap). */
+    /** How this list snaps to the horizontal centre line (y-axis). */
     public enum SnapY {
         NONE,
-        TOP_ON_CENTER,     // list's top    edge on the horizontal centre line
-        CENTER_ON_CENTER,  // list's centre      on the horizontal centre line
-        BOTTOM_ON_CENTER   // list's bottom edge on the horizontal centre line
+        TOP_ON_CENTER,     // top edge on the centre line
+        CENTER_ON_CENTER,  // centre on the centre line
+        BOTTOM_ON_CENTER   // bottom edge on the centre line
     }
 
     public enum Stat {
@@ -55,13 +54,13 @@ public class MtssConfig {
 
     /** How a graph's plot is colored. */
     public enum GraphColorMode {
-        /** Step 1's original behavior: whole graph tinted by the current value's threshold color. */
+        /** Whole graph tinted by the current value's threshold color. */
         CURRENT_THRESHOLD,
-        /** Each historical sample colored by its own threshold value at the time it was recorded. */
+        /** Each historical sample colored by its own value at the time it was recorded. */
         PER_SEGMENT_THRESHOLD,
-        /** Ignore threshold coloring; use a single user-chosen accent color for the whole graph. */
+        /** A single user-chosen accent color for the whole graph. */
         FIXED_ACCENT,
-        /** Smooth color interpolation across the visible value range (blue→green→yellow→red). */
+        /** Smooth color interpolation across the visible range (blue→green→yellow→red). */
         GRADIENT
     }
 
@@ -73,26 +72,20 @@ public class MtssConfig {
 
     // ── Per-stat settings ─────────────────────────────────────────────────────
     public static class StatSettings {
-        /** Whether to show the label prefix (e.g. "TPS: ") before the value. */
+        /** Show the label prefix (e.g. "TPS: ") before the value. */
         public boolean showPrefix = true;
-        /** Decimal places for numeric stats that support it (TPS, MSPT, CPU, Speed). Ignored otherwise. */
+        /** Decimal places for stats that support it (TPS, MSPT, CPU, Speed). Ignored otherwise. */
         public int decimals = 1;
-        /** Render graph. */
+        /** Render as a graph instead of text. */
         public boolean renderAsGraph = false;
-        /**
-         * Visual styling for this stat's graph, used only when renderAsGraph is
-         * true. Lazily backfilled (see backFill()/getGraphStyle()) so configs
-         * written before this field existed still load cleanly.
-         */
+        /** Graph visuals, used only when renderAsGraph is true. Lazily backfilled so old configs still load. */
         public GraphStyle graphStyle = new GraphStyle();
     }
 
     /**
-     * Per-graph visual settings: panel background, gridlines, peak markers,
-     * value readout, smoothing, scale mode, size, and color mode. All fields
-     * default to reproducing step 1's original look exactly (flat 80x28
-     * single-tone fill colored by current-value threshold) so a user who
-     * never opens the (future) styling GUI sees zero behavior change.
+     * Per-graph visual settings. Defaults reproduce the original look
+     * (flat 80x28 fill colored by current-value threshold) so a list that
+     * hasn't been styled looks unchanged.
      */
     public static class GraphStyle {
         public boolean showPanelBackground = true;
@@ -103,11 +96,8 @@ public class MtssConfig {
         public boolean autoScale = true;
         public float fixedMin = 0f;
         public float fixedMax = 100f;
-        // NOTE: 80x28 (not a generic 60x20) because that's what this codebase's
-        // step 1 actually shipped as MtssRenderer.GRAPH_W/GRAPH_H — defaults
-        // here must reproduce the *existing* look exactly.
-        public int width = 80;   // px, replaces step 1's hardcoded GRAPH_W constant
-        public int height = 28;  // px, replaces step 1's hardcoded GRAPH_H constant
+        public int width = 80;   // px
+        public int height = 28;  // px
         public GraphColorMode colorMode = GraphColorMode.CURRENT_THRESHOLD; // CURRENT_THRESHOLD, PER_SEGMENT_THRESHOLD, FIXED_ACCENT, GRADIENT
         public int accentColor = 0xFF55FF55; // used when colorMode == FIXED_ACCENT
 
@@ -141,32 +131,27 @@ public class MtssConfig {
     );
 
     /**
-     * A user-configurable two-cutoff threshold for a single stat's
-     * green/yellow/red coloring (step 4), replacing the previously-hardcoded
-     * bands in MtssDataHolder on a per-stat, per-list basis.
-     *
-     * Direction matters: for "higher is better" stats (TPS, FPS) green is
-     * the HIGH end and red is the LOW end. For "lower is better" stats
-     * (Ping, Memory used-%, CPU) green is the LOW end and red is the HIGH
-     * end -- the comparisons in the color functions flip accordingly even
-     * though the field names (goodMin/warnMin) stay the same shape.
-     *
-     * Defaults (set in MtssConfig.defaultThresholds(), matching the exact
-     * pre-existing hardcoded values so nothing changes visually until a user
-     * opts in):
+     * A user-configurable two-cutoff threshold for a stat's green/yellow/red
+     * coloring, per stat, per list.
+     * <p>
+     * Direction matters: for "higher is better" stats (TPS, FPS) green is the
+     * high end. For "lower is better" stats (Ping, Memory, CPU) green is the
+     * low end — the color functions flip the comparison accordingly, even
+     * though the field names (goodMin/warnMin) stay the same.
+     * <p>
+     * Defaults (see defaultThresholds()) match the original hardcoded values:
+     * <pre>
      *   TPS    higher-is-better  goodMin=18   warnMin=14
      *   FPS    higher-is-better  goodMin=60   warnMin=30
-     *   Ping   lower-is-better   goodMin=80   warnMin=150   (upper bounds)
-     *   Memory lower-is-better   goodMin=60   warnMin=85    (used %, upper bounds)
-     *   CPU    lower-is-better   goodMin=50   warnMin=80    (upper bounds)
-     *
-     * Speed is intentionally NOT part of this system -- see the Speed-stat
-     * decision note in the PR description / CHANGELOG. Its existing
-     * "gray when stationary / yellow above 20 bps / white otherwise" logic
-     * isn't a good/warn/bad scale, so it keeps its old hardcoded behavior.
+     *   Ping   lower-is-better   goodMin=80   warnMin=150
+     *   Memory lower-is-better   goodMin=60   warnMin=85   (used %)
+     *   CPU    lower-is-better   goodMin=50   warnMin=80
+     * </pre>
+     * Speed isn't part of this system — its gray/yellow/white logic isn't a
+     * good/warn/bad scale, so it keeps its own hardcoded behavior.
      */
     public static class ThresholdSettings {
-        /** false = ignore goodMin/warnMin entirely and use the built-in default thresholds. */
+        /** false = ignore goodMin/warnMin and use the built-in default. */
         public boolean enabled = false;
         /** Higher-is-better: value at/above this is "good" (green). Lower-is-better: value at/below this is "good" (green). */
         public float goodMin;
@@ -198,7 +183,7 @@ public class MtssConfig {
 
     // ── Per-list config ───────────────────────────────────────────────────────
     public static class StatListConfig {
-        /** Unique identifier, starts from 0. */
+        /** Unique id, starts from 0. */
         public int    id;
         /** User-visible name shown in the GUI. Defaults to "List N". */
         public String name;
@@ -208,11 +193,9 @@ public class MtssConfig {
         public List<String>              statOrder    = defaultOrder();
         public Map<String, StatSettings> statSettings = new LinkedHashMap<>();
         /**
-         * Per-stat custom color thresholds (step 4), keyed by Stat.name().
-         * Only entries for stats in THRESHOLD_STATS are meaningful; populated
-         * with disabled defaults matching the hardcoded values so existing
-         * configs render identically until a user opts in. See
-         * ThresholdSettings for the enabled/goodMin/warnMin semantics.
+         * Per-stat color thresholds, keyed by Stat.name(). Only entries for
+         * stats in THRESHOLD_STATS matter. Populated disabled by default so
+         * existing configs render the same until a user opts in.
          */
         public Map<String, ThresholdSettings> statThresholds = defaultThresholds();
 
@@ -237,21 +220,18 @@ public class MtssConfig {
         public SnapX snapX = SnapX.NONE;
         public SnapY snapY = SnapY.NONE;
 
-        // ── Template mode (step 6) ──────────────────────────────────────────
+        // ── Template mode ────────────────────────────────────────────────────
         /**
-         * false (default) = classic per-stat-line mode, unchanged from every
-         * prior step. true = render {@link #templateLines} instead of the
-         * per-Stat switch in {@code MtssRenderer.buildLines}. Existing configs
-         * that predate this field load as false via backFill()/load() below,
-         * so nothing changes for anyone who doesn't opt in.
+         * false (default) = classic per-stat-line mode. true = render
+         * {@link #templateLines} instead. Old configs load as false, so
+         * nothing changes unless a list opts in.
          */
         public boolean useTemplate = false;
         /**
-         * One raw markup string per rendered line, only consulted when
+         * One markup string per rendered line, used only when
          * {@link #useTemplate} is true. See {@code TemplateEngine} for the
-         * token grammar (e.g. {@code "{tps}"}, {@code "{tps:2}"}, and
-         * doubled-brace escapes) and the README's "Template Mode" section
-         * for the full token table.
+         * token grammar and the README's "Template Mode" section for the
+         * full token table.
          */
         public List<String> templateLines = new ArrayList<>();
 
@@ -304,28 +284,22 @@ public class MtssConfig {
         }
 
         /**
-         * Gets the custom threshold for a stat, or null if this stat isn't a
-         * threshold-colorable stat (i.e. not in THRESHOLD_STATS) or has no
-         * entry. Callers should treat both "null" and "enabled == false" as
-         * "use the built-in default" — MtssDataHolder's threshold-accepting
-         * overloads already do this.
+         * The custom threshold for a stat, or null if the stat isn't
+         * threshold-colorable or has no entry. Treat both null and
+         * "enabled == false" as "use the built-in default".
          */
         public ThresholdSettings getThreshold(Stat stat) {
             if (!THRESHOLD_STATS.contains(stat)) return null;
             return statThresholds.get(stat.name());
         }
 
-        /** Back-fill any stats added since this config was written. */
+        /** Back-fills any fields added since this config was written. */
         public void backFill() {
             if (name == null) name = "List " + id;
             if (statSettings == null) statSettings = new LinkedHashMap<>();
             if (statThresholds == null) statThresholds = new LinkedHashMap<>();
-            // Step 6: pre-template configs have no templateLines key at all —
-            // Gson leaves the field null rather than running the field
-            // initializer, so this must never be skipped. useTemplate is a
-            // primitive boolean and always deserializes to false when absent,
-            // which is already the correct "classic mode" default, so it
-            // needs no backfill of its own.
+            // Gson leaves this null (not the field initializer) if it's missing
+            // from an old config's JSON.
             if (templateLines == null) templateLines = new ArrayList<>();
 
             for (Stat s : Stat.values()) {
@@ -334,9 +308,7 @@ public class MtssConfig {
                 StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
                 if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
             }
-            // Only THRESHOLD_STATS get entries — matches defaultThresholds()'s
-            // scope, so a config missing statThresholds entirely (pre-step-4)
-            // ends up identical to one freshly created by createList().
+            // Only THRESHOLD_STATS get entries, matching defaultThresholds()'s scope.
             for (Stat s : THRESHOLD_STATS) {
                 statThresholds.computeIfAbsent(s.name(), k -> defaultThresholds().get(k));
             }
@@ -427,25 +399,20 @@ public class MtssConfig {
             try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
                 MtssConfig cfg = GSON.fromJson(r, MtssConfig.class);
                 if (cfg != null) {
-                    // Note: overlayEnabled needs no explicit backfill here. MtssConfig has
-                    // an implicit no-arg constructor, so Gson constructs it that way (not via
-                    // Unsafe), meaning the `= true` field initializer already runs before the
-                    // JSON is applied, a pre-existing config file with no "overlayEnabled" key
-                    // simply leaves that default in place.
+                    // overlayEnabled needs no backfill: Gson uses the no-arg
+                    // constructor, so the `= true` field initializer already
+                    // ran before the JSON was applied, and an old config file
+                    // with no "overlayEnabled" key just leaves it in place.
                     if (cfg.lists == null) cfg.lists = new ArrayList<>();
                     for (StatListConfig list : cfg.lists) {
                         if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
                         if (list.statOrder   == null) list.statOrder   = new ArrayList<>();
-                        // statThresholds (step 4): null for any config written before this
-                        // field existed — backFill() below populates THRESHOLD_STATS defaults.
+                        // Null for configs written before this field existed —
+                        // backFill() below fills in the defaults.
                         if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
-                        // templateLines (step 6): null for any config written before this
-                        // field existed. backFill() below also guards this, but it's set
-                        // here too to match the existing explicit-null-check pattern for
-                        // every other collection field on this class.
                         if (list.templateLines == null) list.templateLines = new ArrayList<>();
 
-                        // anchorCorner field renamed from alignment — treat null as TOP_LEFT
+                        // anchorCorner was renamed from "alignment" — null means TOP_LEFT
                         if (list.anchorCorner == null) list.anchorCorner = Corner.TOP_LEFT;
                         list.backFill();
                     }

@@ -11,7 +11,7 @@ public class MtssCommand {
 
     public static void register(CommandDispatcher<FabricClientCommandSource> dispatcher) {
         dispatcher.register(literal("mtss")
-            // /mtss gui — open the GUI
+            // Opens the GUI
             .then(literal("gui").executes(ctx -> {
                 Minecraft.getInstance().schedule(() ->
                         Minecraft.getInstance().gui.setScreen(new MtssGuiScreen()));

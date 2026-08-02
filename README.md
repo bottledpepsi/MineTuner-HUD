@@ -52,14 +52,15 @@ While dragging, lists snap to the vertical and horizontal centre lines of your s
 
 ### Per-list stat control
 Right-click any list in the editor to open its context menu:
-- **Reorder / Toggle** — enable or disable individual stats, and move them up/down within the list
-- **Per-stat settings** — toggle the label prefix (e.g. hide "TPS: " and show just the value), set decimal places for numeric stats (TPS, MSPT, CPU, Speed), switch graphable stats (TPS, MSPT, FPS, CPU, Ping, Memory, Speed) between text and a rolling history graph, and override the good/warn color thresholds for TPS, FPS, Ping, Memory, and CPU on a per-list basis
-- **Rename** — give each list a custom name
-- **Background** — toggle the semi-transparent dark background per list
-- **Text Shadow** — toggle text shadow per list
-- **Color / Scale** — override the normal color-coding with a custom color, and scale the list's text from 0.5x to 2.0x
-- **Duplicate** — clone a list (including all its stats and settings) as a starting point for a variant layout
-- **Delete** — remove the list entirely
+- **⚙ Edit Stats** — enable or disable individual stats, move them up/down, and open per-stat settings: toggle the label prefix (e.g. hide "TPS: " and show just the value), set decimal places for numeric stats (TPS, MSPT, CPU, Speed), switch graphable stats (TPS, MSPT, FPS, CPU, Ping, Memory, Speed) between text and a rolling history graph, and override the good/warn color thresholds for TPS, FPS, Ping, Memory, and CPU
+- **▤ Appearance** — a sub-panel bundling:
+  - **Rename** — give the list a custom name
+  - **Background** — toggle the semi-transparent dark background
+  - **Text Shadow** — toggle text shadow
+  - **Color / Scale** — override the normal color-coding with a custom color, and scale the list's text from 0.5x to 2.0x
+  - **Template Mode** — switch the list into freeform template lines (see [Template Mode](#template-mode-1) below)
+- **⧉ Duplicate** — clone a list (including all its stats and settings) as a starting point for a variant layout
+- **✕ Delete** — remove the list entirely
 
 ### Right-click to create
 Right-click on any empty area of the editor screen to instantly create a new stat list at that location.
@@ -112,12 +113,12 @@ Press the **Toggle MineTuner Statistics Server Overlay** keybind (unbound by def
 | Action | Result |
 |---|---|
 | **Left-click + drag** | Move a stat list |
-| **Right-click on a list** | Open context menu (configure, rename, color/scale, duplicate, delete) |
+| **Right-click on a list** | Open context menu (edit stats, appearance, duplicate, delete) |
 | **Right-click on empty space** | Create a new list at that position |
 | **Escape** | Close the editor and save |
 
-### Reorder / Toggle panel
-Inside a list's context menu, click **Reorder / Toggle stats** to open the stat panel for that list:
+### Edit Stats panel
+Inside a list's context menu, click **⚙ Edit Stats** to open the stat panel for that list:
 - Click a stat row to **toggle it on or off**
 - Click **▲ / ▼** to move a stat up or down in the display order
 - Click **⚙** to open per-stat settings:
@@ -131,20 +132,27 @@ Inside a list's context menu, click **Reorder / Toggle stats** to open the stat 
     - Click **◀ Back** to return to the per-stat settings panel
 - Click **✕ Close** to return to the context menu
 
-### Color / Scale panel
-Inside a list's context menu, click **Color / Scale...** to:
-- Toggle **Use Custom Color** to override the normal threshold-based coloring
-- Click **Cycle Color** to step through a curated color palette
-- Use **- / +** to adjust the list's text scale between 0.5x and 2.0x
+### Appearance panel
+Inside a list's context menu, click **▤ Appearance »** to open:
+- **Rename** — give the list a custom name
+- **Background** — toggle the semi-transparent dark background
+- **Text Shadow** — toggle text shadow
+- **Color / Scale »** — opens a sub-panel:
+  - Toggle **Use Custom Color** to override the normal threshold-based coloring
+  - Click **Cycle Color** to step through a curated color palette
+  - Use **- / +** to adjust the list's text scale between 0.5x and 2.0x
+  - Click **◀ Back** to return to Appearance
+- **Template Mode** — toggle the list into freeform template lines (see [Template Mode](#template-mode-1) below)
+- Click **◀ Back** to return to the context menu
 
 ### Template Mode
 Classic mode (the default) renders one line per enabled stat, in `statOrder` order, exactly as described above. **Template Mode** is an opt-in alternative for a list: instead of a fixed list of stat rows, you write your own line(s) of text with stat tokens interpolated in — closer to a small hypertext markup than a strict stat list. This is entirely per-list; a list not in Template Mode behaves identically to every prior version.
 
 #### Turning it on
-Right-click a list → **Template Mode** to toggle it on for that list. Once on, the context menu's first row changes from **Reorder / Toggle stats** to **Edit Template Lines**.
+Right-click a list → **▤ Appearance »** → **Template Mode** to toggle it on for that list. Once on, the context menu's **⚙ Edit Stats** row becomes **⚙ Edit Template Lines**.
 
 #### Editing template lines
-Click **Edit Template Lines** to open the line list for that list:
+Click **⚙ Edit Template Lines** to open the line list for that list:
 - Click an existing line to open a text-entry box for it — type your template, press **Enter** to confirm, or **Esc** to cancel and keep the previous text
 - Click **✕** next to a line to delete it
 - Click **+ Add line** to append a new (initially empty) line, then click it to edit

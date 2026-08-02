@@ -26,7 +26,7 @@ public class MtssClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MtssMod.MOD_ID, "main"));
 
-    /** Default keybind to open the MineTuner Statistics Server editor — no default GLFW key, bind it in Controls. */
+    /** Opens the editor. No default key — bind it in Controls. */
     private static final KeyMapping OPEN_GUI_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.mtss.open_gui",
@@ -35,7 +35,7 @@ public class MtssClient implements ClientModInitializer {
                     CATEGORY
             ));
 
-    /** Keybind to toggle the live overlay on/off without opening the editor — unbound by default, bind it in Controls. */
+    /** Shows/hides the overlay without opening the editor. Unbound by default. */
     private static final KeyMapping TOGGLE_OVERLAY_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.mtss.toggle_overlay",

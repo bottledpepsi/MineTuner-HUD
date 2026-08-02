@@ -40,13 +40,22 @@ All notable changes to MineTuner Statistics Server are documented in this file.
   - `MtssRenderer.buildLines` branches to the new template path via a single
     `if (cfg.useTemplate)` at the top of the method — the existing classic-
     mode line-building loop is untouched, not interleaved with the new logic.
-  - **Editor GUI:** a new **Template Mode** toggle in each list's context
-    menu; when on, the context menu's first row becomes **Edit Template
-    Lines**, opening a minimal line list (click a line to edit its text,
-    **✕** to remove it, **+ Add line** to append one) that reuses the
-    existing Rename flow's text-entry pattern. Full multi-line editing UX is
-    intentionally out of scope for this pass — this is a "one line at a
-    time" flow.
+  - **Editor GUI:** template line editing lives under a list's **Appearance**
+    submenu as a **Template Mode** toggle; when on, **Edit Stats** opens a
+    minimal line list (click a line to edit its text, **✕** to remove it,
+    **+ Add line** to append one) that reuses the existing Rename flow's
+    text-entry pattern. Full multi-line editing UX is intentionally out of
+    scope for this pass — this is a "one line at a time" flow.
+
+### Changed
+- **Right-click menu redesigned.** The per-list context menu was a flat list
+  of 8 rows (Reorder/Edit Template, Rename, Background, Shadow, Color/Scale,
+  Duplicate, Delete, Template Mode); it's now 4 grouped rows with icons:
+  **⚙ Edit Stats**, **▤ Appearance »**, **⧉ Duplicate**, **✕ Delete**.
+  Rename, Background, Text Shadow, Color/Scale, and the Template Mode switch
+  now live together under **Appearance**, which opens as its own sub-panel.
+  No settings moved or changed meaning — just regrouped so the top-level
+  menu isn't a long undifferentiated list.
 
 - **Toggle-overlay keybind** (`key.mtss.toggle_overlay`, unbound by default)
   that instantly shows or hides the entire live HUD without opening the

@@ -18,9 +18,8 @@ import java.util.List;
  * MineTuner Statistics Server editor screen.
  *
  * <ul>
- *   <li>Left-click + drag  — move any list</li>
- *   <li>Right-click on a list — context menu (reorder/toggle, rename, background,
- *       shadow, color/scale, duplicate, delete)</li>
+ *   <li>Left-click + drag — move any list</li>
+ *   <li>Right-click on a list — context menu (edit stats, appearance, duplicate, delete)</li>
  *   <li>Right-click on empty space — create new list</li>
  *   <li>Escape — close and save</li>
  * </ul>
@@ -48,18 +47,19 @@ public class MtssGuiScreen extends Screen {
     private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
 
-    // ── Template line editor state (step 6) ───────────────────────────────────
-    /** Whether the "Edit Template Lines" list (one row per templateLines entry + add/remove/back) is open. */
+    // ── Template line editor state ────────────────────────────────────────────
+    /** Whether the template line list (one row per templateLines entry + add/remove/back) is open. */
     private boolean templateListOpen = false;
     /**
-     * Index into templateLines currently being text-edited via
-     * MenuKind.TEMPLATE_EDIT, or -1 when the template-line list itself is
-     * showing (not editing a specific line). Mirrors the RENAME flow's
-     * renameBuffer pattern, generalized to edit one templateLines entry
-     * at a time rather than the list's name.
+     * Index into templateLines being text-edited, or -1 when the line list
+     * itself is showing. Mirrors the RENAME flow's renameBuffer pattern.
      */
     private int templateEditIndex = -1;
     private StringBuilder templateEditBuffer = new StringBuilder();
+
+    // ── Appearance sub-panel state ────────────────────────────────────────────
+    /** True when the Appearance sub-panel (rename, background, shadow, color/scale, template mode) is open. */
+    private boolean appearanceOpen = false;
 
     // ── Layout constants ──────────────────────────────────────────────────────
     private static final int ROW_H     = 13;
@@ -72,26 +72,28 @@ public class MtssGuiScreen extends Screen {
     private static final int SNAP_TICK      = 6;
 
     // ── Context menu item indices ─────────────────────────────────────────────
-    // Row 0 is "Reorder / Toggle stats" in classic mode, or "Edit Template
-    // Lines" in template mode — same index, different action/label, chosen
-    // in renderListContextMenu/handleListContextMenuClick based on
-    // lc.useTemplate. LM_TEMPLATE_MODE is the new toggle row appended after
-    // the original set.
-    private static final int LM_REORDER    = 0; // also serves as LM_EDIT_TEMPLATE when useTemplate is true
-    private static final int LM_RENAME     = 1;
-    private static final int LM_BG         = 2;
-    private static final int LM_SHADOW     = 3;
-    private static final int LM_COLOR      = 4;
-    private static final int LM_DUPLICATE  = 5;
-    private static final int LM_DELETE     = 6;
-    private static final int LM_TEMPLATE_MODE = 7;
-    private static final int LM_COUNT      = 8;
+    // 4 grouped rows: Stats opens the reorder/toggle panel (classic mode) or
+    // the template line editor (template mode); Appearance opens a sub-panel
+    // for rename/background/shadow/color/template-mode; Duplicate and Delete
+    // are single actions.
+    private static final int LM_STATS      = 0; // "Edit Stats" or "Edit Template Lines"
+    private static final int LM_APPEARANCE = 1;
+    private static final int LM_DUPLICATE  = 2;
+    private static final int LM_DELETE     = 3;
+    private static final int LM_COUNT      = 4;
+
+    // ── Appearance sub-panel row indices ──────────────────────────────────────
+    private static final int AP_RENAME        = 0;
+    private static final int AP_BG            = 1;
+    private static final int AP_SHADOW        = 2;
+    private static final int AP_COLOR_SCALE   = 3;
+    private static final int AP_TEMPLATE_MODE = 4;
+    private static final int AP_BACK          = 5;
+    private static final int AP_COUNT         = 6;
 
     // ── Template line list sub-panel row indices ──────────────────────────────
     // Rendered as: header, one row per templateLines entry, "+ Add line", "Back".
-    // Row count is dynamic (depends on templateLines.size()), computed by
-    // templateListPanelHeight()/templateListRowCount() below, mirroring the
-    // reorder panel's own dynamic-height pattern.
+    // Row count is dynamic — see templateListRowCount()/templateListPanelHeight().
 
     // ── Color/scale sub-panel row indices ─────────────────────────────────────
     private static final int CS_USE_CUSTOM = 0;
@@ -170,6 +172,7 @@ public class MtssGuiScreen extends Screen {
         else if (menuKind == MenuKind.RENAME)          renderRenameBox(g, font);
         else if (menuKind == MenuKind.TEMPLATE_EDIT)   renderTemplateEditBox(g, font);
         else if (colorScaleOpen)                       renderColorScalePanel(g, font, mx, my);
+        else if (appearanceOpen)                       renderAppearancePanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null && thresholdPanelOpen) renderThresholdPanel(g, font, mx, my);
         else if (reorderOpen && statSettingsStat != null) renderStatSettingsPanel(g, font, mx, my);
         else if (reorderOpen)                          renderReorderPanel(g, font, mx, my);
@@ -186,12 +189,10 @@ public class MtssGuiScreen extends Screen {
         MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
         boolean empty = cache.rowKinds().isEmpty();
 
-        // Box size: for the empty placeholder, keep the old single-line-of-text
-        // sizing (there's no LineCache row to measure). Otherwise defer to
-        // LineCache.boxW/boxH so graph rows are sized identically here and in
-        // the live HUD — this is the same box math MtssRenderer.render() uses,
-        // so the editor preview and the live overlay can never disagree on
-        // hit-testing dimensions.
+        // For the empty placeholder, use the old single-line sizing (no
+        // LineCache row to measure). Otherwise use LineCache.boxW/boxH — the
+        // same math MtssRenderer.render() uses, so the preview and the live
+        // overlay always agree on size.
         int lineH = font.lineHeight + 1;
         int boxW, boxH;
         if (empty) {
@@ -253,6 +254,28 @@ public class MtssGuiScreen extends Screen {
         MtssConfig.StatListConfig lc = getListById(menuListId);
         if (lc == null) { menuKind = MenuKind.NONE; return; }
 
+        String[] labels = new String[LM_COUNT];
+        labels[LM_STATS]      = "§f⚙ " + (lc.useTemplate
+                ? I18n.get("gui.mtss.menu.edit_template")
+                : I18n.get("gui.mtss.menu.reorder"));
+        labels[LM_APPEARANCE] = "§f▤ " + I18n.get("gui.mtss.menu.appearance") + " »";
+        labels[LM_DUPLICATE]  = "§b⧉ " + I18n.get("gui.mtss.menu.duplicate");
+        labels[LM_DELETE]     = "§c✕ " + I18n.get("gui.mtss.menu.delete");
+
+        drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
+    }
+
+    // ── Appearance sub-panel ──────────────────────────────────────────────────
+    // Bundles the less-frequently-touched cosmetic settings (rename,
+    // background, shadow, color/scale, template mode) behind one menu entry
+    // instead of five separate top-level rows.
+
+    private void renderAppearancePanel(GuiGraphicsExtractor g,
+                                       net.minecraft.client.gui.Font font,
+                                       int mx, int my) {
+        MtssConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null) { appearanceOpen = false; return; }
+
         String onOff_bg  = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
                                               : " §c" + I18n.get("gui.mtss.menu.off");
         String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.mtss.menu.on")
@@ -260,20 +283,41 @@ public class MtssGuiScreen extends Screen {
         String onOff_tpl = lc.useTemplate    ? " §a" + I18n.get("gui.mtss.menu.on")
                                               : " §c" + I18n.get("gui.mtss.menu.off");
 
-        String[] labels = new String[LM_COUNT];
-        // Row 0: "Reorder / Toggle stats" in classic mode, "Edit Template Lines" in template mode
-        labels[LM_REORDER]   = lc.useTemplate
-                ? "§f" + I18n.get("gui.mtss.menu.edit_template")
-                : "§f" + I18n.get("gui.mtss.menu.reorder");
-        labels[LM_RENAME]    = "§e" + I18n.get("gui.mtss.menu.rename");
-        labels[LM_BG]        = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
-        labels[LM_SHADOW]    = "§f" + I18n.get("gui.mtss.menu.shadow")     + onOff_sh;
-        labels[LM_COLOR]     = "§f" + I18n.get("gui.mtss.menu.color_scale");
-        labels[LM_DUPLICATE] = "§b" + I18n.get("gui.mtss.menu.duplicate");
-        labels[LM_DELETE]    = "§c" + I18n.get("gui.mtss.menu.delete");
-        labels[LM_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOff_tpl;
+        String[] labels = new String[AP_COUNT];
+        labels[AP_RENAME]        = "§e" + I18n.get("gui.mtss.menu.rename");
+        labels[AP_BG]            = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
+        labels[AP_SHADOW]        = "§f" + I18n.get("gui.mtss.menu.shadow")     + onOff_sh;
+        labels[AP_COLOR_SCALE]   = "§f" + I18n.get("gui.mtss.menu.color_scale") + " »";
+        labels[AP_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOff_tpl;
+        labels[AP_BACK]          = "§7" + I18n.get("gui.mtss.stat_settings.back");
 
-        drawPanel(g, font, labels, mx, my, PANEL_W, LM_COUNT);
+        drawPanel(g, font, labels, mx, my, PANEL_W, AP_COUNT);
+    }
+
+    private boolean isInsideAppearancePanel(int mx, int my) {
+        int panelH = PANEL_PAD * 2 + ROW_H * AP_COUNT;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
+    }
+
+    private void handleAppearancePanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
+        int panelH = PANEL_PAD * 2 + ROW_H * AP_COUNT;
+        int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
+        if (mx < px || mx > px + PANEL_W) return;
+        int rel = my - (py + PANEL_PAD);
+        if (rel < 0 || rel >= ROW_H * AP_COUNT) return;
+        int idx = rel / ROW_H;
+
+        MtssConfig root = MtssConfig.getInstance();
+
+        switch (idx) {
+            case AP_RENAME        -> { appearanceOpen = false; menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
+            case AP_BG            -> { lc.showBackground = !lc.showBackground; root.save(); }
+            case AP_SHADOW        -> { lc.textShadow     = !lc.textShadow;     root.save(); }
+            case AP_COLOR_SCALE   -> { appearanceOpen = false; colorScaleOpen = true; }
+            case AP_TEMPLATE_MODE -> { lc.useTemplate = !lc.useTemplate; root.save(); }
+            case AP_BACK          -> { appearanceOpen = false; menuKind = MenuKind.LIST_CONTEXT; }
+        }
     }
 
     // ── Color / scale sub-panel ───────────────────────────────────────────────
@@ -362,6 +406,7 @@ public class MtssGuiScreen extends Screen {
             root.save();
         } else if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H)) {
             colorScaleOpen = false;
+            appearanceOpen = true; // Color/Scale nests inside Appearance, so Back returns there
         }
     }
 
@@ -440,14 +485,12 @@ public class MtssGuiScreen extends Screen {
                 px + PANEL_PAD, closeY + 2, 0xFFFFFFFF, false);
     }
 
-    // ── Template line editor (step 6) ─────────────────────────────────────────
-    // Intentionally minimal per the spec: a flat list of templateLines
-    // entries with add/remove/edit, reusing the RENAME text-entry pattern
-    // (see templateEditBuffer / MenuKind.TEMPLATE_EDIT below) generalized to
-    // one templateLines entry at a time. Full multi-line editing UX is
-    // explicitly out of scope for this step.
+    // ── Template line editor ──────────────────────────────────────────────────
+    // Minimal by design: a flat list of templateLines entries with
+    // add/remove/edit, reusing the RENAME text-entry pattern for editing one
+    // line at a time.
 
-    /** Row count for the template line list panel: header + one row per templateLines entry + "+ Add line" + "Back". */
+    /** Row count for the template line list panel: header + one row per line + "+ Add line" + "Back". */
     private int templateListRowCount(MtssConfig.StatListConfig lc) {
         return 1 + lc.templateLines.size() + 2; // header + lines + add + back
     }
@@ -555,7 +598,7 @@ public class MtssGuiScreen extends Screen {
         }
     }
 
-    /** Text-entry box for a single templateLines entry — same visual/interaction pattern as renderRenameBox, generalized to a wider box since template strings run longer than list names. */
+    /** Text-entry box for one templateLines entry — same pattern as renderRenameBox, just wider since template strings run longer. */
     private void renderTemplateEditBox(GuiGraphicsExtractor g,
                                        net.minecraft.client.gui.Font font) {
         String prompt  = "§e" + I18n.get("gui.mtss.template.edit_prompt", templateEditIndex + 1);
@@ -590,28 +633,22 @@ public class MtssGuiScreen extends Screen {
     }
 
     /**
-     * True for stats where a HIGHER value is better (green at/above goodMin).
-     * False for stats where a LOWER value is better (green at/below goodMin).
-     * Must match the direction baked into MtssDataHolder's xColorFor(...) functions.
+     * True when a higher value is better (green at/above goodMin) — TPS, FPS.
+     * False means lower is better. Must match MtssDataHolder's xColorFor() direction.
      */
     private boolean isHigherBetter(MtssConfig.Stat stat) {
         return stat == MtssConfig.Stat.TPS || stat == MtssConfig.Stat.FPS;
     }
 
-    /**
-     * Increment step size appropriate to each threshold stat's natural scale:
-     * whole numbers for Ping/Memory/FPS, 0.5 for TPS, 1.0 for CPU%.
-     */
+    /** Increment step for each threshold stat's scale: 0.5 for TPS, whole units otherwise. */
     private float thresholdStep(MtssConfig.Stat stat) {
         return (stat == MtssConfig.Stat.TPS) ? 0.5f : 1.0f;
     }
 
     /**
-     * Row count for the stat settings panel: header + prefix + (optional
-     * decimals) + (optional graph toggle) + (optional thresholds row) + back.
-     * Shared by the render, click-handling, and hit-testing methods below so
-     * they can't drift out of sync with each other (see the reorder/toggle
-     * panel's history of the same bug, noted in the changelog).
+     * Row count for the stat settings panel: header + prefix + optional
+     * decimals/graph/thresholds rows + back. Shared by render, click, and
+     * hit-test so they can't drift out of sync.
      */
     private int statSettingsPanelRows(MtssConfig.Stat stat) {
         int rows = 3; // header + prefix + back
@@ -761,9 +798,8 @@ public class MtssGuiScreen extends Screen {
     }
 
     // ── Custom-threshold sub-panel ────────────────────────────────────────────
-    // Mirrors the LM_COLOR -> colorScaleOpen/renderColorScalePanel nesting
-    // pattern: a boolean flag opens a sibling sub-panel from within the stat
-    // settings panel, with its own render/click/hit-test methods below.
+    // Same nesting pattern as colorScaleOpen: a boolean flag opens a sibling
+    // sub-panel from the stat settings panel, with its own render/click/hit-test.
 
     private void renderThresholdPanel(GuiGraphicsExtractor g,
                                       net.minecraft.client.gui.Font font,
@@ -898,11 +934,9 @@ public class MtssGuiScreen extends Screen {
     }
 
     /**
-     * Enforces goodMin/warnMin ordering after an adjustment so a user can't
-     * create an inverted range: for higher-is-better stats, warnMin must stay
-     * <= goodMin; for lower-is-better stats, warnMin must stay >= goodMin.
-     * `adjustedGood` tells us which field was just moved, so the other field
-     * is the one pulled back into line.
+     * Keeps goodMin/warnMin from inverting after an adjustment: for
+     * higher-is-better stats warnMin stays &lt;= goodMin, for lower-is-better
+     * it stays &gt;= goodMin. adjustedGood says which field just moved.
      */
     private void clampThresholdOrder(MtssConfig.ThresholdSettings ts, boolean higherBetter, boolean adjustedGood) {
         if (higherBetter) {
@@ -985,7 +1019,13 @@ public class MtssGuiScreen extends Screen {
         if (colorScaleOpen) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc != null && isInsideColorScalePanel(mx, my)) handleColorScalePanelClick(mx, my, lc);
-            else colorScaleOpen = false;
+            else { colorScaleOpen = false; appearanceOpen = true; } // click outside → back to Appearance, since Color/Scale nests inside it
+            return true;
+        }
+        if (appearanceOpen) {
+            MtssConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && isInsideAppearancePanel(mx, my)) handleAppearancePanelClick(mx, my, lc);
+            else appearanceOpen = false;
             return true;
         }
         if (reorderOpen) {
@@ -1142,10 +1182,8 @@ public class MtssGuiScreen extends Screen {
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
             char ch = (char) event.codepoint();
-            // Template strings are meaningfully longer than a list name (they're
-            // full lines of mixed literal text + tokens), so this cap is much
-            // higher than renameBuffer's 32 — generous but still bounded so a
-            // single template line can't grow unboundedly.
+            // Higher cap than renameBuffer's 32 since template lines mix text
+            // and tokens and run longer — still bounded so it can't grow unbounded.
             if (ch >= 32 && templateEditBuffer.length() < 200)
                 templateEditBuffer.append(ch);
             return true;
@@ -1170,17 +1208,13 @@ public class MtssGuiScreen extends Screen {
         menuKind = MenuKind.NONE;
 
         switch (idx) {
-            case LM_REORDER   -> {
+            case LM_STATS -> {
                 if (lc.useTemplate) { templateListOpen = true; templateEditIndex = -1; }
                 else reorderOpen = true;
             }
-            case LM_RENAME    -> { menuKind = MenuKind.RENAME; renameBuffer = new StringBuilder(lc.displayName()); }
-            case LM_BG        -> { lc.showBackground = !lc.showBackground; root.save(); }
-            case LM_SHADOW    -> { lc.textShadow     = !lc.textShadow;     root.save(); }
-            case LM_COLOR     -> colorScaleOpen = true;
-            case LM_DUPLICATE -> { root.duplicateList(lc.id); root.save(); }
-            case LM_DELETE    -> { root.removeList(lc.id); root.save(); reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; templateListOpen = false; }
-            case LM_TEMPLATE_MODE -> { lc.useTemplate = !lc.useTemplate; root.save(); }
+            case LM_APPEARANCE -> appearanceOpen = true;
+            case LM_DUPLICATE  -> { root.duplicateList(lc.id); root.save(); }
+            case LM_DELETE     -> { root.removeList(lc.id); root.save(); reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; templateListOpen = false; appearanceOpen = false; colorScaleOpen = false; }
         }
     }
 

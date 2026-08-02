@@ -12,39 +12,27 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Parses and renders freeform "template lines" (step 6) — a small
- * hypertext-style markup grammar that lets a single rendered line mix
- * literal text with interpolated stat tokens, e.g.
- * {@code "FPS: {fps} | TPS: {tps:2} | {ping}ms"}.
- * <p>
- * This is entirely separate from, and does not alter, classic per-stat-line
- * mode — {@code MtssRenderer.buildLines} only calls into this class when
- * {@code StatListConfig.useTemplate} is true for a given list.
+ * Parses and renders "template lines" — freeform text with stat tokens mixed
+ * in, e.g. {@code "FPS: {fps} | TPS: {tps:2} | {ping}ms"}. Used instead of
+ * classic per-stat-line mode when {@code StatListConfig.useTemplate} is true.
  *
  * <h2>Token grammar</h2>
  * <ul>
- *   <li>{@code {token}} — interpolates a stat using its default decimal count.</li>
- *   <li>{@code {token:N}} — interpolates a stat with N decimal places, for
- *       stats that support a decimals setting (see {@link #DECIMAL_TOKENS}).
- *       Ignored (with a one-time warning) for stats that don't.</li>
- *   <li>Doubled braces escape a literal brace character: {@code "{{"} renders
- *       as {@code "{"}, and {@code "}}"} renders as {@code "}"}.</li>
- *   <li>Anything else inside {@code { }} that isn't a recognized token name
- *       is treated as a malformed token: it renders back out as literal text
- *       unchanged (braces and all) rather than throwing or vanishing, so a
- *       typo like {@code {tsp}} is visible and fixable in-game.</li>
+ *   <li>{@code {token}} — a stat's value, using its default decimal count.</li>
+ *   <li>{@code {token:N}} — N decimal places, for stats that support decimals
+ *       (see {@link #DECIMAL_TOKENS}). Ignored (with a warning) otherwise.</li>
+ *   <li>{@code "{{"} and {@code "}}"} escape literal {@code {} and {@code }}.</li>
+ *   <li>Anything else in braces that isn't a known token is malformed and
+ *       renders back out as plain text, so a typo is visible, not silent.</li>
  * </ul>
- * See the README's "Template Mode" section for the full token table.
+ * Full token table: README's "Template Mode" section.
  */
 public final class TemplateEngine {
 
     private TemplateEngine() {}
 
     // ── Token table ──────────────────────────────────────────────────────────
-    // Maps each markup token name (lowercase, as typed in a template string,
-    // e.g. "tps" for "{tps}") to the Stat it represents. One entry per
-    // existing Stat enum value. Keep this in sync with the "Template Mode"
-    // token table in README.md if either changes.
+    // Token name -> Stat. Keep in sync with README's Template Mode table.
     private static final Map<String, Stat> TOKEN_TO_STAT = new LinkedHashMap<>();
     static {
         TOKEN_TO_STAT.put("tps",       Stat.TPS);
@@ -65,10 +53,10 @@ public final class TemplateEngine {
         TOKEN_TO_STAT.put("dimension", Stat.DIMENSION);
     }
 
-    /** Stats whose {@code :N} decimals suffix is meaningful (matches StatSettings.decimals' scope). */
+    /** Stats whose {@code :N} decimals suffix does anything. */
     private static final Set<Stat> DECIMAL_TOKENS = Set.of(Stat.TPS, Stat.MSPT, Stat.CPU, Stat.SPEED);
 
-    /** Each stat's built-in default decimal count, used when {@code :N} is omitted — mirrors MtssDataHolder's getFormattedX() no-arg overloads. */
+    /** Default decimal count when {@code :N} is omitted. */
     private static int defaultDecimals(Stat stat) {
         return switch (stat) {
             case SPEED -> 2;
@@ -80,32 +68,24 @@ public final class TemplateEngine {
 
     public sealed interface Token permits LiteralToken, StatToken {}
 
-    /** A run of literal text (including resolved {@code {{}/{@code }}} escapes and malformed-token fallback text) copied through unchanged. */
+    /** A run of plain text, copied through unchanged. */
     public record LiteralToken(String text) implements Token {}
 
-    /** A {@code {statname}} or {@code {statname:N}} reference. decimals is -1 when omitted (use the stat's default). */
+    /** A {@code {statname}} or {@code {statname:N}} reference. decimals is -1 if omitted. */
     public record StatToken(Stat stat, int decimals) implements Token {}
 
     // ── Parse cache ──────────────────────────────────────────────────────────
-    // Keyed per list (by StatListConfig.id) and invalidated whenever that
-    // list's templateLines content changes, so parsing only happens once per
-    // edit rather than once per frame. Each cache entry stores the exact
-    // joined source it was parsed from, so a stale cache is detected cheaply
-    // (a single String.equals) without needing an explicit "dirty" flag
-    // threaded through the GUI's save path.
+    // Keyed per list. Re-parses only when that list's template text changes,
+    // so parsing happens once per edit, not once per frame.
     private record CacheEntry(String sourceHash, List<List<Token>> perLine) {}
     private static final Map<Integer, CacheEntry> PARSE_CACHE = new HashMap<>();
 
-    /** Per-list, per-template-content one-time warning tracker for malformed tokens (see class doc). */
+    /** Per-list set of bad tokens already warned about, so each is only logged once. */
     private static final Map<Integer, Set<String>> WARNED_BAD_TOKENS = new HashMap<>();
 
-    /**
-     * Returns the parsed token lists for {@code cfg.templateLines} (one
-     * {@code List<Token>} per line), reusing the cached parse unless the
-     * joined template content has changed since it was last parsed.
-     */
+    /** Parsed token lists for {@code cfg.templateLines}, using the cache when the template text hasn't changed. */
     public static List<List<Token>> getParsedLines(MtssConfig.StatListConfig cfg) {
-        String joined = String.join("\u0000", cfg.templateLines); // NUL can't appear in a normal template string, so this is a safe unambiguous join separator
+        String joined = String.join("\u0000", cfg.templateLines); // NUL is a safe separator; can't appear in a template string
         CacheEntry cached = PARSE_CACHE.get(cfg.id);
         if (cached != null && cached.sourceHash().equals(joined)) {
             return cached.perLine();
@@ -118,7 +98,7 @@ public final class TemplateEngine {
         return parsed;
     }
 
-    /** Explicitly drops the cached parse for a list — call after the GUI's template editor saves a change, though getParsedLines() also self-invalidates via the content hash. */
+    /** Drops the cached parse for a list. getParsedLines() also self-invalidates on content change, but call this after saving an edit. */
     public static void invalidate(int listId) {
         PARSE_CACHE.remove(listId);
         WARNED_BAD_TOKENS.remove(listId);
@@ -126,11 +106,7 @@ public final class TemplateEngine {
 
     // ── Parser ───────────────────────────────────────────────────────────────
 
-    /**
-     * Parses a single template line into literal/stat tokens. Never throws:
-     * malformed token bodies fall back to literal text (braces included) so
-     * a bad template renders visibly instead of silently losing the line.
-     */
+    /** Parses a template line into tokens. Never throws — malformed tokens fall back to literal text. */
     public static List<Token> parse(int listIdForWarnings, String template) {
         List<Token> out = new ArrayList<>();
         StringBuilder literal = new StringBuilder();
@@ -140,7 +116,7 @@ public final class TemplateEngine {
             char c = template.charAt(i);
 
             if (c == '{') {
-                // Escaped literal "{{"
+                // Escaped "{{"
                 if (i + 1 < len && template.charAt(i + 1) == '{') {
                     literal.append('{');
                     i += 2;
@@ -148,7 +124,7 @@ public final class TemplateEngine {
                 }
                 int close = template.indexOf('}', i + 1);
                 if (close < 0) {
-                    // No matching close brace at all — rest of the string is literal.
+                    // No closing brace — rest of the string is literal.
                     literal.append(template.substring(i));
                     i = len;
                     continue;
@@ -159,8 +135,7 @@ public final class TemplateEngine {
                     if (!literal.isEmpty()) { out.add(new LiteralToken(literal.toString())); literal.setLength(0); }
                     out.add(parsedToken);
                 } else {
-                    // Malformed token (unknown stat name, bad decimals, empty, etc.) —
-                    // render the original "{body}" back out as literal text unchanged.
+                    // Malformed token — render the original "{body}" back as literal text.
                     warnOnce(listIdForWarnings, body);
                     literal.append('{').append(body).append('}');
                 }
@@ -169,13 +144,13 @@ public final class TemplateEngine {
             }
 
             if (c == '}') {
-                // Escaped literal "}}"
+                // Escaped "}}"
                 if (i + 1 < len && template.charAt(i + 1) == '}') {
                     literal.append('}');
                     i += 2;
                     continue;
                 }
-                // Lone unmatched "}" — treat as literal text (nothing to escape/parse).
+                // Lone "}" — just literal text.
                 literal.append('}');
                 i++;
                 continue;
@@ -189,7 +164,7 @@ public final class TemplateEngine {
         return out;
     }
 
-    /** Returns the parsed StatToken for a "{...}" body, or null if the body isn't a recognized token. */
+    /** Parses a "{...}" body into a token, or returns null if it isn't a recognized one. */
     private static StatToken tryParseTokenBody(String body) {
         if (body.isEmpty()) return null;
 
@@ -202,24 +177,22 @@ public final class TemplateEngine {
             try {
                 decimals = Integer.parseInt(decStr.trim());
             } catch (NumberFormatException e) {
-                return null; // e.g. "{tps:abc}" — malformed, fall back to literal
+                return null; // e.g. "{tps:abc}"
             }
-            if (decimals < 0 || decimals > 6) return null; // out of MtssDataHolder.fmt()'s supported range
+            if (decimals < 0 || decimals > 6) return null;
         }
 
         Stat stat = TOKEN_TO_STAT.get(name.trim().toLowerCase(java.util.Locale.ROOT));
-        if (stat == null) return null; // typo'd/unknown stat name, e.g. "{tsp}"
+        if (stat == null) return null; // typo'd/unknown name, e.g. "{tsp}"
 
         if (decimals >= 0 && !DECIMAL_TOKENS.contains(stat)) {
-            // e.g. "{ping:2}" — Ping has no decimals concept. Treat as malformed
-            // rather than silently dropping the suffix, so the user notices.
-            return null;
+            return null; // e.g. "{ping:2}" — Ping has no decimals
         }
 
         return new StatToken(stat, decimals);
     }
 
-    /** Logs a one-time-per-list-per-bad-token warning to the client log, not every frame/parse. */
+    /** Logs each bad token once per list, not every parse. */
     private static void warnOnce(int listId, String badBody) {
         Set<String> warned = WARNED_BAD_TOKENS.computeIfAbsent(listId, k -> new java.util.HashSet<>());
         if (warned.add(badBody)) {
@@ -232,12 +205,10 @@ public final class TemplateEngine {
     // ── Renderer ─────────────────────────────────────────────────────────────
 
     /**
-     * Interpolates a parsed token list into the final line text, reusing the
-     * exact same {@code MtssDataHolder.getFormattedX(decimals)} calls classic
-     * mode uses — no formatting logic is duplicated here. Prefix/label
-     * stripping (showPrefix) from classic mode intentionally does NOT apply:
-     * template mode is the user's own literal text, so they simply don't
-     * type "TPS: " if they don't want the label.
+     * Renders a parsed token list to text, reusing the same
+     * {@code MtssDataHolder.getFormattedX()} calls classic mode uses. Classic
+     * mode's prefix/label stripping doesn't apply here — the user's own
+     * literal text is the label.
      */
     public static String render(List<Token> tokens) {
         StringBuilder sb = new StringBuilder();
