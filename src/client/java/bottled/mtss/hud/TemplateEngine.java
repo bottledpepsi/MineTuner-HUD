@@ -45,7 +45,7 @@ public final class TemplateEngine {
     public record StatToken(Stat stat, int decimals) implements Token {}
 
     // ── Parse cache ──────────────────────────────────────────────────────────
-    // Keyed per list. Re-parses only when that list's template text changes,
+    // Keyed per list. Reparses only when that list's template text changes,
     // so parsing happens once per edit, not once per frame.
     private record CacheEntry(String sourceHash, List<List<Token>> perLine) {}
     private static final Map<Integer, CacheEntry> PARSE_CACHE = new HashMap<>();
