@@ -198,7 +198,9 @@ Template lines render in a single flat color per line — either the list's cust
 Template lines are always plain text rows — Template Mode does not currently support rendering a template line as a rolling graph.
 
 ### Config file
-Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually — the in-game GUI covers everything.
+Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually for anything the in-game GUI exposes.
+
+One exception: a graph's `GraphStyle` (panel background, gridlines, peak markers, value-display mode, smoothing, scale mode, color mode, width/height) is data model + rendering only for now — GUI controls for these follow in a later step. Until then, tweaking them means editing the relevant stat's `graphStyle` block in the config file directly.
 
 ---
 

@@ -1,5 +1,6 @@
 package bottled.mtss.config;
 
+import bottled.mtss.hud.TemplateEngine;
 import bottled.mtss.stat.StatDefinition;
 import bottled.mtss.stat.StatRegistry;
 import com.google.gson.Gson;
@@ -380,6 +381,7 @@ public class MtssConfig {
 
     public void removeList(int id) {
         lists.removeIf(l -> l.id == id);
+        TemplateEngine.invalidate(id); // drop any cached template parse/warn state for the deleted list
     }
 
     /** Duplicates the given list (by id) and appends the copy. Returns the new list, or null if not found. */

@@ -200,8 +200,11 @@ public class MtssRenderer {
                 }
                 // MSPT can go unavailable mid-session (e.g. leaving singleplayer) while
                 // its history still has old samples — fall back to the last raw value
-                // instead of showing a blank label.
-                if (label.isEmpty()) label = rawHistory[rawHistory.length - 1] + "";
+                // instead of showing a blank label. Routed through formatAxisValue (the
+                // same helper used for minValueLabel/maxValueLabel below) instead of
+                // printing the raw float, so the fallback still respects the stat's
+                // normal decimal formatting.
+                if (label.isEmpty()) label = def.formatAxisValue(rawHistory[rawHistory.length - 1]);
 
                 // Scale bounds computed once per frame here, not per pixel-column in drawGraph.
                 float scaleMin, scaleMax;
@@ -448,16 +451,20 @@ public class MtssRenderer {
         int plotY = y + 1;
         if (plotW <= 0 || plotH <= 0 || n == 0) return;
 
-        // ── 2. Gridlines (drawn behind the data, disabled for now) ───────
+        // ── 2. Gridlines (drawn behind the data) ──────────────────────────
+        // Re-enabled: was left commented out with everything else in this
+        // file already using graphics.fill() for pixel-level drawing, so
+        // uncommenting (rather than removing) keeps this consistent with the
+        // surrounding style instead of dropping the feature.
         // Skipped below ~12px tall — three gridlines would just be noise at small sizes.
-//        if (style.showGridlines && plotH >= 12) {
-//            for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
-//                int gy = plotY + Math.round(plotH * (1f - frac));
-//                for (int dx = 0; dx < plotW; dx += 3) {
-//                    graphics.fill(plotX + dx, gy, plotX + Math.min(dx + 1, plotW), gy + 1, 0x25FFFFFF);
-//                }
-//            }
-//        }
+        if (style.showGridlines && plotH >= 12) {
+            for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
+                int gy = plotY + Math.round(plotH * (1f - frac));
+                for (int dx = 0; dx < plotW; dx += 3) {
+                    graphics.fill(plotX + dx, gy, plotX + Math.min(dx + 1, plotW), gy + 1, 0x25FFFFFF);
+                }
+            }
+        }
 
         // ── 3 & 4. Filled area (gradient-faded) + interpolated stroke line ──
         drawPlotLine(graphics, entry, style, display, n, plotX, plotY, plotW, plotH);

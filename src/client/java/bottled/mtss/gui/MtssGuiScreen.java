@@ -191,18 +191,21 @@ public class MtssGuiScreen extends Screen {
         boolean empty = cache.rowKinds().isEmpty();
 
         // For the empty placeholder, use the old single-line sizing (no
-        // LineCache row to measure). Otherwise use LineCache.boxW/boxH — the
-        // same math MtssRenderer.render() uses, so the preview and the live
-        // overlay always agree on size.
+        // LineCache row to measure) — MtssRenderer.render() skips empty lists
+        // entirely, so there's no scaled size to match here. Otherwise use
+        // LineCache.boxW/boxH scaled by textScale — the same math
+        // MtssRenderer.render() uses, so the preview, hit-boxes, and
+        // drag/anchor math all agree with the live overlay.
         int lineH = font.lineHeight + 1;
+        float scale = lc.textScale <= 0f ? 1f : lc.textScale;
         int boxW, boxH;
         if (empty) {
             String placeholder = I18n.get("gui.mtss.no_stats");
             boxW = font.width(placeholder) + 4;
             boxH = lineH + 3;
         } else {
-            boxW = cache.boxW(font);
-            boxH = cache.boxH(font);
+            boxW = Math.round(cache.boxW(font) * scale);
+            boxH = Math.round(cache.boxH(font) * scale);
         }
 
         int wx, wy;
@@ -225,8 +228,18 @@ public class MtssGuiScreen extends Screen {
         boolean shadow = lc.textShadow;
         if (empty) {
             g.text(font, "§7" + I18n.get("gui.mtss.no_stats"), wx + 2, wy + 2, 0xFFAAAAAA, shadow);
-        } else {
+        } else if (scale == 1f) {
             MtssRenderer.drawRows(g, font, cache, wx + 2, wy + 2, shadow);
+        } else {
+            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0) —
+            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s
+            // scaled branch, so the preview matches the live overlay exactly.
+            var matrices = g.pose();
+            matrices.pushMatrix();
+            matrices.translate(wx, wy);
+            matrices.scale(scale, scale);
+            MtssRenderer.drawRows(g, font, cache, 0, 0, shadow);
+            matrices.popMatrix();
         }
     }
 
@@ -658,6 +671,28 @@ public class MtssGuiScreen extends Screen {
         return rows;
     }
 
+    /**
+     * Y-offsets (relative to the panel's top-left {@code (px, py)}) for every
+     * row in the stat settings panel, in display order: prefix, decimals
+     * (if applicable), graph toggle (if applicable), thresholds opener (if
+     * applicable), back. Optional rows are simply absent from the list, so
+     * index-based lookups below always mean "the Nth visible row".
+     * <p>
+     * Computed once here and consumed by both
+     * {@link #renderStatSettingsPanel} and {@link #handleStatSettingsPanelClick}
+     * so row math can't drift between paint and hit-test.
+     */
+    private int[] statSettingsRowOffsets(MtssConfig.Stat stat, int py) {
+        List<Integer> offsets = new ArrayList<>();
+        int row = 1; // row 0 is the header, which isn't clickable
+        offsets.add(py + PANEL_PAD + ROW_H * row++); // prefix — always present
+        if (supportsDecimals(stat))   offsets.add(py + PANEL_PAD + ROW_H * row++);
+        if (supportsGraph(stat))      offsets.add(py + PANEL_PAD + ROW_H * row++);
+        if (supportsThresholds(stat)) offsets.add(py + PANEL_PAD + ROW_H * row++);
+        offsets.add(py + PANEL_PAD + ROW_H * row); // back — always present, always last
+        return offsets.stream().mapToInt(Integer::intValue).toArray();
+    }
+
     private void renderStatSettingsPanel(GuiGraphicsExtractor g,
                                          net.minecraft.client.gui.Font font,
                                          int mx, int my) {
@@ -666,8 +701,9 @@ public class MtssGuiScreen extends Screen {
 
         MtssConfig.StatSettings ss = lc.getStatSettings(statSettingsStat);
         String statLabel = I18n.get("stat.mtss." + statSettingsStat.name().toLowerCase());
-        boolean decimalsRow = supportsDecimals(statSettingsStat);
-        boolean graphRow    = supportsGraph(statSettingsStat);
+        boolean decimalsRow   = supportsDecimals(statSettingsStat);
+        boolean graphRow      = supportsGraph(statSettingsStat);
+        boolean thresholdsRow = supportsThresholds(statSettingsStat);
 
         // 1 header row + 1 prefix row + (optional decimals row) + (optional graph row) + 1 back row
         int rows = statSettingsPanelRows(statSettingsStat);
@@ -682,8 +718,11 @@ public class MtssGuiScreen extends Screen {
         g.text(font, "§e" + I18n.get("gui.mtss.stat_settings.title", statLabel),
                 px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
 
-        // Show Prefix toggle
-        int ry1 = py + PANEL_PAD + ROW_H;
+        int[] rowY = statSettingsRowOffsets(statSettingsStat, py);
+        int idx = 0;
+
+        // Show Prefix toggle — always the first row
+        int ry1 = rowY[idx++];
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H))
             g.fill(px + 1, ry1, px + PANEL_W - 1, ry1 + ROW_H, 0x44FFFFFF);
         String prefixToggle = I18n.get("gui.mtss.stat_settings.show_prefix")
@@ -692,9 +731,8 @@ public class MtssGuiScreen extends Screen {
         g.text(font, "§f" + prefixToggle, px + PANEL_PAD, ry1 + 2, 0xFFFFFFFF, false);
 
         // Decimals stepper (only for numeric stats)
-        int nextRow = 2;
         if (decimalsRow) {
-            int ryDec = py + PANEL_PAD + ROW_H * nextRow;
+            int ryDec = rowY[idx++];
             boolean hoverDown = isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H);
             boolean hoverUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H);
             if (hoverDown) g.fill(px + 1, ryDec, px + PANEL_W / 2, ryDec + ROW_H, 0x44FFFFFF);
@@ -702,34 +740,30 @@ public class MtssGuiScreen extends Screen {
             g.text(font, "§f- " + I18n.get("gui.mtss.stat_settings.decimals", ss.decimals),
                     px + PANEL_PAD, ryDec + 2, 0xFFFFFFFF, false);
             g.text(font, "§f+", px + PANEL_W - 14, ryDec + 2, 0xFFFFFFFF, false);
-            nextRow++;
         }
 
         // Render-as-graph toggle (only for graphable stats: TPS, MSPT, FPS, CPU, Ping, Memory, Speed)
         if (graphRow) {
-            int ryGraph = py + PANEL_PAD + ROW_H * nextRow;
+            int ryGraph = rowY[idx++];
             if (isHoveringRow(mx, my, px, ryGraph, PANEL_W, ROW_H))
                 g.fill(px + 1, ryGraph, px + PANEL_W - 1, ryGraph + ROW_H, 0x44FFFFFF);
             String graphToggle = I18n.get("gui.mtss.stat_settings.render_as_graph")
                     + (ss.renderAsGraph ? " §a" + I18n.get("gui.mtss.menu.on")
                                         : " §c" + I18n.get("gui.mtss.menu.off"));
             g.text(font, "§f" + graphToggle, px + PANEL_PAD, ryGraph + 2, 0xFFFFFFFF, false);
-            nextRow++;
         }
 
         // Custom Thresholds sub-panel opener (only for threshold-eligible stats)
-        boolean thresholdsRow = supportsThresholds(statSettingsStat);
         if (thresholdsRow) {
-            int ryTh = py + PANEL_PAD + ROW_H * nextRow;
+            int ryTh = rowY[idx++];
             if (isHoveringRow(mx, my, px, ryTh, PANEL_W, ROW_H))
                 g.fill(px + 1, ryTh, px + PANEL_W - 1, ryTh + ROW_H, 0x44FFFFFF);
             g.text(font, "§f" + I18n.get("gui.mtss.stat_settings.custom_thresholds"),
                     px + PANEL_PAD, ryTh + 2, 0xFFFFFFFF, false);
-            nextRow++;
         }
 
-        // Back button
-        int ryBack = py + PANEL_PAD + ROW_H * nextRow;
+        // Back button — always the last row
+        int ryBack = rowY[idx];
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H))
             g.fill(px + 1, ryBack, px + PANEL_W - 1, ryBack + ROW_H, 0x44FFFFFF);
         g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"),
@@ -749,9 +783,10 @@ public class MtssGuiScreen extends Screen {
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
-        int ry1 = py + PANEL_PAD + ROW_H;
-        int nextRow = 2;
+        int[] rowY = statSettingsRowOffsets(statSettingsStat, py);
+        int idx = 0;
 
+        int ry1 = rowY[idx++];
         if (isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
             ss.showPrefix = !ss.showPrefix;
             MtssConfig.getInstance().save();
@@ -759,7 +794,7 @@ public class MtssGuiScreen extends Screen {
         }
 
         if (decimalsRow) {
-            int ryDec = py + PANEL_PAD + ROW_H * nextRow;
+            int ryDec = rowY[idx++];
             if (isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.max(0, ss.decimals - 1);
                 MtssConfig.getInstance().save();
@@ -769,29 +804,26 @@ public class MtssGuiScreen extends Screen {
                 MtssConfig.getInstance().save();
                 return;
             }
-            nextRow++;
         }
 
         if (graphRow) {
-            int ryGraph = py + PANEL_PAD + ROW_H * nextRow;
+            int ryGraph = rowY[idx++];
             if (isHoveringRow(mx, my, px, ryGraph, PANEL_W, ROW_H)) {
                 ss.renderAsGraph = !ss.renderAsGraph;
                 MtssConfig.getInstance().save();
                 return;
             }
-            nextRow++;
         }
 
         if (thresholdsRow) {
-            int ryTh = py + PANEL_PAD + ROW_H * nextRow;
+            int ryTh = rowY[idx++];
             if (isHoveringRow(mx, my, px, ryTh, PANEL_W, ROW_H)) {
                 thresholdPanelOpen = true;
                 return;
             }
-            nextRow++;
         }
 
-        int ryBack = py + PANEL_PAD + ROW_H * nextRow;
+        int ryBack = rowY[idx];
         if (isHoveringRow(mx, my, px, ryBack, PANEL_W, ROW_H)) {
             statSettingsStat = null; // back to reorder panel
         }
@@ -800,6 +832,25 @@ public class MtssGuiScreen extends Screen {
     // ── Custom-threshold sub-panel ────────────────────────────────────────────
     // Same nesting pattern as colorScaleOpen: a boolean flag opens a sibling
     // sub-panel from the stat settings panel, with its own render/click/hit-test.
+
+    /** Total panel height for the threshold sub-panel (fixed row count, no conditional rows). */
+    private int thresholdPanelHeight(net.minecraft.client.gui.Font font) {
+        return PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+    }
+
+    /**
+     * Y-offsets (relative to the panel's top-left) for each of the threshold
+     * panel's {@code TH_COUNT} rows, indexed by the {@code TH_*} constants.
+     * Shared by {@link #renderThresholdPanel}, {@link #isInsideThresholdPanel}
+     * (via {@link #thresholdPanelHeight}), and {@link #handleThresholdPanelClick}
+     * so row math can't drift between paint and hit-test.
+     */
+    private int[] thresholdRowOffsets(int py, net.minecraft.client.gui.Font font) {
+        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+        int[] rowY = new int[TH_COUNT];
+        for (int i = 0; i < TH_COUNT; i++) rowY[i] = rowTop + ROW_H * i;
+        return rowY;
+    }
 
     private void renderThresholdPanel(GuiGraphicsExtractor g,
                                       net.minecraft.client.gui.Font font,
@@ -813,7 +864,7 @@ public class MtssGuiScreen extends Screen {
         boolean higherBetter = isHigherBetter(statSettingsStat);
         String statLabel = I18n.get("stat.mtss." + statSettingsStat.name().toLowerCase());
 
-        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int panelH = thresholdPanelHeight(font);
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
 
@@ -827,10 +878,10 @@ public class MtssGuiScreen extends Screen {
                                         : I18n.get("gui.mtss.threshold.lower_is_better");
         g.text(font, "§7" + dirLabel, px + PANEL_PAD, py + PANEL_PAD + font.lineHeight, 0xFF999999, false);
 
-        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+        int[] rowY = thresholdRowOffsets(py, font);
 
         // Row 0: Use custom thresholds toggle
-        int ry0 = rowTop + ROW_H * TH_USE_CUSTOM;
+        int ry0 = rowY[TH_USE_CUSTOM];
         if (isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H))
             g.fill(px + 1, ry0, px + PANEL_W - 1, ry0 + ROW_H, 0x44FFFFFF);
         String useCustomLabel = I18n.get("gui.mtss.threshold.use_custom")
@@ -839,7 +890,7 @@ public class MtssGuiScreen extends Screen {
         g.text(font, "§f" + useCustomLabel, px + PANEL_PAD, ry0 + 2, 0xFFFFFFFF, false);
 
         // Row 1: Good threshold stepper
-        int ry1 = rowTop + ROW_H * TH_GOOD;
+        int ry1 = rowY[TH_GOOD];
         boolean hoverGoodDown = isHoveringRow(mx, my, px, ry1, PANEL_W / 2, ROW_H);
         boolean hoverGoodUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry1, PANEL_W / 2, ROW_H);
         if (hoverGoodDown) g.fill(px + 1, ry1, px + PANEL_W / 2, ry1 + ROW_H, 0x44FFFFFF);
@@ -849,7 +900,7 @@ public class MtssGuiScreen extends Screen {
         g.text(font, "§f+", px + PANEL_W - 14, ry1 + 2, 0xFFFFFFFF, false);
 
         // Row 2: Warn threshold stepper
-        int ry2 = rowTop + ROW_H * TH_WARN;
+        int ry2 = rowY[TH_WARN];
         boolean hoverWarnDown = isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H);
         boolean hoverWarnUp   = isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H);
         if (hoverWarnDown) g.fill(px + 1, ry2, px + PANEL_W / 2, ry2 + ROW_H, 0x44FFFFFF);
@@ -859,7 +910,7 @@ public class MtssGuiScreen extends Screen {
         g.text(font, "§f+", px + PANEL_W - 14, ry2 + 2, 0xFFFFFFFF, false);
 
         // Row 3: Back
-        int ry3 = rowTop + ROW_H * TH_BACK;
+        int ry3 = rowY[TH_BACK];
         if (isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H))
             g.fill(px + 1, ry3, px + PANEL_W - 1, ry3 + ROW_H, 0x44FFFFFF);
         g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"),
@@ -873,7 +924,7 @@ public class MtssGuiScreen extends Screen {
     }
 
     private boolean isInsideThresholdPanel(int mx, int my) {
-        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int panelH = thresholdPanelHeight(font);
         int px = clampX(menuX, PANEL_W), py = clampY(menuY, panelH);
         return mx >= px && mx <= px + PANEL_W && my >= py && my <= py + panelH;
     }
@@ -886,15 +937,15 @@ public class MtssGuiScreen extends Screen {
         boolean higherBetter = isHigherBetter(statSettingsStat);
         float step = thresholdStep(statSettingsStat);
 
-        int panelH = PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        int panelH = thresholdPanelHeight(font);
         int px = clampX(menuX, PANEL_W);
         int py = clampY(menuY, panelH);
-        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+        int[] rowY = thresholdRowOffsets(py, font);
 
-        int ry0 = rowTop + ROW_H * TH_USE_CUSTOM;
-        int ry1 = rowTop + ROW_H * TH_GOOD;
-        int ry2 = rowTop + ROW_H * TH_WARN;
-        int ry3 = rowTop + ROW_H * TH_BACK;
+        int ry0 = rowY[TH_USE_CUSTOM];
+        int ry1 = rowY[TH_GOOD];
+        int ry2 = rowY[TH_WARN];
+        int ry3 = rowY[TH_BACK];
 
         MtssConfig root = MtssConfig.getInstance();
 
@@ -1174,18 +1225,19 @@ public class MtssGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        int codepoint = event.codepoint();
         if (menuKind == MenuKind.RENAME) {
-            char ch = (char) event.codepoint();
-            if (ch >= 32 && renameBuffer.length() < 32)
-                renameBuffer.append(ch);
+            // (char) truncates codepoints outside the BMP (e.g. most emoji) to garbage —
+            // Character.toChars() expands to a surrogate pair instead when needed.
+            if (codepoint >= 32 && renameBuffer.length() < 32)
+                renameBuffer.append(Character.toChars(codepoint));
             return true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
-            char ch = (char) event.codepoint();
             // Higher cap than renameBuffer's 32 since template lines mix text
             // and tokens and run longer — still bounded so it can't grow unbounded.
-            if (ch >= 32 && templateEditBuffer.length() < 200)
-                templateEditBuffer.append(ch);
+            if (codepoint >= 32 && templateEditBuffer.length() < 200)
+                templateEditBuffer.append(Character.toChars(codepoint));
             return true;
         }
         return super.charTyped(event);
@@ -1349,15 +1401,17 @@ public class MtssGuiScreen extends Screen {
         var font = this.font;
         MtssRenderer.LineCache cache = MtssRenderer.getCachedLines(lc);
         int lineH = font.lineHeight + 1;
+        float scale = lc.textScale <= 0f ? 1f : lc.textScale;
         int boxW, boxH;
         if (cache.rowKinds().isEmpty()) {
-            // Mirrors drawList's empty-placeholder sizing.
+            // Mirrors drawList's empty-placeholder sizing (no scale — see drawList).
             String placeholder = I18n.get("gui.mtss.no_stats");
             boxW = font.width(placeholder) + 4;
             boxH = lineH + 3;
         } else {
-            boxW = cache.boxW(font);
-            boxH = cache.boxH(font);
+            // Mirrors drawList's scaled sizing, which mirrors MtssRenderer.render().
+            boxW = Math.round(cache.boxW(font) * scale);
+            boxH = Math.round(cache.boxH(font) * scale);
         }
         int[] pos = MtssRenderer.getPosition(lc, width, height, boxW, boxH);
         return new int[]{ pos[0], pos[1], boxW, boxH };
