@@ -27,6 +27,16 @@ public interface StatDefinition {
     /** The rendered line for classic mode / template mode, e.g. "TPS: 19.8". Empty string means "skip this line" (e.g. MSPT on a remote server). */
     String format(int decimals);
 
+    /**
+     * The bare value with no label and no unit suffix, e.g. "1.0" for Speed
+     * (vs. {@link #format} which gives "Speed: 1.0 b/s"). Used by Template
+     * Mode, where the user's own surrounding text supplies any label/unit.
+     * Defaults to {@link #format} since most stats have no unit to strip —
+     * override this only for stats whose format() glues a unit directly
+     * onto the number (e.g. "ms", "%", "b/s").
+     */
+    default String rawValue(int decimals) { return format(decimals); }
+
     /** Default decimal count used when no per-stat/per-token override is given. Ignored unless {@link #supportsDecimals()} is true. */
     default int defaultDecimals() { return 1; }
 

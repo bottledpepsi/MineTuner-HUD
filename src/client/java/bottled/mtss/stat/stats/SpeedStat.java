@@ -14,6 +14,7 @@ public final class SpeedStat implements StatDefinition {
     @Override public MtssConfig.Stat key() { return MtssConfig.Stat.SPEED; }
     @Override public String token() { return "speed"; }
     @Override public String format(int decimals) { return MtssDataHolder.getFormattedSpeed(decimals); }
+    @Override public String rawValue(int decimals) { return MtssDataHolder.getRawSpeed(decimals); }
     @Override public int defaultDecimals() { return 2; }
 
     @Override public boolean supportsDecimals() { return true; }

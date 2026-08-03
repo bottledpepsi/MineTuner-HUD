@@ -10,4 +10,5 @@ public final class GcTimeStat implements StatDefinition {
     @Override public MtssConfig.Stat key() { return MtssConfig.Stat.GC_TIME; }
     @Override public String token() { return "gc"; }
     @Override public String format(int decimals) { return MtssDataHolder.getFormattedGcTime(); }
+    @Override public String rawValue(int decimals) { return MtssDataHolder.getRawGcTime(); }
 }

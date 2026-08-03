@@ -13,6 +13,7 @@ public final class CpuStat implements StatDefinition {
     @Override public MtssConfig.Stat key() { return MtssConfig.Stat.CPU; }
     @Override public String token() { return "cpu"; }
     @Override public String format(int decimals) { return MtssDataHolder.getFormattedCpu(decimals); }
+    @Override public String rawValue(int decimals) { return MtssDataHolder.getRawCpu(decimals); }
 
     @Override public boolean supportsDecimals() { return true; }
     @Override public boolean supportsGraph() { return true; }

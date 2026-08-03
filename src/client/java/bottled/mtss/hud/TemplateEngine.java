@@ -26,6 +26,9 @@ import java.util.Set;
  *   <li>Anything else in braces that isn't a known token is malformed and
  *       renders back out as plain text, so a typo is visible, not silent.</li>
  * </ul>
+ * Stat tokens render as bare values via {@link StatDefinition#rawValue}, with
+ * no "Label: " prefix and no unit suffix (e.g. {speed} -&gt; "1.0", not
+ * "Speed: 1.0 b/s") — the user's own surrounding literal text is the label.
  * Token names and their decimal support both come from {@link StatRegistry}
  * now — a new stat's token "just works" here as soon as it's registered.
  * Full token table: README's "Template Mode" section.
@@ -194,6 +197,14 @@ public final class TemplateEngine {
     private static String renderStat(StatToken token) {
         StatDefinition def = StatRegistry.get(token.stat());
         int decimals = token.decimals() >= 0 ? token.decimals() : def.defaultDecimals();
-        return def.format(decimals);
+        String text = def.rawValue(decimals);
+        // Safety net: rawValue() defaults to format() for stats that don't
+        // override it, which bakes in a "Label: " prefix for classic mode.
+        // Strip it the same way MtssRenderer does for showPrefix=off, so a
+        // stat that forgets to override rawValue() still degrades cleanly
+        // instead of doubling the label in template mode.
+        int sep = text.indexOf(": ");
+        if (sep >= 0) text = text.substring(sep + 2);
+        return text;
     }
 }

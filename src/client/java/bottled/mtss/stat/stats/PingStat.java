@@ -10,6 +10,7 @@ public final class PingStat implements StatDefinition {
     @Override public MtssConfig.Stat key() { return MtssConfig.Stat.PING; }
     @Override public String token() { return "ping"; }
     @Override public String format(int decimals) { return MtssDataHolder.getFormattedPing(); }
+    @Override public String rawValue(int decimals) { return MtssDataHolder.getRawPing(); }
 
     @Override public boolean supportsGraph() { return true; }
     @Override public float[] history() { return MtssDataHolder.getPingHistory(); }

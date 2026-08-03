@@ -266,11 +266,17 @@ public final class MtssDataHolder {
 
     public static String getFormattedFps()      { return t("mtss.stat.fps",      fps); }
     public static String getFormattedPing()     { return ping >= 0 ? t("mtss.stat.ping", ping) : t("mtss.stat.ping.na"); }
+    /** Bare ping value with no "ms" suffix, for Template Mode. */
+    public static String getRawPing()           { return ping >= 0 ? Integer.toString(ping) : "N/A"; }
     public static String getFormattedMem()      { return t("mtss.stat.memory",   memUsedMb, memMaxMb); }
 
     public static String getFormattedCpu()             { return getFormattedCpu(1); }
     public static String getFormattedCpu(int decimals) {
         return cpuPercent >= 0 ? t("mtss.stat.cpu", fmt(cpuPercent, decimals)) : t("mtss.stat.cpu.na");
+    }
+    /** Bare CPU value with no "%" suffix, for Template Mode. */
+    public static String getRawCpu(int decimals) {
+        return cpuPercent >= 0 ? fmt(cpuPercent, decimals) : "N/A";
     }
 
     public static String getFormattedEntities() { return t("mtss.stat.entities", entityCount); }
@@ -281,8 +287,12 @@ public final class MtssDataHolder {
 
     public static String getFormattedSpeed()             { return getFormattedSpeed(2); }
     public static String getFormattedSpeed(int decimals) { return t("mtss.stat.speed", fmt(speedBps, decimals)); }
+    /** Bare speed value with no "b/s" suffix, for Template Mode. */
+    public static String getRawSpeed(int decimals)        { return fmt(speedBps, decimals); }
 
     public static String getFormattedGcTime()   { return t("mtss.stat.gc",       gcTimeMs); }
+    /** Bare GC time value with no "ms" suffix, for Template Mode. */
+    public static String getRawGcTime()         { return Long.toString(gcTimeMs); }
     public static String getFormattedBiome()    { return t("mtss.stat.biome",    biomeName.isEmpty() ? "?" : biomeName); }
     public static String getFormattedLight()    { return t("mtss.stat.light",    lightLevel); }
     public static String getFormattedDimension(){ return t("mtss.stat.dimension", dimensionName.isEmpty() ? "?" : dimensionName); }
