@@ -1,5 +1,7 @@
 package bottled.mtss.config;
 
+import bottled.mtss.stat.StatDefinition;
+import bottled.mtss.stat.StatRegistry;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
@@ -13,6 +15,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class MtssConfig {
 
@@ -80,6 +84,15 @@ public class MtssConfig {
         public boolean renderAsGraph = false;
         /** Graph visuals, used only when renderAsGraph is true. Lazily backfilled so old configs still load. */
         public GraphStyle graphStyle = new GraphStyle();
+
+        public StatSettings copy() {
+            StatSettings c = new StatSettings();
+            c.showPrefix    = showPrefix;
+            c.decimals      = decimals;
+            c.renderAsGraph = renderAsGraph;
+            c.graphStyle    = (graphStyle != null ? graphStyle : new GraphStyle()).copy();
+            return c;
+        }
     }
 
     /**
@@ -103,32 +116,40 @@ public class MtssConfig {
 
         public GraphStyle() {}
 
+        /** Field-by-field copy — GraphStyle is a flat Gson POJO, so there's no shortcut around listing every field once. */
         public GraphStyle copy() {
             GraphStyle c = new GraphStyle();
-            c.showPanelBackground = this.showPanelBackground;
-            c.showGridlines       = this.showGridlines;
-            c.showPeakMarkers     = this.showPeakMarkers;
-            c.valueDisplay        = this.valueDisplay;
-            c.smoothing           = this.smoothing;
-            c.autoScale           = this.autoScale;
-            c.fixedMin            = this.fixedMin;
-            c.fixedMax            = this.fixedMax;
-            c.width                = this.width;
-            c.height               = this.height;
-            c.colorMode            = this.colorMode;
-            c.accentColor          = this.accentColor;
+            c.showPanelBackground = showPanelBackground;
+            c.showGridlines       = showGridlines;
+            c.showPeakMarkers     = showPeakMarkers;
+            c.valueDisplay        = valueDisplay;
+            c.smoothing           = smoothing;
+            c.autoScale           = autoScale;
+            c.fixedMin            = fixedMin;
+            c.fixedMax            = fixedMax;
+            c.width               = width;
+            c.height              = height;
+            c.colorMode           = colorMode;
+            c.accentColor         = accentColor;
             return c;
         }
     }
 
-    /** Stats for which the rolling graph render mode is available. */
-    public static final java.util.Set<Stat> GRAPHABLE_STATS = java.util.Set.of(
-            Stat.TPS, Stat.MSPT, Stat.FPS, Stat.CPU, Stat.PING, Stat.MEMORY, Stat.SPEED
-    );
+    /**
+     * Stats for which the rolling graph render mode is available. Derived
+     * from each stat's own {@code StatDefinition.supportsGraph()} — a new
+     * stat opts in just by overriding that method, no list to update here.
+     */
+    public static final Set<Stat> GRAPHABLE_STATS = StatRegistry.all().stream()
+            .filter(StatDefinition::supportsGraph)
+            .map(StatDefinition::key)
+            .collect(Collectors.toUnmodifiableSet());
 
-    public static final java.util.Set<Stat> THRESHOLD_STATS = java.util.Set.of(
-            Stat.TPS, Stat.FPS, Stat.PING, Stat.MEMORY, Stat.CPU
-    );
+    /** Same idea as {@link #GRAPHABLE_STATS}, driven by {@code supportsThreshold()}. */
+    public static final Set<Stat> THRESHOLD_STATS = StatRegistry.all().stream()
+            .filter(StatDefinition::supportsThreshold)
+            .map(StatDefinition::key)
+            .collect(Collectors.toUnmodifiableSet());
 
     /**
      * A user-configurable two-cutoff threshold for a stat's green/yellow/red
@@ -139,16 +160,12 @@ public class MtssConfig {
      * low end — the color functions flip the comparison accordingly, even
      * though the field names (goodMin/warnMin) stay the same.
      * <p>
-     * Defaults (see defaultThresholds()) match the original hardcoded values:
-     * <pre>
-     *   TPS    higher-is-better  goodMin=18   warnMin=14
-     *   FPS    higher-is-better  goodMin=60   warnMin=30
-     *   Ping   lower-is-better   goodMin=80   warnMin=150
-     *   Memory lower-is-better   goodMin=60   warnMin=85   (used %)
-     *   CPU    lower-is-better   goodMin=50   warnMin=80
-     * </pre>
+     * Defaults (see defaultThresholds()) come from each stat's own
+     * {@code StatDefinition.defaultGoodMin()}/{@code defaultWarnMin()} — see
+     * {@code bottled.mtss.stat.stats} for the actual numbers per stat.
      * Speed isn't part of this system — its gray/yellow/white logic isn't a
-     * good/warn/bad scale, so it keeps its own hardcoded behavior.
+     * good/warn/bad scale, so it keeps its own hardcoded behavior
+     * ({@code supportsThreshold()} returns false there).
      */
     public static class ThresholdSettings {
         /** false = ignore goodMin/warnMin and use the built-in default. */
@@ -171,13 +188,13 @@ public class MtssConfig {
         }
     }
 
+    /** Built straight from each threshold stat's own defaultGoodMin()/defaultWarnMin() — see the values there, not here. */
     private static Map<String, ThresholdSettings> defaultThresholds() {
         Map<String, ThresholdSettings> m = new LinkedHashMap<>();
-        m.put(Stat.TPS.name(),    new ThresholdSettings(false, 18f, 14f));
-        m.put(Stat.FPS.name(),    new ThresholdSettings(false, 60f, 30f));
-        m.put(Stat.PING.name(),   new ThresholdSettings(false, 80f, 150f));
-        m.put(Stat.MEMORY.name(), new ThresholdSettings(false, 60f, 85f));
-        m.put(Stat.CPU.name(),    new ThresholdSettings(false, 50f, 80f));
+        for (Stat s : THRESHOLD_STATS) {
+            StatDefinition def = StatRegistry.get(s);
+            m.put(s.name(), new ThresholdSettings(false, def.defaultGoodMin(), def.defaultWarnMin()));
+        }
         return m;
     }
 
@@ -308,9 +325,12 @@ public class MtssConfig {
                 StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
                 if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
             }
-            // Only THRESHOLD_STATS get entries, matching defaultThresholds()'s scope.
+            // Built once, not per-stat — defaultThresholds() allocates a fresh
+            // map every call, so calling it inside the loop below would
+            // rebuild the whole thing for every missing entry.
+            Map<String, ThresholdSettings> defaults = defaultThresholds();
             for (Stat s : THRESHOLD_STATS) {
-                statThresholds.computeIfAbsent(s.name(), k -> defaultThresholds().get(k));
+                statThresholds.computeIfAbsent(s.name(), defaults::get);
             }
         }
 
@@ -322,35 +342,28 @@ public class MtssConfig {
         /** Deep-copies this list's settings into a brand-new list with the given id, offset slightly. */
         public StatListConfig duplicate(int newId) {
             StatListConfig copy = new StatListConfig(newId);
-            copy.name           = displayName() + " (copy)";
-            copy.statEnabled    = new LinkedHashMap<>(this.statEnabled);
-            copy.statOrder      = new ArrayList<>(this.statOrder);
-            copy.statSettings   = new LinkedHashMap<>();
-            for (Map.Entry<String, StatSettings> e : this.statSettings.entrySet()) {
-                StatSettings src = e.getValue();
-                StatSettings dst = new StatSettings();
-                dst.showPrefix    = src.showPrefix;
-                dst.decimals      = src.decimals;
-                dst.renderAsGraph = src.renderAsGraph;
-                dst.graphStyle    = (src.graphStyle != null ? src.graphStyle : new GraphStyle()).copy();
-                copy.statSettings.put(e.getKey(), dst);
-            }
+            copy.name         = displayName() + " (copy)";
+            copy.statEnabled  = new LinkedHashMap<>(statEnabled);
+            copy.statOrder    = new ArrayList<>(statOrder);
+
+            copy.statSettings = new LinkedHashMap<>();
+            statSettings.forEach((key, src) -> copy.statSettings.put(key, src.copy()));
+
             copy.statThresholds = new LinkedHashMap<>();
-            for (Map.Entry<String, ThresholdSettings> e : this.statThresholds.entrySet()) {
-                copy.statThresholds.put(e.getKey(), e.getValue().copy());
-            }
-            copy.anchorCorner   = this.anchorCorner;
-            copy.anchorDx       = this.anchorDx + 12;
-            copy.anchorDy       = this.anchorDy + 12;
-            copy.showBackground = this.showBackground;
-            copy.textShadow     = this.textShadow;
-            copy.useCustomColor = this.useCustomColor;
-            copy.overrideColor  = this.overrideColor;
-            copy.textScale      = this.textScale;
-            copy.snapX          = this.snapX;
-            copy.snapY          = this.snapY;
-            copy.useTemplate    = this.useTemplate;
-            copy.templateLines  = new ArrayList<>(this.templateLines);
+            statThresholds.forEach((key, src) -> copy.statThresholds.put(key, src.copy()));
+
+            copy.anchorCorner   = anchorCorner;
+            copy.anchorDx       = anchorDx + 12;
+            copy.anchorDy       = anchorDy + 12;
+            copy.showBackground = showBackground;
+            copy.textShadow     = textShadow;
+            copy.useCustomColor = useCustomColor;
+            copy.overrideColor  = overrideColor;
+            copy.textScale      = textScale;
+            copy.snapX          = snapX;
+            copy.snapY          = snapY;
+            copy.useTemplate    = useTemplate;
+            copy.templateLines  = new ArrayList<>(templateLines);
             return copy;
         }
     }

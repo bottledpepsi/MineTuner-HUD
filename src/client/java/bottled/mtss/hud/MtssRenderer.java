@@ -2,6 +2,8 @@ package bottled.mtss.hud;
 
 import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
+import bottled.mtss.stat.StatDefinition;
+import bottled.mtss.stat.StatRegistry;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -161,26 +163,20 @@ public class MtssRenderer {
                                   List<String> lines, List<Integer> colors,
                                   List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
+            // Every stat's behavior comes from its StatDefinition now — no
+            // per-stat switch here, so a new stat needs no changes in this file.
+            StatDefinition def = StatRegistry.get(stat);
+
             // getStatSettings() lazily creates settings for any stat, so this
             // is safe even for stats with no settings entry written to disk.
-            boolean asGraph = MtssConfig.GRAPHABLE_STATS.contains(stat)
-                    && cfg.getStatSettings(stat).renderAsGraph;
+            boolean asGraph = def.supportsGraph() && cfg.getStatSettings(stat).renderAsGraph;
 
             if (asGraph) {
                 MtssConfig.StatSettings statSettings = cfg.getStatSettings(stat);
                 int decimals = statSettings.decimals;
                 MtssConfig.GraphStyle style = statSettings.graphStyle;
 
-                float[] rawHistory = switch (stat) {
-                    case TPS   -> MtssDataHolder.getTpsHistory();
-                    case MSPT  -> MtssDataHolder.getMsptHistory();
-                    case FPS   -> MtssDataHolder.getFpsHistory();
-                    case CPU   -> MtssDataHolder.getCpuHistory();
-                    case PING  -> MtssDataHolder.getPingHistory();
-                    case MEMORY-> MtssDataHolder.getMemHistory();
-                    case SPEED -> MtssDataHolder.getSpeedHistory();
-                    default    -> new float[0]; // unreachable — guarded by GRAPHABLE_STATS above
-                };
+                float[] rawHistory = def.history();
                 // Nothing to draw yet (unsupported CPU, remote-server MSPT, etc.) — same as text mode skipping unavailable stats.
                 if (rawHistory.length == 0) continue;
 
@@ -188,33 +184,16 @@ public class MtssRenderer {
                 float[] displayHistory = applySmoothing(rawHistory, style.smoothing);
 
                 // Current-value color, also used for CURRENT_THRESHOLD mode and the label color.
-                // MSPT/Speed have no THRESHOLD_STATS entry, so getThreshold() returns null there
-                // (meaning "use the built-in default").
-                int currentColor = switch (stat) {
-                    case TPS   -> MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS));
-                    case MSPT  -> MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS)); // MSPT shares TPS's threshold — same underlying tick-time signal
-                    case FPS   -> MtssDataHolder.getFpsColor(cfg.getThreshold(MtssConfig.Stat.FPS));
-                    case CPU   -> MtssDataHolder.getCpuColor(cfg.getThreshold(MtssConfig.Stat.CPU));
-                    case PING  -> MtssDataHolder.getPingColor(cfg.getThreshold(MtssConfig.Stat.PING));
-                    case MEMORY-> MtssDataHolder.getMemColor(cfg.getThreshold(MtssConfig.Stat.MEMORY));
-                    case SPEED -> MtssDataHolder.getSpeedColor();
-                    default    -> 0xFFFFFFFF;
-                };
+                // Stats with no threshold of their own (MSPT/Speed) ignore the
+                // custom argument or resolve it to a related stat's threshold —
+                // see their StatDefinition for specifics.
+                int currentColor = def.color(cfg.getThreshold(stat));
                 // Per-list color override beats everything: override > per-stat threshold > default.
                 if (cfg.useCustomColor) currentColor = cfg.overrideColor;
 
                 // Same formatted string text mode would show, so switching a stat
                 // between text and graph doesn't change how the number reads.
-                String label = switch (stat) {
-                    case TPS   -> MtssDataHolder.getFormattedTps(decimals);
-                    case MSPT  -> MtssDataHolder.getFormattedMspt(decimals);
-                    case FPS   -> MtssDataHolder.getFormattedFps();
-                    case PING  -> MtssDataHolder.getFormattedPing();
-                    case CPU   -> MtssDataHolder.getFormattedCpu(decimals);
-                    case MEMORY-> MtssDataHolder.getFormattedMem();
-                    case SPEED -> MtssDataHolder.getFormattedSpeed(decimals);
-                    default    -> "";
-                };
+                String label = def.format(decimals);
                 if (!statSettings.showPrefix) {
                     int sep = label.indexOf(": ");
                     if (sep >= 0) label = label.substring(sep + 2);
@@ -249,12 +228,12 @@ public class MtssRenderer {
                     if (displayHistory[i] > displayHistory[peakMaxIdx]) peakMaxIdx = i;
                 }
 
-                String minValueLabel = rawHistory.length >= 2 ? formatAxisValue(stat, displayHistory[peakMinIdx]) : "";
-                String maxValueLabel = rawHistory.length >= 2 ? formatAxisValue(stat, displayHistory[peakMaxIdx]) : "";
+                String minValueLabel = rawHistory.length >= 2 ? def.formatAxisValue(displayHistory[peakMinIdx]) : "";
+                String maxValueLabel = rawHistory.length >= 2 ? def.formatAxisValue(displayHistory[peakMaxIdx]) : "";
 
                 // Same threshold as currentColor above, carried onto the entry so
                 // PER_SEGMENT_THRESHOLD coloring uses the same cutoffs for every sample.
-                MtssConfig.ThresholdSettings entryThreshold = MtssConfig.THRESHOLD_STATS.contains(stat)
+                MtssConfig.ThresholdSettings entryThreshold = def.supportsThreshold()
                         ? cfg.getThreshold(stat) : null;
 
                 graphEntries.add(new GraphEntry(stat, rawHistory, displayHistory, currentColor, label,
@@ -263,27 +242,11 @@ public class MtssRenderer {
                 continue;
             }
 
-            String text  = null;
-            int    color = 0xFFFFFFFF;
-            int    decimals = cfg.getStatSettings(stat).decimals;
-            switch (stat) {
-                case TPS   -> { text = MtssDataHolder.getFormattedTps(decimals);   color = MtssDataHolder.getTpsColor(cfg.getThreshold(MtssConfig.Stat.TPS)); }
-                case MSPT  -> { text = MtssDataHolder.getFormattedMspt(decimals); /* empty on remote servers */ }
-                case FPS   -> { text = MtssDataHolder.getFormattedFps();      color = MtssDataHolder.getFpsColor(cfg.getThreshold(MtssConfig.Stat.FPS)); }
-                case PING  -> { text = MtssDataHolder.getFormattedPing();     color = MtssDataHolder.getPingColor(cfg.getThreshold(MtssConfig.Stat.PING)); }
-                case MEMORY-> { text = MtssDataHolder.getFormattedMem();      color = MtssDataHolder.getMemColor(cfg.getThreshold(MtssConfig.Stat.MEMORY)); }
-                case CPU   -> { text = MtssDataHolder.getFormattedCpu(decimals);   color = MtssDataHolder.getCpuColor(cfg.getThreshold(MtssConfig.Stat.CPU)); }
-                case ENTITIES         -> { text = MtssDataHolder.getFormattedEntities(); }
-                case CHUNKS           -> { text = MtssDataHolder.getFormattedChunks(); }
-                case RENDERED_SECTIONS-> { text = MtssDataHolder.getFormattedRendered(); }
-                case COORDS           -> { text = MtssDataHolder.getFormattedCoords(); }
-                case FACING           -> { text = MtssDataHolder.getFormattedFacing(); }
-                case SPEED            -> { text = MtssDataHolder.getFormattedSpeed(decimals); color = MtssDataHolder.getSpeedColor(); }
-                case GC_TIME          -> { text = MtssDataHolder.getFormattedGcTime(); }
-                case BIOME            -> { text = MtssDataHolder.getFormattedBiome(); }
-                case LIGHT_LEVEL      -> { text = MtssDataHolder.getFormattedLight(); }
-                case DIMENSION        -> { text = MtssDataHolder.getFormattedDimension(); }
-            }
+            // Classic text row: format + color both come straight from the
+            // stat's own definition, so this block never needs a new case.
+            int decimals = cfg.getStatSettings(stat).decimals;
+            String text  = def.format(decimals);
+            int    color = def.color(cfg.getThreshold(stat));
             if (text == null || text.isEmpty()) continue;
             // Strip the "Label: " prefix when showPrefix is off
             if (!cfg.getStatSettings(stat).showPrefix) {
@@ -628,21 +591,9 @@ public class MtssRenderer {
         return switch (style.colorMode) {
             case CURRENT_THRESHOLD -> entry.color();
             case FIXED_ACCENT -> style.accentColor;
-            case PER_SEGMENT_THRESHOLD -> thresholdColorForSample(entry.stat(), entry.displayHistory()[sampleIdx], entry.threshold());
+            case PER_SEGMENT_THRESHOLD -> StatRegistry.get(entry.stat())
+                    .colorFor(entry.displayHistory()[sampleIdx], entry.threshold());
             case GRADIENT -> gradientColorForValue(entry.displayHistory()[sampleIdx], entry.scaleMin(), entry.scaleMax());
-        };
-    }
-
-    /** custom is the per-list, per-stat threshold resolved in buildLines (null for MSPT/Speed/other non-threshold stats — uses the built-in default). */
-    private static int thresholdColorForSample(MtssConfig.Stat stat, float value, MtssConfig.ThresholdSettings custom) {
-        return switch (stat) {
-            case TPS, MSPT -> MtssDataHolder.tpsColorFor(value, custom);
-            case FPS       -> MtssDataHolder.fpsColorFor(value, custom);
-            case PING      -> MtssDataHolder.pingColorFor(value, custom);
-            case MEMORY    -> MtssDataHolder.memColorForPercent(value, custom);
-            case CPU       -> MtssDataHolder.cpuColorFor(value, custom);
-            case SPEED     -> MtssDataHolder.speedColorFor(value);
-            default        -> 0xFFFFFFFF;
         };
     }
 
@@ -673,13 +624,5 @@ public class MtssRenderer {
         g = Math.min(255, g + (255 - g) * 35 / 100);
         b = Math.min(255, b + (255 - b) * 35 / 100);
         return (argb & 0xFF000000) | (r << 16) | (g << 8) | b;
-    }
-
-    private static String formatAxisValue(MtssConfig.Stat stat, float value) {
-        return switch (stat) {
-            case TPS, MSPT, CPU, SPEED -> String.format("%.1f", value);
-            case MEMORY -> Math.round(value) + "%";
-            default -> Integer.toString(Math.round(value)); // FPS, Ping — whole units
-        };
     }
 }

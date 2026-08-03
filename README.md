@@ -207,3 +207,18 @@ Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspe
 - **Client-side only** — works on any server (vanilla, Paper, Fabric, etc.)
 - **MSPT** is only displayed on singleplayer and LAN worlds — it's silently hidden on remote servers where the data isn't accessible
 - Does not conflict with other HUD mods — MineTuner Statistics Server registers its overlay via Fabric API's `HudElementRegistry` and attaches before the chat layer
+
+---
+
+## Adding a stat (for contributors)
+
+Every stat's formatting, coloring, decimals, and graph/threshold support live in one place: `bottled.mtss.stat.StatDefinition`. The GUI, HUD renderer, and Template Engine all read from `bottled.mtss.stat.StatRegistry` — none of them switch on individual stats, so a new stat needs no changes in those files.
+
+1. Add a constant to `MtssConfig.Stat`.
+2. Write a class in `bottled.mtss.stat.stats` implementing `StatDefinition`. Copy the smallest existing one (`EntitiesStat`) for a plain text stat, or a threshold stat like `PingStat` if it needs graph/color support.
+3. Register an instance of it in `StatRegistry`'s static block.
+4. Add its lang keys (`stat.mtss.<name>` and `mtss.stat.<name>`) to `en_us.json`.
+5. If it's raw game/JVM state, pull it from `MtssDataHolder`'s sampling loop, same as the existing stats — `StatDefinition` implementations should stay thin delegates, not do their own polling.
+6. Add its token row to the Template Mode table above.
+
+That's the whole surface area — no `switch (stat)` blocks to update.

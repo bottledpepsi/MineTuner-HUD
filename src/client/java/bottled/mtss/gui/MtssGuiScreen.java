@@ -3,6 +3,7 @@ package bottled.mtss.gui;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.hud.MtssRenderer;
 import bottled.mtss.hud.TemplateEngine;
+import bottled.mtss.stat.StatRegistry;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -616,33 +617,32 @@ public class MtssGuiScreen extends Screen {
 
     // ── Per-stat settings panel ───────────────────────────────────────────────
 
-    /** Stats whose formatted value supports a configurable decimal-places setting. */
+    /** Stats whose formatted value supports a configurable decimal-places setting. Delegates to the stat's own StatDefinition. */
     private boolean supportsDecimals(MtssConfig.Stat stat) {
-        return stat == MtssConfig.Stat.TPS || stat == MtssConfig.Stat.MSPT
-            || stat == MtssConfig.Stat.CPU || stat == MtssConfig.Stat.SPEED;
+        return StatRegistry.get(stat).supportsDecimals();
     }
 
     /** Stats that can be rendered as a rolling graph instead of text. */
     private boolean supportsGraph(MtssConfig.Stat stat) {
-        return MtssConfig.GRAPHABLE_STATS.contains(stat);
+        return StatRegistry.get(stat).supportsGraph();
     }
 
     /** Stats that have a user-configurable good/warn color threshold (step 4's ThresholdSettings). */
     private boolean supportsThresholds(MtssConfig.Stat stat) {
-        return MtssConfig.THRESHOLD_STATS.contains(stat);
+        return StatRegistry.get(stat).supportsThreshold();
     }
 
     /**
      * True when a higher value is better (green at/above goodMin) — TPS, FPS.
-     * False means lower is better. Must match MtssDataHolder's xColorFor() direction.
+     * False means lower is better. Must match the stat's own color() direction.
      */
     private boolean isHigherBetter(MtssConfig.Stat stat) {
-        return stat == MtssConfig.Stat.TPS || stat == MtssConfig.Stat.FPS;
+        return StatRegistry.get(stat).higherIsBetter();
     }
 
     /** Increment step for each threshold stat's scale: 0.5 for TPS, whole units otherwise. */
     private float thresholdStep(MtssConfig.Stat stat) {
-        return (stat == MtssConfig.Stat.TPS) ? 0.5f : 1.0f;
+        return StatRegistry.get(stat).thresholdStep();
     }
 
     /**

@@ -1,12 +1,12 @@
 package bottled.mtss.hud;
 
-import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.config.MtssConfig.Stat;
+import bottled.mtss.stat.StatDefinition;
+import bottled.mtss.stat.StatRegistry;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,49 +20,19 @@ import java.util.Set;
  * <ul>
  *   <li>{@code {token}} — a stat's value, using its default decimal count.</li>
  *   <li>{@code {token:N}} — N decimal places, for stats that support decimals
- *       (see {@link #DECIMAL_TOKENS}). Ignored (with a warning) otherwise.</li>
+ *       (see {@code StatDefinition.supportsDecimals()}). Ignored (with a
+ *       warning) otherwise.</li>
  *   <li>{@code "{{"} and {@code "}}"} escape literal {@code {} and {@code }}.</li>
  *   <li>Anything else in braces that isn't a known token is malformed and
  *       renders back out as plain text, so a typo is visible, not silent.</li>
  * </ul>
+ * Token names and their decimal support both come from {@link StatRegistry}
+ * now — a new stat's token "just works" here as soon as it's registered.
  * Full token table: README's "Template Mode" section.
  */
 public final class TemplateEngine {
 
     private TemplateEngine() {}
-
-    // ── Token table ──────────────────────────────────────────────────────────
-    // Token name -> Stat. Keep in sync with README's Template Mode table.
-    private static final Map<String, Stat> TOKEN_TO_STAT = new LinkedHashMap<>();
-    static {
-        TOKEN_TO_STAT.put("tps",       Stat.TPS);
-        TOKEN_TO_STAT.put("mspt",      Stat.MSPT);
-        TOKEN_TO_STAT.put("fps",       Stat.FPS);
-        TOKEN_TO_STAT.put("ping",      Stat.PING);
-        TOKEN_TO_STAT.put("mem",       Stat.MEMORY);
-        TOKEN_TO_STAT.put("cpu",       Stat.CPU);
-        TOKEN_TO_STAT.put("entities",  Stat.ENTITIES);
-        TOKEN_TO_STAT.put("chunks",    Stat.CHUNKS);
-        TOKEN_TO_STAT.put("rendered",  Stat.RENDERED_SECTIONS);
-        TOKEN_TO_STAT.put("coords",    Stat.COORDS);
-        TOKEN_TO_STAT.put("facing",    Stat.FACING);
-        TOKEN_TO_STAT.put("speed",     Stat.SPEED);
-        TOKEN_TO_STAT.put("gc",        Stat.GC_TIME);
-        TOKEN_TO_STAT.put("biome",     Stat.BIOME);
-        TOKEN_TO_STAT.put("light",     Stat.LIGHT_LEVEL);
-        TOKEN_TO_STAT.put("dimension", Stat.DIMENSION);
-    }
-
-    /** Stats whose {@code :N} decimals suffix does anything. */
-    private static final Set<Stat> DECIMAL_TOKENS = Set.of(Stat.TPS, Stat.MSPT, Stat.CPU, Stat.SPEED);
-
-    /** Default decimal count when {@code :N} is omitted. */
-    private static int defaultDecimals(Stat stat) {
-        return switch (stat) {
-            case SPEED -> 2;
-            default -> 1; // TPS, MSPT, CPU
-        };
-    }
 
     // ── Token model ──────────────────────────────────────────────────────────
 
@@ -182,14 +152,14 @@ public final class TemplateEngine {
             if (decimals < 0 || decimals > 6) return null;
         }
 
-        Stat stat = TOKEN_TO_STAT.get(name.trim().toLowerCase(java.util.Locale.ROOT));
-        if (stat == null) return null; // typo'd/unknown name, e.g. "{tsp}"
+        StatDefinition def = StatRegistry.byToken(name.trim().toLowerCase(java.util.Locale.ROOT));
+        if (def == null) return null; // typo'd/unknown name, e.g. "{tsp}"
 
-        if (decimals >= 0 && !DECIMAL_TOKENS.contains(stat)) {
+        if (decimals >= 0 && !def.supportsDecimals()) {
             return null; // e.g. "{ping:2}" — Ping has no decimals
         }
 
-        return new StatToken(stat, decimals);
+        return new StatToken(def.key(), decimals);
     }
 
     /** Logs each bad token once per list, not every parse. */
@@ -206,9 +176,9 @@ public final class TemplateEngine {
 
     /**
      * Renders a parsed token list to text, reusing the same
-     * {@code MtssDataHolder.getFormattedX()} calls classic mode uses. Classic
-     * mode's prefix/label stripping doesn't apply here — the user's own
-     * literal text is the label.
+     * {@code StatDefinition.format()} call classic mode uses. Classic mode's
+     * prefix/label stripping doesn't apply here — the user's own literal
+     * text is the label.
      */
     public static String render(List<Token> tokens) {
         StringBuilder sb = new StringBuilder();
@@ -222,25 +192,8 @@ public final class TemplateEngine {
     }
 
     private static String renderStat(StatToken token) {
-        Stat stat = token.stat();
-        int decimals = token.decimals() >= 0 ? token.decimals() : defaultDecimals(stat);
-        return switch (stat) {
-            case TPS    -> MtssDataHolder.getFormattedTps(decimals);
-            case MSPT   -> MtssDataHolder.getFormattedMspt(decimals);
-            case FPS    -> MtssDataHolder.getFormattedFps();
-            case PING   -> MtssDataHolder.getFormattedPing();
-            case MEMORY -> MtssDataHolder.getFormattedMem();
-            case CPU    -> MtssDataHolder.getFormattedCpu(decimals);
-            case ENTITIES          -> MtssDataHolder.getFormattedEntities();
-            case CHUNKS            -> MtssDataHolder.getFormattedChunks();
-            case RENDERED_SECTIONS -> MtssDataHolder.getFormattedRendered();
-            case COORDS            -> MtssDataHolder.getFormattedCoords();
-            case FACING            -> MtssDataHolder.getFormattedFacing();
-            case SPEED             -> MtssDataHolder.getFormattedSpeed(decimals);
-            case GC_TIME           -> MtssDataHolder.getFormattedGcTime();
-            case BIOME             -> MtssDataHolder.getFormattedBiome();
-            case LIGHT_LEVEL       -> MtssDataHolder.getFormattedLight();
-            case DIMENSION         -> MtssDataHolder.getFormattedDimension();
-        };
+        StatDefinition def = StatRegistry.get(token.stat());
+        int decimals = token.decimals() >= 0 ? token.decimals() : def.defaultDecimals();
+        return def.format(decimals);
     }
 }
