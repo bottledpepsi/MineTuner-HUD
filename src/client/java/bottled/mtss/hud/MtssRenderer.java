@@ -1,14 +1,12 @@
 package bottled.mtss.hud;
 
-import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
+import bottled.mtss.sample.SamplingDriver;
 import bottled.mtss.stat.StatDefinition;
 import bottled.mtss.stat.StatRegistry;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.multiplayer.PlayerInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -296,59 +294,10 @@ public class MtssRenderer {
         tickCache();
 
         // ── Data collection ──────────────────────────────────────────────────
-        if (mc.hasSingleplayerServer() && mc.getSingleplayerServer() != null) {
-            MtssDataHolder.mspt =
-                    mc.getSingleplayerServer().getAverageTickTimeNanos() / 1_000_000.0f;
-        } else {
-            MtssDataHolder.mspt = -1f; // unavailable on remote servers
-        }
-        MtssDataHolder.fps = mc.getFps();
-
-        ClientPacketListener conn = mc.getConnection();
-        if (mc.player != null && conn != null) {
-            PlayerInfo info = conn.getPlayerInfo(mc.player.getUUID());
-            MtssDataHolder.ping = info != null ? info.getLatency() : -1;
-        }
-
-        if (mc.level != null) {
-            MtssDataHolder.entityCount  = mc.level.getEntityCount();
-            MtssDataHolder.loadedChunks = mc.level.getChunkSource().getLoadedChunksCount();
-            MtssDataHolder.dimensionName = mc.level.dimension().identifier().getPath();
-        }
-        if (mc.player != null) {
-            MtssDataHolder.playerX = mc.player.getX();
-            MtssDataHolder.playerY = mc.player.getY();
-            MtssDataHolder.playerZ = mc.player.getZ();
-            if (mc.level != null) {
-                net.minecraft.core.BlockPos pos = mc.player.blockPosition();
-                MtssDataHolder.lightLevel = mc.level.getMaxLocalRawBrightness(pos);
-                var biomeHolder = mc.level.getBiome(pos);
-                MtssDataHolder.biomeName = biomeHolder.unwrapKey()
-                        .map(key -> key.identifier().getPath())
-                        .orElse("?");
-            }
-            // Facing: NORTH/SOUTH/EAST/WEST + intercardinals from yaw
-            float yaw = ((mc.player.getYRot() % 360) + 360) % 360;
-            if      (yaw <  22.5f)  MtssDataHolder.facingName = "S";
-            else if (yaw <  67.5f)  MtssDataHolder.facingName = "SW";
-            else if (yaw < 112.5f)  MtssDataHolder.facingName = "W";
-            else if (yaw < 157.5f)  MtssDataHolder.facingName = "NW";
-            else if (yaw < 202.5f)  MtssDataHolder.facingName = "N";
-            else if (yaw < 247.5f)  MtssDataHolder.facingName = "NE";
-            else if (yaw < 292.5f)  MtssDataHolder.facingName = "E";
-            else if (yaw < 337.5f)  MtssDataHolder.facingName = "SE";
-            else                     MtssDataHolder.facingName = "S";
-            // Horizontal speed: per-tick delta movement × 20 ticks/sec = blocks/sec
-            double dx = mc.player.getDeltaMovement().x;
-            double dz = mc.player.getDeltaMovement().z;
-            MtssDataHolder.speedBps = (float)(Math.sqrt(dx * dx + dz * dz) * 20.0);
-        }
-        if (mc.levelRenderer != null) {
-            MtssDataHolder.renderedSections = mc.levelExtractor.countRenderedSections();
-        }
-
-        MtssDataHolder.updateFastMetrics();
-        MtssDataHolder.updateSlowMetrics();
+        // Each raw value is pulled in by its own StatSource (bottled.mtss.sample),
+        // registered in SourceRegistry and run here at its declared cadence.
+        // See the design doc for the full acquisition-side pipeline.
+        SamplingDriver.sampleAll();
 
         // ── Render each stat list (uses frame cache) ─────────────────────────
         MtssConfig root = MtssConfig.getInstance();
