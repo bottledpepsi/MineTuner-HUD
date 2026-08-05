@@ -6,9 +6,10 @@ import bottled.mtss.sample.SamplingContext;
 import bottled.mtss.sample.StatSource;
 
 /**
- * Player position, facing, and horizontal speed. Batched into one source
- * rather than split per-field: all three share the {@code ctx.hasPlayer()}
- * precondition and are always read together in the original inline block.
+ * Player position, facing, orientation, and horizontal speed. Batched into
+ * one source rather than split per-field: all share the
+ * {@code ctx.hasPlayer()} precondition and are always read together in the
+ * original inline block.
  */
 public final class PlayerPositionSource implements StatSource {
     @Override public String id() { return "player_position"; }
@@ -21,8 +22,12 @@ public final class PlayerPositionSource implements StatSource {
         MtssDataHolder.playerY = player.getY();
         MtssDataHolder.playerZ = player.getZ();
 
-        // Facing: NORTH/SOUTH/EAST/WEST + intercardinals from yaw
+        // Yaw normalized to [0, 360). Pitch is already in [-90, 90] from Entity, no normalization needed.
         float yaw = ((player.getYRot() % 360) + 360) % 360;
+        MtssDataHolder.playerYaw = yaw;
+        MtssDataHolder.playerPitch = player.getXRot();
+
+        // Facing: NORTH/SOUTH/EAST/WEST + intercardinals from yaw
         if      (yaw <  22.5f)  MtssDataHolder.facingName = "S";
         else if (yaw <  67.5f)  MtssDataHolder.facingName = "SW";
         else if (yaw < 112.5f)  MtssDataHolder.facingName = "W";

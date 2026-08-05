@@ -14,9 +14,14 @@ import bottled.mtss.stat.stats.LightLevelStat;
 import bottled.mtss.stat.stats.MemoryStat;
 import bottled.mtss.stat.stats.MsptStat;
 import bottled.mtss.stat.stats.PingStat;
+import bottled.mtss.stat.stats.PitchStat;
 import bottled.mtss.stat.stats.RenderedSectionsStat;
 import bottled.mtss.stat.stats.SpeedStat;
 import bottled.mtss.stat.stats.TpsStat;
+import bottled.mtss.stat.stats.XStat;
+import bottled.mtss.stat.stats.YStat;
+import bottled.mtss.stat.stats.YawStat;
+import bottled.mtss.stat.stats.ZStat;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +68,12 @@ public final class StatRegistry {
         register(new ChunksStat());
         register(new RenderedSectionsStat());
         register(new CoordsStat());
+        register(new XStat());
+        register(new YStat());
+        register(new ZStat());
         register(new FacingStat());
+        register(new YawStat());
+        register(new PitchStat());
         register(new SpeedStat());
         register(new GcTimeStat());
         register(new BiomeStat());

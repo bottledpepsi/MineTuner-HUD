@@ -175,7 +175,12 @@ Wrap a stat's token name in curly braces to interpolate it: `{tps}` inserts the 
 | `{chunks}` | Chunks | — |
 | `{rendered}` | Rendered Sections | — |
 | `{coords}` | Coords | — |
+| `{x}` | X | Block-rounded, individual coordinate |
+| `{y}` | Y | Block-rounded, individual coordinate |
+| `{z}` | Z | Block-rounded, individual coordinate |
 | `{facing}` | Facing | — |
+| `{yaw}` | Yaw | Supports `:N` decimals suffix; normalized to 0-360 |
+| `{pitch}` | Pitch | Supports `:N` decimals suffix; -90 (up) to 90 (down) |
 | `{speed}` | Speed | Supports `:N` decimals suffix |
 | `{gc}` | GC Time | — |
 | `{biome}` | Biome | — |
@@ -185,6 +190,8 @@ Wrap a stat's token name in curly braces to interpolate it: `{tps}` inserts the 
 Add `:N` after any decimals-capable token to override its decimal places, e.g. `{tps:2}` for two decimal places, `{cpu:0}` for a whole number. Omit it to use that stat's normal default (the same default classic mode uses).
 
 Example: `FPS: {fps} | TPS: {tps:2} | {ping}ms` might render as `FPS: 144 | TPS: 19.86 | 42ms`.
+
+Example: `{x} {y} {z} | Yaw {yaw:0} Pitch {pitch:0}` might render as `123 64 -456 | Yaw 180 Pitch 0`.
 
 #### Literal braces
 To show a literal `{` or `}` in a template line (rather than starting a token), double it: `{{` renders as `{`, and `}}` renders as `}`.

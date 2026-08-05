@@ -48,7 +48,7 @@ public class MtssConfig {
     public enum Stat {
         TPS, MSPT, FPS, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
-        COORDS, FACING, SPEED, GC_TIME,
+        COORDS, X, Y, Z, FACING, YAW, PITCH, SPEED, GC_TIME,
         BIOME, LIGHT_LEVEL, DIMENSION
     }
 

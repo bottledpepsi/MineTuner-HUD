@@ -5,6 +5,19 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`{x}`, `{y}`, `{z}` Template Mode tokens** — individual, block-rounded
+  coordinate values, sourced from `PlayerPositionSource` alongside the
+  existing combined `{coords}` token. Lets a template line lay out
+  coordinates freely (e.g. `{x} {y} {z}`) instead of the fixed
+  `XYZ: x / y / z` layout `{coords}` gives. New `Stat.X` / `Stat.Y` / `Stat.Z`
+  constants, backed by `XStat` / `YStat` / `ZStat`.
+- **Yaw and Pitch stats** — raw player orientation angles, complementing the
+  existing 8-way `{facing}` token. Yaw is normalized to `[0, 360)` degrees
+  (same normalization `FacingStat` already used internally); Pitch is the
+  unmodified `-90` (up) to `90` (down) range from `Entity.getXRot()`. Both
+  support the `:N` decimals suffix in Template Mode, same as TPS/CPU/Speed.
+  New `Stat.YAW` / `Stat.PITCH` constants, backed by `YawStat` / `PitchStat`,
+  sourced from `PlayerPositionSource`.
 - **Template Mode** — an opt-in, per-list alternative to classic per-stat-line
   rendering. Instead of a fixed list of stat rows, a list in Template Mode
   renders freeform lines of your own text with stat tokens interpolated in

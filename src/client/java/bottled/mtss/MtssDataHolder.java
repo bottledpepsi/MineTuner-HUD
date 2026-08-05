@@ -23,12 +23,14 @@ public final class MtssDataHolder {
     public static int renderedSections = 0;
 
     // ── Player ────────────────────────────────────────────────────────────────
-    public static double playerX    = 0;
-    public static double playerY    = 0;
-    public static double playerZ    = 0;
-    public static String facingName = "S";
-    public static float  speedBps   = 0;
-    public static int    lightLevel = 0;
+    public static double playerX     = 0;
+    public static double playerY     = 0;
+    public static double playerZ     = 0;
+    public static String facingName  = "S";
+    public static float  playerYaw   = 0; // normalized to [0, 360)
+    public static float  playerPitch = 0; // [-90 (straight up), 90 (straight down)]
+    public static float  speedBps    = 0;
+    public static int    lightLevel  = 0;
 
     // ── World ─────────────────────────────────────────────────────────────────
     public static String biomeName     = "";
@@ -283,7 +285,26 @@ public final class MtssDataHolder {
     public static String getFormattedChunks()   { return t("mtss.stat.chunks",   loadedChunks); }
     public static String getFormattedRendered() { return t("mtss.stat.rendered", renderedSections); }
     public static String getFormattedCoords()   { return t("mtss.stat.coords",   (int) Math.floor(playerX), (int) Math.floor(playerY), (int) Math.floor(playerZ)); }
+    public static String getFormattedX()        { return t("mtss.stat.x", (int) Math.floor(playerX)); }
+    public static String getFormattedY()        { return t("mtss.stat.y", (int) Math.floor(playerY)); }
+    public static String getFormattedZ()        { return t("mtss.stat.z", (int) Math.floor(playerZ)); }
+    /** Bare block-rounded X coordinate, no label — for Template Mode's {x} token. */
+    public static String getRawX()              { return Integer.toString((int) Math.floor(playerX)); }
+    /** Bare block-rounded Y coordinate, no label — for Template Mode's {y} token. */
+    public static String getRawY()              { return Integer.toString((int) Math.floor(playerY)); }
+    /** Bare block-rounded Z coordinate, no label — for Template Mode's {z} token. */
+    public static String getRawZ()              { return Integer.toString((int) Math.floor(playerZ)); }
     public static String getFormattedFacing()   { return t("mtss.stat.facing",   facingName); }
+
+    public static String getFormattedYaw()             { return getFormattedYaw(1); }
+    public static String getFormattedYaw(int decimals) { return t("mtss.stat.yaw", fmt(playerYaw, decimals)); }
+    /** Bare yaw value with no label, for Template Mode. */
+    public static String getRawYaw(int decimals)       { return fmt(playerYaw, decimals); }
+
+    public static String getFormattedPitch()             { return getFormattedPitch(1); }
+    public static String getFormattedPitch(int decimals) { return t("mtss.stat.pitch", fmt(playerPitch, decimals)); }
+    /** Bare pitch value with no label, for Template Mode. */
+    public static String getRawPitch(int decimals)        { return fmt(playerPitch, decimals); }
 
     public static String getFormattedSpeed()             { return getFormattedSpeed(2); }
     public static String getFormattedSpeed(int decimals) { return t("mtss.stat.speed", fmt(speedBps, decimals)); }
