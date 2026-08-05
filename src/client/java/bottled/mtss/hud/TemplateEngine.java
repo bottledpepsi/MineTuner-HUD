@@ -22,6 +22,16 @@ import java.util.Set;
  *   <li>{@code {token:N}} — N decimal places, for stats that support decimals
  *       (see {@code StatDefinition.supportsDecimals()}). Ignored (with a
  *       warning) otherwise.</li>
+ *   <li>{@code {token:graph=true}} — renders that stat as a rolling history
+ *       graph instead of text, for stats that support it (see
+ *       {@code StatDefinition.supportsGraph()}). The graph uses that stat's
+ *       normal {@code GraphStyle} settings (same lazily-created per-list
+ *       settings classic mode's graph mode uses). A graph token must be the
+ *       line's only content — see "Graph tokens" below.</li>
+ *   <li>Modifiers after {@code :} are comma-separated, e.g.
+ *       {@code {tps:2,graph=true}} sets both decimals and graph mode at
+ *       once. A bare number is always decimals; {@code graph=true} /
+ *       {@code graph=false} toggles graph mode explicitly.</li>
  *   <li>{@code "{{"} and {@code "}}"} escape literal {@code {} and {@code }}.</li>
  *   <li>Anything else in braces that isn't a known token is malformed and
  *       renders back out as plain text, so a typo is visible, not silent.</li>
@@ -32,6 +42,16 @@ import java.util.Set;
  * Token names and their decimal support both come from {@link StatRegistry}
  * now — a new stat's token "just works" here as soon as it's registered.
  * Full token table: README's "Template Mode" section.
+ *
+ * <h2>Graph tokens</h2>
+ * A classic-mode stat line is either all text or all graph — there's no such
+ * thing as a graph with text stitched onto the same row. Template mode keeps
+ * that rule: a line renders as a graph row only when a {@code graph=true}
+ * token is the <em>entire</em> line (no literal text, no other tokens). A
+ * graph token mixed with anything else on the same line is treated like any
+ * other malformed token — it falls back to literal text (rendering the
+ * stat's plain value) with a one-time warning, rather than silently dropping
+ * either the graph or the surrounding text.
  */
 public final class TemplateEngine {
 
@@ -44,8 +64,8 @@ public final class TemplateEngine {
     /** A run of plain text, copied through unchanged. */
     public record LiteralToken(String text) implements Token {}
 
-    /** A {@code {statname}} or {@code {statname:N}} reference. decimals is -1 if omitted. */
-    public record StatToken(Stat stat, int decimals) implements Token {}
+    /** A {@code {statname}}, {@code {statname:N}}, and/or {@code {statname:graph=true}} reference. decimals is -1 if omitted. */
+    public record StatToken(Stat stat, int decimals, boolean asGraph) implements Token {}
 
     // ── Parse cache ──────────────────────────────────────────────────────────
     // Keyed per list. Reparses only when that list's template text changes,
@@ -143,16 +163,39 @@ public final class TemplateEngine {
 
         String name = body;
         int decimals = -1;
+        boolean asGraph = false;
+
         int colon = body.indexOf(':');
         if (colon >= 0) {
             name = body.substring(0, colon);
-            String decStr = body.substring(colon + 1);
-            try {
-                decimals = Integer.parseInt(decStr.trim());
-            } catch (NumberFormatException e) {
-                return null; // e.g. "{tps:abc}"
+            String modifiers = body.substring(colon + 1);
+            if (modifiers.isBlank()) return null; // e.g. "{tps:}"
+
+            for (String part : modifiers.split(",", -1)) {
+                String mod = part.trim();
+                if (mod.isEmpty()) return null; // e.g. "{tps:2,,graph=true}"
+
+                int eq = mod.indexOf('=');
+                if (eq >= 0) {
+                    String key = mod.substring(0, eq).trim().toLowerCase(java.util.Locale.ROOT);
+                    String value = mod.substring(eq + 1).trim().toLowerCase(java.util.Locale.ROOT);
+                    if (key.equals("graph") && value.equals("true")) {
+                        asGraph = true;
+                    } else if (key.equals("graph") && value.equals("false")) {
+                        asGraph = false;
+                    } else {
+                        return null; // unknown key or non-boolean value, e.g. "{tps:foo=1}", "{tps:graph=yes}"
+                    }
+                } else {
+                    // Bare token — must be the decimals count, e.g. "{tps:2}"
+                    try {
+                        decimals = Integer.parseInt(mod);
+                    } catch (NumberFormatException e) {
+                        return null; // e.g. "{tps:abc}"
+                    }
+                    if (decimals < 0 || decimals > 6) return null;
+                }
             }
-            if (decimals < 0 || decimals > 6) return null;
         }
 
         StatDefinition def = StatRegistry.byToken(name.trim().toLowerCase(java.util.Locale.ROOT));
@@ -161,8 +204,11 @@ public final class TemplateEngine {
         if (decimals >= 0 && !def.supportsDecimals()) {
             return null; // e.g. "{ping:2}" — Ping has no decimals
         }
+        if (asGraph && !def.supportsGraph()) {
+            return null; // e.g. "{ping:graph=true}" — Ping has no graph history
+        }
 
-        return new StatToken(def.key(), decimals);
+        return new StatToken(def.key(), decimals, asGraph);
     }
 
     /** Logs each bad token once per list, not every parse. */

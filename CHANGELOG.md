@@ -5,6 +5,20 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`{token:graph=true}` Template Mode syntax** — renders a graphable stat as
+  a rolling history graph instead of text, reusing that stat's normal
+  `GraphStyle` settings (the same ones classic mode's per-stat "Render as
+  Graph" toggle edits). A graph token must be a template line's only
+  content — mixing it with literal text or other tokens falls back to a
+  normal text row instead, matching classic mode's one-row-is-either-text-
+  or-graph rule. Combinable with the existing decimals modifier via a comma,
+  e.g. `{cpu:0,graph=true}`. `TemplateEngine`'s token grammar now parses a
+  comma-separated modifier list after `:` instead of a single bare number,
+  so `{tps:2}` keeps working unchanged. The graph-entry-building logic
+  (history, smoothing, scale bounds, peak markers, threshold color) was
+  factored out of `LineBuilder`'s classic-mode loop into a shared
+  `buildGraphEntry` helper so classic and template mode produce identical
+  `GraphEntry`s for the same stat.
 - **`{x}`, `{y}`, `{z}` Template Mode tokens** — individual, block-rounded
   coordinate values, sourced from `PlayerPositionSource` alongside the
   existing combined `{coords}` token. Lets a template line lay out

@@ -193,16 +193,25 @@ Example: `FPS: {fps} | TPS: {tps:2} | {ping}ms` might render as `FPS: 144 | TPS:
 
 Example: `{x} {y} {z} | Yaw {yaw:0} Pitch {pitch:0}` might render as `123 64 -456 | Yaw 180 Pitch 0`.
 
+#### Graph tokens
+Add `graph=true` after `:` on any graphable token (the same stats that support **Render as Graph** in classic mode's per-stat settings) to render that stat as a rolling history graph instead of text, e.g. `{fps:graph=true}`. It uses that stat's normal graph settings — width/height, smoothing, scale mode, color mode, and so on — the same `GraphStyle` the per-stat settings panel edits (⚙ → Render as Graph), so a stat's graph looks and behaves the same whether it's turned on there or written as a template token.
+
+Combine it with a decimals override using a comma, e.g. `{cpu:0,graph=true}`.
+
+A graph token must be the **entire** line — no literal text and no other tokens alongside it. `{fps:graph=true}` on its own line renders a graph; `FPS: {fps:graph=true}` does not — the token still parses fine and renders FPS's plain number, but the surrounding "FPS: " text means the line no longer qualifies as graph-only, so it's drawn as a normal text row instead. This mirrors classic mode, where a stat row is always either all text or all graph, never both on the same line.
+
+`graph=false` is also accepted (the default, so writing it explicitly is rarely needed) for symmetry with `graph=true`.
+
+Example: a list with two lines, `{tps:graph=true}` and `{ping:graph=true}`, renders two stacked graphs instead of any text rows.
+
 #### Literal braces
 To show a literal `{` or `}` in a template line (rather than starting a token), double it: `{{` renders as `{`, and `}}` renders as `}`.
 
 #### Unrecognized tokens
-A typo'd or unknown token — `{tsp}`, `{ping:2}` (Ping has no decimals), `{tps:abc}` — is not silently dropped or treated as an error. It renders back out as literal text (braces included, e.g. `{tsp}` shows up on screen exactly like that), so a mistake is visible and easy to spot and fix rather than quietly disappearing.
+A typo'd or unknown token — `{tsp}`, `{ping:2}` (Ping has no decimals), `{tps:abc}`, `{ping:graph=true}` (Ping has no graph history), `{tps:graph=yes}` (only `true`/`false` are recognized) — is not silently dropped or treated as an error. It renders back out as literal text (braces included, e.g. `{tsp}` shows up on screen exactly like that), so a mistake is visible and easy to spot and fix rather than quietly disappearing.
 
 #### Coloring and current limitations
 Template lines render in a single flat color per line — either the list's custom color (**Color / Scale... → Use Custom Color**) if enabled, or plain white otherwise. Per-token inline coloring (so different parts of the same line could show their own threshold color) is **not yet supported** — it's a natural follow-up but out of scope for the current version. Classic mode's per-stat threshold coloring and Show Prefix setting don't apply in Template Mode either; since you're writing the literal text yourself, you simply don't type a label if you don't want one.
-
-Template lines are always plain text rows — Template Mode does not currently support rendering a template line as a rolling graph.
 
 ### Config file
 Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually for anything the in-game GUI exposes.
