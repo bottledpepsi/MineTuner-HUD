@@ -9,12 +9,15 @@ public final class ListPositioner {
 
     public static int[] getPosition(MtssConfig.StatListConfig cfg,
                                     int screenW, int screenH, int boxW, int boxH) {
+        int dx = (int) Math.round(cfg.anchorFracX * screenW);
+        int dy = (int) Math.round(cfg.anchorFracY * screenH);
+
         int x, y;
         switch (cfg.anchorCorner) {
-            case TOP_RIGHT    -> { x = screenW - boxW - cfg.anchorDx; y = cfg.anchorDy; }
-            case BOTTOM_LEFT  -> { x = cfg.anchorDx;                  y = screenH - boxH - cfg.anchorDy; }
-            case BOTTOM_RIGHT -> { x = screenW - boxW - cfg.anchorDx; y = screenH - boxH - cfg.anchorDy; }
-            default           -> { x = cfg.anchorDx;                  y = cfg.anchorDy; } // TOP_LEFT
+            case TOP_RIGHT    -> { x = screenW - boxW - dx; y = dy; }
+            case BOTTOM_LEFT  -> { x = dx;                  y = screenH - boxH - dy; }
+            case BOTTOM_RIGHT -> { x = screenW - boxW - dx; y = screenH - boxH - dy; }
+            default           -> { x = dx;                  y = dy; } // TOP_LEFT
         }
         // Snap overrides beat the corner anchor on the snapped axis
         int cx = screenW / 2;

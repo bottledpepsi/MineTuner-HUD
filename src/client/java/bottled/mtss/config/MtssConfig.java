@@ -22,8 +22,10 @@ import java.util.stream.Collectors;
 public class MtssConfig {
 
     /**
-     * Which screen corner a list is anchored to. anchorDx/anchorDy are
-     * pixel offsets from that corner, so the list moves with it on resize.
+     * Which screen corner a list is anchored to. anchorFracX/anchorFracY are
+     * offsets from that corner's edges, normalized to [0, 1] as a fraction of
+     * the current screen width/height, so the list stays in the same visual
+     * spot when the GUI scale (and therefore the effective screen size) changes.
      */
     public enum Corner {
         TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT
@@ -249,12 +251,32 @@ public class MtssConfig {
          */
         public Map<String, ThresholdSettings> statThresholds = defaultThresholds();
 
-        // Position — corner anchor + pixel offsets
+        // Position — corner anchor + normalized offsets
         public Corner anchorCorner = Corner.TOP_LEFT;
-        /** Pixels from the anchor corner's horizontal edge. */
-        public int    anchorDx    = 4;
-        /** Pixels from the anchor corner's vertical edge. */
-        public int    anchorDy    = 4;
+        /**
+         * Offset from the anchor corner's horizontal edge, normalized as a
+         * fraction of screen width (0.0–1.0ish). Resolved to pixels at
+         * render/layout time via {@code screenW * anchorFracX}. Kept as a
+         * fraction (rather than raw pixels) so the list's on-screen position
+         * is stable across GUI scale changes, which change the effective
+         * screen width/height without this config changing.
+         */
+        public double anchorFracX = 0.01;
+        /** Offset from the anchor corner's vertical edge, normalized as a fraction of screen height. See {@link #anchorFracX}. */
+        public double anchorFracY = 0.01;
+
+        /**
+         * Legacy raw-pixel offsets from before positions were normalized.
+         * Present only so old config files' "anchorDx"/"anchorDy" JSON keys
+         * still deserialize into something {@link #backFill()} can migrate
+         * from. Null (the default) means "not present in the loaded JSON" —
+         * Gson leaves object-typed fields null rather than running the field
+         * initializer when the key is absent. Nulled back out once migrated,
+         * so this doesn't re-run on later loads and isn't written by fresh
+         * saves going forward.
+         */
+        public Integer anchorDx = null;
+        public Integer anchorDy = null;
 
         // Appearance
         public boolean showBackground = true;
@@ -352,6 +374,23 @@ public class MtssConfig {
             // from an old config's JSON.
             if (templateLines == null) templateLines = new ArrayList<>();
 
+            // Migrate old raw-pixel anchorDx/anchorDy (pre-normalized-position
+            // configs) into normalized anchorFracX/Y. Old configs assumed a
+            // 1x-GUI-scale-ish screen size at save time, which we don't know
+            // anymore — but converting using a reasonable reference size gets
+            // existing lists close to where they were, and from then on their
+            // position is scale-stable. Only run once: anchorDx/anchorDy are
+            // nulled out after migrating so this doesn't re-run on later loads
+            // and doesn't clobber a position the user has since re-dragged.
+            if (anchorDx != null || anchorDy != null) {
+                final double REFERENCE_W = 320.0; // matches Minecraft's default GUI-scaled width at scale 1 on a common 1080p display
+                final double REFERENCE_H = 240.0;
+                anchorFracX = (anchorDx != null ? anchorDx : 4) / REFERENCE_W;
+                anchorFracY = (anchorDy != null ? anchorDy : 4) / REFERENCE_H;
+                anchorDx = null;
+                anchorDy = null;
+            }
+
             for (Stat s : Stat.values()) {
                 statEnabled.putIfAbsent(s.name(), false);
                 if (!statOrder.contains(s.name())) statOrder.add(s.name());
@@ -386,8 +425,12 @@ public class MtssConfig {
             statThresholds.forEach((key, src) -> copy.statThresholds.put(key, src.copy()));
 
             copy.anchorCorner   = anchorCorner;
-            copy.anchorDx       = anchorDx + 12;
-            copy.anchorDy       = anchorDy + 12;
+            // Nudge the copy so it doesn't sit exactly on top of the original.
+            // 0.02 of screen size lands close to the old 12px-at-reference-size
+            // nudge without hardcoding a pixel amount that would drift when
+            // rendered at a different GUI scale than duplication happened at.
+            copy.anchorFracX    = anchorFracX + 0.02;
+            copy.anchorFracY    = anchorFracY + 0.02;
             copy.showBackground = showBackground;
             copy.textShadow     = textShadow;
             copy.useCustomColor = useCustomColor;
@@ -405,8 +448,11 @@ public class MtssConfig {
 
     public StatListConfig createList() {
         StatListConfig cfg = new StatListConfig(nextId++);
-        cfg.anchorDx = 4 + lists.size() * 20;
-        cfg.anchorDy = 4 + lists.size() * 20;
+        // Stagger new lists diagonally so they don't stack on top of each
+        // other, same idea as before but expressed as a screen fraction so
+        // the stagger looks the same regardless of GUI scale.
+        cfg.anchorFracX = 0.01 + lists.size() * 0.05;
+        cfg.anchorFracY = 0.01 + lists.size() * 0.05;
         lists.add(cfg);
         return cfg;
     }

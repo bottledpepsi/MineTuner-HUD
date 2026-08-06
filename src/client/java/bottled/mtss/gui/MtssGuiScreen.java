@@ -522,23 +522,36 @@ public class MtssGuiScreen extends Screen {
         return new int[]{ snappedX, snappedY };
     }
 
+    /**
+     * Picks the nearest corner for (bx, by) and stores the offset from it as
+     * a fraction of the current screen size, so the position is scale-
+     * independent from here on. (bx, by) is already resolved screen-space
+     * pixels — the same coordinate space {@link ListPositioner#getPosition}
+     * renders in and {@link #applySnap} snapped against — so this just
+     * mirrors that resolution back into a corner + fraction rather than
+     * introducing a different notion of position.
+     */
     private void snapToNearestCorner(MtssConfig.StatListConfig lc,
                                      int bx, int by, int boxW, int boxH) {
         boolean nearRight  = (bx + boxW / 2) > width  / 2;
         boolean nearBottom = (by + boxH / 2) > height / 2;
+        int pixelDx, pixelDy;
         if (!nearRight && !nearBottom) {
             lc.anchorCorner = MtssConfig.Corner.TOP_LEFT;
-            lc.anchorDx = bx;                    lc.anchorDy = by;
+            pixelDx = bx;                  pixelDy = by;
         } else if (nearRight && !nearBottom) {
             lc.anchorCorner = MtssConfig.Corner.TOP_RIGHT;
-            lc.anchorDx = width - (bx + boxW);   lc.anchorDy = by;
+            pixelDx = width - (bx + boxW); pixelDy = by;
         } else if (!nearRight) {
             lc.anchorCorner = MtssConfig.Corner.BOTTOM_LEFT;
-            lc.anchorDx = bx;                    lc.anchorDy = height - (by + boxH);
+            pixelDx = bx;                  pixelDy = height - (by + boxH);
         } else {
             lc.anchorCorner = MtssConfig.Corner.BOTTOM_RIGHT;
-            lc.anchorDx = width - (bx + boxW);   lc.anchorDy = height - (by + boxH);
+            pixelDx = width - (bx + boxW); pixelDy = height - (by + boxH);
         }
+        // width/height are never 0 for an open Screen, so no guard needed.
+        lc.anchorFracX = pixelDx / (double) width;
+        lc.anchorFracY = pixelDy / (double) height;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

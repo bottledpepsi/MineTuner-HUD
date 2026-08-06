@@ -229,6 +229,26 @@ All notable changes to MineTuner Statistics Server are documented in this file.
   modes (`CURRENT_THRESHOLD`, `FIXED_ACCENT`) this collapses the fill pass
   from `plotW` calls down to as few as 2-4. Purely an internal draw-call
   reduction — the rendered pixels are identical to before.
+- **HUD list positions drifting/clipping when the GUI scale changed.**
+  `StatListConfig.anchorDx`/`anchorDy` stored a list's offset from its
+  anchor corner as raw pixels. Since Minecraft's GUI-scaled coordinate
+  space (what `screenW`/`screenH` mean throughout `ListPositioner`) shrinks
+  or grows with the GUI scale option, the same raw pixel offset landed in a
+  different relative spot — or even off-screen — after a scale change.
+  Replaced with `anchorFracX`/`anchorFracY`, offsets normalized as a
+  fraction of the current screen width/height, resolved back to pixels in
+  `ListPositioner.getPosition` against whatever screen size is passed in
+  each call. A list now stays visually anchored in the same spot across
+  GUI scale changes. Existing configs migrate their old pixel offsets to
+  fractions once, on load, via `StatListConfig.backFill()`.
+  - Drag behavior is unchanged: dragging still tracks the cursor in
+    screen-space pixels frame-to-frame, and center/edge snapping
+    (`applySnap`) still compares against resolved screen-space pixel
+    bounds — the same coordinates `ListPositioner.getPosition` renders the
+    list at — so snapping continues to feel correct instead of teleporting.
+    Only `mouseReleased`'s final commit step (`snapToNearestCorner`)
+    changed, converting the resolved drop position to a corner + fraction
+    instead of a corner + raw pixel offset.
 
 ## [1.1.0] - Unreleased
 
