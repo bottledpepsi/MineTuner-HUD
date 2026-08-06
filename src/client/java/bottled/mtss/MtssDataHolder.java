@@ -35,6 +35,33 @@ public final class MtssDataHolder {
     // ── World ─────────────────────────────────────────────────────────────────
     public static String biomeName     = "";
     public static String dimensionName = "";
+    public static boolean isRaining     = false;
+    public static boolean isThundering  = false;
+    public static String difficultyName = "";
+    public static int    skyLight       = 0;
+    public static int    blockLight     = 0;
+    public static boolean canSeeSky     = false;
+    public static int    chunkX         = 0;
+    public static int    chunkZ         = 0;
+    public static double distanceFromSpawn = 0;
+
+    // ── Player vitals ─────────────────────────────────────────────────────────
+    public static float  health      = 0f;
+    public static float  maxHealth   = 20f;
+    public static int    hunger      = 0;
+    public static float  saturation  = 0f;
+    public static int    armor       = 0;
+    public static int    air         = 0;
+    public static int    maxAir      = 300;
+    public static int    xpLevel     = 0;
+    public static float  xpProgress  = 0f;
+    public static String gameMode    = "";
+    public static int    selectedSlot = 0;
+    public static String heldItemName = "";
+    public static float  verticalSpeedBps = 0f;
+
+    // ── Session ───────────────────────────────────────────────────────────────
+    public static int    playersOnline = 0;
 
     // ── System (throttled) ────────────────────────────────────────────────────
     public static long   memUsedMb  = 0;
@@ -52,6 +79,9 @@ public final class MtssDataHolder {
     private static final RingBuffer pingHistory  = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer memHistory   = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer speedHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer healthHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer hungerHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer armorHistory  = new RingBuffer(HISTORY_SIZE);
 
     /** Minimal fixed-size float ring buffer with copy-out reads. Not thread-safe (client render thread only). */
     private static final class RingBuffer {
@@ -107,6 +137,12 @@ public final class MtssDataHolder {
         if (ping >= 0) pingHistory.push(ping);
         if (memMaxMb > 0) memHistory.push((float) (100.0 * memUsedMb / memMaxMb));
         speedHistory.push(speedBps);
+        // Health is stored as a percent of max, same convention as Memory's
+        // used/max percentage — keeps colorFor()'s percent-based thresholds
+        // valid for historical samples even if max health changes mid-session.
+        if (maxHealth > 0) healthHistory.push(100f * health / maxHealth);
+        hungerHistory.push(hunger);
+        armorHistory.push(armor);
     }
 
     public static void updateSlowMetrics() {
@@ -138,6 +174,9 @@ public final class MtssDataHolder {
     public static float[] getPingHistory()  { return pingHistory.snapshot(); }
     public static float[] getMemHistory()   { return memHistory.snapshot(); }
     public static float[] getSpeedHistory() { return speedHistory.snapshot(); }
+    public static float[] getHealthHistory() { return healthHistory.snapshot(); }
+    public static float[] getHungerHistory() { return hungerHistory.snapshot(); }
+    public static float[] getArmorHistory()  { return armorHistory.snapshot(); }
 
     // ── Color helpers ─────────────────────────────────────────────────────────
     // Each getXColor() reads live state and calls the matching xColorFor(value),
@@ -247,6 +286,67 @@ public final class MtssDataHolder {
         return 0xFFFFFFFF;
     }
 
+    public static int getHealthColor() { return getHealthColor(null); }
+    public static int getHealthColor(ThresholdSettings custom) { return healthColorFor(health, custom); }
+
+    public static int healthColorFor(float healthValue) { return healthColorFor(healthValue, null); }
+    /** Health is higher-is-better, measured as a percent of max so it works with any max-health modifier. */
+    public static int healthColorFor(float healthValue, ThresholdSettings custom) {
+        float pct = maxHealth > 0 ? (100f * healthValue / maxHealth) : 0f;
+        if (custom != null && custom.enabled) {
+            if (pct >= custom.goodMin) return 0xFF55FF55;
+            if (pct >= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
+        if (pct >= 75f) return 0xFF55FF55;
+        if (pct >= 35f) return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
+    public static int getHungerColor() { return getHungerColor(null); }
+    public static int getHungerColor(ThresholdSettings custom) { return hungerColorFor(hunger, custom); }
+
+    public static int hungerColorFor(float hungerValue) { return hungerColorFor(hungerValue, null); }
+    /** Hunger (food level, 0-20) is higher-is-better. */
+    public static int hungerColorFor(float hungerValue, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (hungerValue >= custom.goodMin) return 0xFF55FF55;
+            if (hungerValue >= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
+        if (hungerValue >= 15) return 0xFF55FF55;
+        if (hungerValue >= 6)  return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
+    public static int getArmorColor() { return getArmorColor(null); }
+    public static int getArmorColor(ThresholdSettings custom) { return armorColorFor(armor, custom); }
+
+    public static int armorColorFor(float armorValue) { return armorColorFor(armorValue, null); }
+    /** Armor points (0-20) is higher-is-better. */
+    public static int armorColorFor(float armorValue, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (armorValue >= custom.goodMin) return 0xFF55FF55;
+            if (armorValue >= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
+        if (armorValue >= 15) return 0xFF55FF55;
+        if (armorValue >= 5)  return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
+    // Air isn't a ThresholdSettings stat: it sits at maxAir almost all the
+    // time (not underwater) and only becomes meaningful near zero, so a
+    // fixed "danger below 20%" rule reads better than a tunable good/warn band.
+    public static int getAirColor() { return airColorFor(air, maxAir); }
+    public static int airColorFor(float airValue, int maxAirValue) {
+        if (maxAirValue <= 0) return 0xFFFFFFFF;
+        float pct = 100f * airValue / maxAirValue;
+        if (pct >= 100f) return 0xFFFFFFFF; // full breath — no need to draw attention
+        if (pct >= 20f)  return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
     // ── Formatted strings (via I18n so text is translatable) ──────────────────
 
     private static String t(String key, Object... args) {
@@ -317,4 +417,72 @@ public final class MtssDataHolder {
     public static String getFormattedBiome()    { return t("mtss.stat.biome",    biomeName.isEmpty() ? "?" : biomeName); }
     public static String getFormattedLight()    { return t("mtss.stat.light",    lightLevel); }
     public static String getFormattedDimension(){ return t("mtss.stat.dimension", dimensionName.isEmpty() ? "?" : dimensionName); }
+
+    // ── Player vitals ──────────────────────────────────────────────────────────
+
+    public static String getFormattedHealth() { return t("mtss.stat.health", fmt(health, 0), fmt(maxHealth, 0)); }
+    /** Bare "current/max" with no label, for Template Mode. */
+    public static String getRawHealth()       { return fmt(health, 0) + "/" + fmt(maxHealth, 0); }
+
+    public static String getFormattedHunger() { return t("mtss.stat.hunger", hunger); }
+    public static String getFormattedSaturation()             { return getFormattedSaturation(1); }
+    public static String getFormattedSaturation(int decimals) { return t("mtss.stat.saturation", fmt(saturation, decimals)); }
+    public static String getRawSaturation(int decimals)       { return fmt(saturation, decimals); }
+
+    public static String getFormattedArmor()  { return t("mtss.stat.armor", armor); }
+
+    /** Empty string when at full air (nothing worth showing outside water), same "skip this line" convention as MSPT on remote servers. */
+    public static String getFormattedAir() {
+        return air < maxAir ? t("mtss.stat.air", air) : "";
+    }
+    public static String getRawAir() { return Integer.toString(air); }
+
+    public static String getFormattedXpLevel()    { return t("mtss.stat.xp_level", xpLevel); }
+    public static String getFormattedXpProgress()             { return getFormattedXpProgress(0); }
+    public static String getFormattedXpProgress(int decimals) { return t("mtss.stat.xp_progress", fmt(xpProgress * 100.0, decimals)); }
+    public static String getRawXpProgress(int decimals)       { return fmt(xpProgress * 100.0, decimals); }
+
+    public static String getFormattedGameMode()  {
+        String raw = gameMode;
+        String display = raw.isEmpty() ? "?" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        return t("mtss.stat.game_mode", display);
+    }
+    public static String getFormattedSelectedSlot() { return t("mtss.stat.selected_slot", selectedSlot + 1); }
+    public static String getFormattedHeldItem()  { return t("mtss.stat.held_item", heldItemName.isEmpty() ? "-" : heldItemName); }
+
+    public static String getFormattedVerticalSpeed()             { return getFormattedVerticalSpeed(2); }
+    public static String getFormattedVerticalSpeed(int decimals) { return t("mtss.stat.vertical_speed", fmt(verticalSpeedBps, decimals)); }
+    public static String getRawVerticalSpeed(int decimals)       { return fmt(verticalSpeedBps, decimals); }
+
+    // ── World / environment ──────────────────────────────────────────────────
+
+
+    public static String getFormattedWeather() {
+        String state = isThundering ? t("mtss.stat.weather.thunder")
+                      : isRaining   ? t("mtss.stat.weather.rain")
+                                    : t("mtss.stat.weather.clear");
+        return t("mtss.stat.weather", state);
+    }
+
+    public static String getFormattedDifficulty() {
+        String raw = difficultyName;
+        String display = raw.isEmpty() ? "?" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        return t("mtss.stat.difficulty", display);
+    }
+
+    public static String getFormattedSkyLight()   { return t("mtss.stat.sky_light",   skyLight); }
+    public static String getFormattedBlockLight() { return t("mtss.stat.block_light", blockLight); }
+    public static String getFormattedCanSeeSky()  {
+        return t("mtss.stat.can_see_sky", canSeeSky ? t("gui.mtss.menu.on") : t("gui.mtss.menu.off"));
+    }
+
+    // ── Server / session ──────────────────────────────────────────────────────
+
+    public static String getFormattedPlayersOnline() { return t("mtss.stat.players_online", playersOnline); }
+
+    public static String getFormattedChunkPos() { return t("mtss.stat.chunk_pos", chunkX, chunkZ); }
+
+    public static String getFormattedDistanceFromSpawn()             { return getFormattedDistanceFromSpawn(0); }
+    public static String getFormattedDistanceFromSpawn(int decimals) { return t("mtss.stat.distance_from_spawn", fmt(distanceFromSpawn, decimals)); }
+    public static String getRawDistanceFromSpawn(int decimals)       { return fmt(distanceFromSpawn, decimals); }
 }

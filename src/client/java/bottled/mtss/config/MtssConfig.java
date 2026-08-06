@@ -49,7 +49,39 @@ public class MtssConfig {
         TPS, MSPT, FPS, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
         COORDS, X, Y, Z, FACING, YAW, PITCH, SPEED, GC_TIME,
-        BIOME, LIGHT_LEVEL, DIMENSION
+        BIOME, LIGHT_LEVEL, DIMENSION,
+        // ── Player vitals ────────────────────────────────────────────────
+        HEALTH, HUNGER, SATURATION, ARMOR, AIR,
+        XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM,
+        // ── World / environment ─────────────────────────────────────────
+        WEATHER, DIFFICULTY,
+        SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY,
+        // ── Server / session ─────────────────────────────────────────────
+        PLAYERS_ONLINE, DISTANCE_FROM_SPAWN, CHUNK_POS, VERTICAL_SPEED
+    }
+
+    /**
+     * Groups {@link Stat} constants for the redesigned toggle/reorder panel
+     * (see {@code bottled.mtss.gui.panel.ReorderPanel}). Purely a GUI
+     * organization concern — rendering, sampling, and Template Mode don't
+     * care about categories at all, so adding a stat to the wrong category
+     * (or forgetting it) only affects where it's *listed* in the editor, not
+     * whether it works. {@link #categoryOf(Stat)} is the single source of
+     * truth; every {@link Stat} constant must appear in exactly one bucket
+     * there or it silently won't show up in the categorized panel.
+     */
+    public enum StatCategory {
+        PERFORMANCE, PLAYER, WORLD, POSITION
+    }
+
+    /** Which {@link StatCategory} a stat belongs to in the toggle panel. Every Stat must be covered — see the class doc above. */
+    public static StatCategory categoryOf(Stat stat) {
+        return switch (stat) {
+            case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE -> StatCategory.PERFORMANCE;
+            case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM, SPEED, VERTICAL_SPEED -> StatCategory.PLAYER;
+            case ENTITIES, CHUNKS, BIOME, DIMENSION, WEATHER, DIFFICULTY, LIGHT_LEVEL, SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY -> StatCategory.WORLD;
+            case COORDS, X, Y, Z, FACING, YAW, PITCH, CHUNK_POS, DISTANCE_FROM_SPAWN -> StatCategory.POSITION;
+        };
     }
 
     /** How much of the graph's current/min/max value readout is drawn. */

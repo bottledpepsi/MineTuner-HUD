@@ -28,6 +28,8 @@ public final class SourceRegistry {
         register(new WorldCountsSource());        // entities, chunks, dimension
         register(new PlayerPositionSource());     // x/y/z, facing, speed
         register(new PlayerEnvironmentSource());  // light level, biome
+        register(new PlayerVitalsSource());       // health, hunger, saturation, armor, air, xp, game mode, held item
+        register(new WorldStateSource());         // time, moon phase, weather, difficulty, chunk pos, distance from spawn, players online
         register(new RenderedSectionsSource());
         register(new SlowMetricsSource());        // THROTTLED — cpu, gc
         register(new FastMetricsSource());        // memory + history push; must run last (reads fields above)

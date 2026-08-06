@@ -51,6 +51,8 @@ public class MtssGuiScreen extends Screen {
     private int      menuListId = -1;
     private int      menuX, menuY;
     private boolean  reorderOpen       = false;
+    /** Category-expansion/scroll state for the redesigned {@link ReorderPanel} — reset whenever the panel opens (see the LM_STATS case in {@link #handleListContextMenuClick}). */
+    private final ReorderPanel.UiState reorderUiState = new ReorderPanel.UiState();
     /** Which stat's settings panel is open (null = reorder panel showing). */
     private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
@@ -155,7 +157,7 @@ public class MtssGuiScreen extends Screen {
         } else if (reorderOpen) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) reorderOpen = false;
-            else ReorderPanel.render(g, font, mx, my, menuX, menuY, width, height, lc);
+            else ReorderPanel.render(g, font, mx, my, menuX, menuY, width, height, lc, reorderUiState);
         } else if (templateListOpen) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) templateListOpen = false;
@@ -241,7 +243,7 @@ public class MtssGuiScreen extends Screen {
                 } else {
                     statSettingsStat = null; // click outside → back to reorder
                 }
-            } else if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc)) {
+            } else if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc, reorderUiState)) {
                 handleReorderPanelClick(mx, my, lc);
             } else {
                 reorderOpen = false;
@@ -409,7 +411,7 @@ public class MtssGuiScreen extends Screen {
         switch (idx) {
             case ListContextMenuPanel.LM_STATS -> {
                 if (lc.useTemplate) { templateListOpen = true; templateEditIndex = -1; }
-                else reorderOpen = true;
+                else { reorderOpen = true; reorderUiState.reset(); }
             }
             case ListContextMenuPanel.LM_APPEARANCE -> appearanceOpen = true;
             case ListContextMenuPanel.LM_DUPLICATE  -> { root.duplicateList(lc.id); root.save(); }
@@ -452,7 +454,7 @@ public class MtssGuiScreen extends Screen {
     }
 
     private void handleReorderPanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
-        MtssConfig.Stat clickedCog = ReorderPanel.handleClick(mx, my, menuX, menuY, width, height, lc,
+        MtssConfig.Stat clickedCog = ReorderPanel.handleClick(mx, my, menuX, menuY, width, height, lc, reorderUiState,
                 () -> { reorderOpen = false; statSettingsStat = null; thresholdPanelOpen = false; });
         if (clickedCog != null) {
             statSettingsStat = clickedCog;

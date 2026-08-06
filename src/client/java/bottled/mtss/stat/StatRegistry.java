@@ -1,24 +1,43 @@
 package bottled.mtss.stat;
 
 import bottled.mtss.config.MtssConfig;
+import bottled.mtss.stat.stats.AirStat;
+import bottled.mtss.stat.stats.ArmorStat;
 import bottled.mtss.stat.stats.BiomeStat;
+import bottled.mtss.stat.stats.BlockLightStat;
+import bottled.mtss.stat.stats.CanSeeSkyStat;
+import bottled.mtss.stat.stats.ChunkPosStat;
 import bottled.mtss.stat.stats.ChunksStat;
 import bottled.mtss.stat.stats.CoordsStat;
 import bottled.mtss.stat.stats.CpuStat;
+import bottled.mtss.stat.stats.DifficultyStat;
 import bottled.mtss.stat.stats.DimensionStat;
+import bottled.mtss.stat.stats.DistanceFromSpawnStat;
 import bottled.mtss.stat.stats.EntitiesStat;
 import bottled.mtss.stat.stats.FacingStat;
 import bottled.mtss.stat.stats.FpsStat;
+import bottled.mtss.stat.stats.GameModeStat;
 import bottled.mtss.stat.stats.GcTimeStat;
+import bottled.mtss.stat.stats.HealthStat;
+import bottled.mtss.stat.stats.HeldItemStat;
+import bottled.mtss.stat.stats.HungerStat;
 import bottled.mtss.stat.stats.LightLevelStat;
 import bottled.mtss.stat.stats.MemoryStat;
 import bottled.mtss.stat.stats.MsptStat;
 import bottled.mtss.stat.stats.PingStat;
 import bottled.mtss.stat.stats.PitchStat;
+import bottled.mtss.stat.stats.PlayersOnlineStat;
 import bottled.mtss.stat.stats.RenderedSectionsStat;
+import bottled.mtss.stat.stats.SaturationStat;
+import bottled.mtss.stat.stats.SelectedSlotStat;
+import bottled.mtss.stat.stats.SkyLightStat;
 import bottled.mtss.stat.stats.SpeedStat;
 import bottled.mtss.stat.stats.TpsStat;
+import bottled.mtss.stat.stats.VerticalSpeedStat;
+import bottled.mtss.stat.stats.WeatherStat;
 import bottled.mtss.stat.stats.XStat;
+import bottled.mtss.stat.stats.XpLevelStat;
+import bottled.mtss.stat.stats.XpProgressStat;
 import bottled.mtss.stat.stats.YStat;
 import bottled.mtss.stat.stats.YawStat;
 import bottled.mtss.stat.stats.ZStat;
@@ -79,6 +98,31 @@ public final class StatRegistry {
         register(new BiomeStat());
         register(new LightLevelStat());
         register(new DimensionStat());
+
+        // ── Player vitals ────────────────────────────────────────────────
+        register(new HealthStat());
+        register(new HungerStat());
+        register(new SaturationStat());
+        register(new ArmorStat());
+        register(new AirStat());
+        register(new XpLevelStat());
+        register(new XpProgressStat());
+        register(new GameModeStat());
+        register(new SelectedSlotStat());
+        register(new HeldItemStat());
+        register(new VerticalSpeedStat());
+
+        // ── World / environment ─────────────────────────────────────────
+        register(new WeatherStat());
+        register(new DifficultyStat());
+        register(new SkyLightStat());
+        register(new BlockLightStat());
+        register(new CanSeeSkyStat());
+
+        // ── Server / session ─────────────────────────────────────────────
+        register(new PlayersOnlineStat());
+        register(new ChunkPosStat());
+        register(new DistanceFromSpawnStat());
     }
 
     /** Looks up a stat's definition. Every {@link MtssConfig.Stat} constant must have one registered above. */
