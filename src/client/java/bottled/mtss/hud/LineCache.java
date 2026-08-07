@@ -48,17 +48,10 @@ public record LineCache(List<String> lines, List<Integer> colors,
     // ── Frame cache ─────────────────────────────────────────────────────────
 
     private static final Map<Integer, LineCache> FRAME_CACHE = new HashMap<>();
-    /** Bumped by {@link #tickCache()} each render call. The GUI calls it too so both share the same frame budget. */
-    private static long cacheGeneration = 0;
-    private static long lastCacheGeneration = -1;
 
     /** Advances the cache generation — call once per frame. */
     public static void tickCache() {
-        if (cacheGeneration != lastCacheGeneration) {
-            FRAME_CACHE.clear();
-            lastCacheGeneration = cacheGeneration;
-        }
-        cacheGeneration++;
+        FRAME_CACHE.clear();
     }
 
     /** Returns cached lines for this list, building them if needed this frame. */

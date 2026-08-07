@@ -34,14 +34,14 @@ final class GraphRenderer {
         if (plotW <= 0 || plotH <= 0 || n == 0) return;
 
         // ── 2. Gridlines (drawn behind the data) ──────────────────────────
-//        if (style.showGridlines && plotH >= 12) {
-//            for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
-//                int gy = plotY + Math.round(plotH * (1f - frac));
-//                for (int dx = 0; dx < plotW; dx += 3) {
-//                    graphics.fill(plotX + dx, gy, plotX + Math.min(dx + 1, plotW), gy + 1, 0x25FFFFFF);
-//                }
-//            }
-//        }
+        if (style.showGridlines && plotH >= 12) {
+            for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
+                int gy = plotY + Math.round(plotH * (1f - frac));
+                for (int dx = 0; dx < plotW; dx += 3) {
+                    graphics.fill(plotX + dx, gy, plotX + Math.min(dx + 1, plotW), gy + 1, 0x25FFFFFF);
+                }
+            }
+        }
 
         // ── 3 & 4. Filled area (gradient-faded) + interpolated stroke line ──
         drawPlotLine(graphics, entry, style, display, n, plotX, plotY, plotW, plotH);

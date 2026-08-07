@@ -1,11 +1,16 @@
 package bottled.mtss.sample;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /** Runs every registered StatSource at its declared cadence, once per frame. */
 public final class SamplingDriver {
     private SamplingDriver() {}
 
     private static long lastTickMs = 0, lastThrottledMs = 0;
     private static final long TICK_MS = 50, THROTTLE_MS = 500;
+
+    private static final Set<String> WARNED_SOURCE_IDS = new HashSet<>();
 
     /** Call once per render frame — same spot the old inline block lived. */
     public static void sampleAll() {
@@ -27,8 +32,16 @@ public final class SamplingDriver {
                 try {
                     src.sample(ctx);
                 } catch (Exception e) {
-                    // one bad source shouldn't take the whole overlay down
-                    // — log once, consider marking it dead until reload.
+                    // One bad source shouldn't take the whole overlay down —
+                    // sampling continues every frame (so it recovers on its
+                    // own if the failure was transient) but only the first
+                    // failure per source is logged, so a source that's
+                    // consistently broken doesn't spam the log forever.
+                    if (WARNED_SOURCE_IDS.add(src.id())) {
+                        System.err.println("[MTSS] StatSource \"" + src.id()
+                                + "\" threw during sample() — its stat(s) will show stale/default "
+                                + "values until it recovers. " + e);
+                    }
                 }
             }
         }

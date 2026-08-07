@@ -38,5 +38,12 @@ public final class SourceRegistry {
         // here, listed for discoverability only.
     }
 
-    public static List<StatSource> all() { return List.copyOf(ALL); }
+    // Registration only ever happens once, in the static initializer above,
+    // so the defensive copy only needs to be made once too — snapshotting it
+    // here instead of on every all() call avoids a fresh List allocation
+    // every single frame (all() is called from SamplingDriver.sampleAll(),
+    // which runs once per render frame).
+    private static final List<StatSource> SNAPSHOT = List.copyOf(ALL);
+
+    public static List<StatSource> all() { return SNAPSHOT; }
 }
