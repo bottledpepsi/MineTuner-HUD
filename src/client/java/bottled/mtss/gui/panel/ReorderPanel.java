@@ -52,7 +52,7 @@ public final class ReorderPanel {
     public static final int PANEL_W = WIDE_PANEL_W;
 
     /** Max number of stat/header rows visible at once before paging kicks in. Keeps the panel's height bounded regardless of stat count or how many categories are expanded. */
-    private static final int MAX_VISIBLE_ROWS = 14;
+    private static final int MAX_VISIBLE_ROWS = 16;
 
     private static final MtssConfig.StatCategory[] CATEGORY_ORDER = {
             MtssConfig.StatCategory.PERFORMANCE,
