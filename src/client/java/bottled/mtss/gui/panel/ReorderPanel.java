@@ -62,19 +62,26 @@ public final class ReorderPanel {
     };
 
     /**
-     * Per-list UI state for this panel: which categories are expanded and
-     * the current scroll offset. Reset (via {@link #reset()}) whenever the
-     * panel is opened for a (possibly different) list, so state from a
-     * previously-viewed list never bleeds into another.
+     * Per-list UI state for this panel: which categories are expanded, the
+     * current scroll offset, and the search filter. Reset (via
+     * {@link #reset()}) whenever the panel is opened for a (possibly
+     * different) list, so state from a previously-viewed list never bleeds
+     * into another.
      */
     public static final class UiState {
         private final Set<MtssConfig.StatCategory> expanded = EnumSet.noneOf(MtssConfig.StatCategory.class);
         private int scrollOffset = 0;
+        /** Live filter text, entered via the search field toggled from the title row. Empty = no filter, normal expand/collapse behavior. */
+        private final StringBuilder search = new StringBuilder();
+        /** Whether the search text field currently has keyboard focus. Distinct from "search.isEmpty()" — a field can be focused with no text typed yet, or have leftover text after losing focus. */
+        private boolean searchFocused = false;
 
-        /** Collapses every category and scrolls to the top — call when the panel opens (or opens for a different list). */
+        /** Collapses every category, scrolls to the top, and clears any search — call when the panel opens (or opens for a different list). */
         public void reset() {
             expanded.clear();
             scrollOffset = 0;
+            search.setLength(0);
+            searchFocused = false;
         }
 
         boolean isExpanded(MtssConfig.StatCategory cat) { return expanded.contains(cat); }
@@ -83,6 +90,17 @@ public final class ReorderPanel {
             if (!expanded.remove(cat)) expanded.add(cat);
             scrollOffset = 0; // expanding/collapsing shifts everything below it — avoid a disorienting jump mid-list
         }
+
+        public boolean isSearchFocused() { return searchFocused; }
+        public String searchText() { return search.toString(); }
+        public boolean hasSearch() { return !search.isEmpty(); }
+
+        /** Toggles the search field's focus. Opening it doesn't clear existing text (so re-focusing keeps refining a prior search); closing it doesn't clear the filter either — clear it explicitly (✕) if the intent is "stop filtering", not just "stop typing". */
+        public void toggleSearchFocus() { searchFocused = !searchFocused; scrollOffset = 0; }
+
+        public void appendSearch(char c) { if (search.length() < 32) { search.append(c); scrollOffset = 0; } }
+        public void backspaceSearch() { if (!search.isEmpty()) { search.deleteCharAt(search.length() - 1); scrollOffset = 0; } }
+        public void clearSearch() { search.setLength(0); scrollOffset = 0; }
     }
 
     // ── Row model ────────────────────────────────────────────────────────────
@@ -108,11 +126,38 @@ public final class ReorderPanel {
 
     private static List<Row> buildRows(MtssConfig.StatListConfig lc, UiState ui) {
         Map<MtssConfig.StatCategory, List<MtssConfig.Stat>> byCat = groupByCategory(lc);
+        boolean filtering = ui.hasSearch();
+        String needle = filtering ? ui.searchText().toLowerCase(java.util.Locale.ROOT) : null;
+
         List<Row> rows = new ArrayList<>();
         for (MtssConfig.StatCategory cat : CATEGORY_ORDER) {
             List<MtssConfig.Stat> stats = byCat.get(cat);
             int enabledCount = 0;
             for (MtssConfig.Stat s : stats) if (lc.isEnabled(s)) enabledCount++;
+
+            if (filtering) {
+                // Filtered view: only stats whose display name contains the
+                // search text, and only categories that have at least one —
+                // an empty category header with nothing to expand into would
+                // just be a dead end for the user typing a query.
+                List<MtssConfig.Stat> matches = new ArrayList<>();
+                for (MtssConfig.Stat s : stats) {
+                    if (statMatches(s, needle)) matches.add(s);
+                }
+                if (matches.isEmpty()) continue;
+                rows.add(new HeaderRow(cat, enabledCount, stats.size()));
+                for (int i = 0; i < matches.size(); i++) {
+                    // indexInCategory/categorySize stay relative to the *unfiltered*
+                    // category so ▲/▼ reordering (which operates on the full
+                    // statOrder) still makes sense — a filtered-out neighbor
+                    // just means ▲/▼ silently reorders past it, same as it
+                    // already does past any other same-category stat.
+                    int fullIdx = stats.indexOf(matches.get(i));
+                    rows.add(new StatRow(matches.get(i), fullIdx, stats.size()));
+                }
+                continue;
+            }
+
             rows.add(new HeaderRow(cat, enabledCount, stats.size()));
             if (ui.isExpanded(cat)) {
                 for (int i = 0; i < stats.size(); i++) {
@@ -123,6 +168,12 @@ public final class ReorderPanel {
         return rows;
     }
 
+    /** Case-insensitive substring match against a stat's localized display name (the same text the row itself shows), not its enum constant name — so search matches what the user actually reads on screen. */
+    private static boolean statMatches(MtssConfig.Stat stat, String lowercaseNeedle) {
+        String displayName = I18n.get("stat.mtss." + stat.name().toLowerCase(java.util.Locale.ROOT));
+        return displayName.toLowerCase(java.util.Locale.ROOT).contains(lowercaseNeedle);
+    }
+
     // ── Sizing ───────────────────────────────────────────────────────────────
 
     /** Total row count including the "Close" footer — used to decide whether paging controls are needed. */
@@ -130,9 +181,12 @@ public final class ReorderPanel {
         return buildRows(lc, ui).size() + 1; // + Close row
     }
 
+    /** Title row + the always-present search row, both above the scrollable stat/header rows. */
+    private static final int HEADER_ROWS = 2;
+
     public static int panelHeight(MtssConfig.StatListConfig lc, UiState ui) {
         int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRowCount(lc, ui));
-        return PANEL_PAD * 2 + ROW_H /* title */ + ROW_H * visibleRows;
+        return PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
     }
 
     // ── Render ───────────────────────────────────────────────────────────────
@@ -148,7 +202,7 @@ public final class ReorderPanel {
         int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
         ui.scrollOffset = Math.max(0, Math.min(ui.scrollOffset, maxOffset));
 
-        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * visibleRows;
+        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelH, screenH);
 
@@ -159,7 +213,10 @@ public final class ReorderPanel {
         if (paged) title += "  §7(" + (ui.scrollOffset + 1) + "-" + Math.min(ui.scrollOffset + visibleRows, totalRows) + "/" + totalRows + ")";
         g.text(font, title, px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
 
-        int rowTop = py + PANEL_PAD + ROW_H;
+        int searchY = py + PANEL_PAD + ROW_H;
+        renderSearchRow(g, font, mx, my, px, searchY, ui);
+
+        int rowTop = searchY + ROW_H;
 
         for (int visIdx = 0; visIdx < visibleRows; visIdx++) {
             int logicalIdx = ui.scrollOffset + visIdx;
@@ -178,6 +235,37 @@ public final class ReorderPanel {
             } else if (row instanceof StatRow statRow) {
                 renderStatRow(g, font, mx, my, px, ry, lc, statRow);
             }
+        }
+    }
+
+    /**
+     * The search row: a magnifying-glass-style field showing either the
+     * placeholder hint or the current filter text with a blinking-style
+     * cursor bar when focused, plus a ✕ to clear when there's text. Reuses
+     * the same rectangular row geometry every other row in this panel uses,
+     * so hover/click math stays consistent — clicking anywhere in the row
+     * except the ✕ toggles focus (see {@link #handleClick}).
+     */
+    private static void renderSearchRow(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
+                                        int mx, int my, int px, int ry, UiState ui) {
+        PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
+
+        boolean hasText = ui.hasSearch();
+        String icon = ui.isSearchFocused() ? "§e🔍" : "§7🔍";
+        String text;
+        if (hasText) {
+            text = "§f" + ui.searchText() + (ui.isSearchFocused() ? "§7|" : "");
+        } else if (ui.isSearchFocused()) {
+            text = "§7|"; // empty field, focused: just the cursor
+        } else {
+            text = "§8" + I18n.get("gui.mtss.reorder.search_hint");
+        }
+        g.text(font, icon + " " + truncate(font, text, PANEL_W - 16 - (hasText ? 14 : 0)),
+                px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+
+        if (hasText) {
+            boolean clearHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 14, ry, 12, ROW_H);
+            g.text(font, clearHovered ? "§c✕" : "§7✕", px + PANEL_W - 14, ry + 2, 0xFFFFFFFF, false);
         }
     }
 
@@ -250,10 +338,9 @@ public final class ReorderPanel {
         List<Row> rows = buildRows(lc, ui);
         int totalRows = rows.size() + 1;
         int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
-        int panelH = PANEL_PAD * 2 + ROW_H + ROW_H * visibleRows;
+        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelH, screenH);
-        int rowTop = py + PANEL_PAD + ROW_H;
 
         // Title-row paging: click the left half to scroll up a page, right half to scroll down —
         // no dedicated arrow glyphs needed since the title row already shows the "(a-b/n)" range as a hint.
@@ -264,6 +351,24 @@ public final class ReorderPanel {
             else                       ui.scrollOffset = Math.min(maxOffset, ui.scrollOffset + MAX_VISIBLE_ROWS);
             return null;
         }
+
+        int searchY = py + PANEL_PAD + ROW_H;
+        if (PanelChrome.isHoveringRow(mx, my, px, searchY, PANEL_W, ROW_H)) {
+            if (ui.hasSearch() && mx >= px + PANEL_W - 14) {
+                ui.clearSearch(); // ✕ — clear filter text, leave focus as-is
+            } else {
+                ui.toggleSearchFocus();
+            }
+            return null;
+        } else if (ui.isSearchFocused()) {
+            // Clicked elsewhere in the panel while the field had focus — same
+            // "clicking away" convention RENAME/TEMPLATE_EDIT use elsewhere in
+            // this GUI, except here it only drops focus rather than closing
+            // the whole panel, since the filter itself might still be wanted.
+            ui.toggleSearchFocus();
+        }
+
+        int rowTop = searchY + ROW_H;
 
         for (int visIdx = 0; visIdx < visibleRows; visIdx++) {
             int logicalIdx = ui.scrollOffset + visIdx;

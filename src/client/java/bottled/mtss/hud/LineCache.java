@@ -8,8 +8,18 @@ import java.util.List;
 import java.util.Map;
 
 
-public record LineCache(List<String> lines, List<Integer> colors,
+public record LineCache(List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                         List<LineCache.GraphEntry> graphEntries, List<LineCache.RowKind> rowKinds) {
+
+    // `lines`/`colors` stay the flat single-color view every existing reader
+    // (width measurement, drag-preview rendering, getListBounds sizing) was
+    // built against — `runs` is parallel to them (same index = same text
+    // row) and only carries information beyond "one flat color" when a
+    // template line actually used an inline color=# modifier; the renderer
+    // uses `runs` to draw, everything else keeps reading `lines`/`colors`
+    // unchanged. `lines.get(i)` is always the same characters as
+    // `runs.get(i)` joined together, so anything measuring wrapped text
+    // width doesn't need to change just because coloring got richer.
 
     public record GraphEntry(MtssConfig.Stat stat, float[] rawHistory, float[] displayHistory,
                              int color, String label, String minValueLabel, String maxValueLabel,
@@ -59,10 +69,11 @@ public record LineCache(List<String> lines, List<Integer> colors,
         return FRAME_CACHE.computeIfAbsent(cfg.id, id -> {
             List<String>     lines        = new ArrayList<>();
             List<Integer>    colors       = new ArrayList<>();
+            List<List<TemplateEngine.ColoredRun>> runs = new ArrayList<>();
             List<GraphEntry> graphEntries = new ArrayList<>();
             List<RowKind>    rowKinds     = new ArrayList<>();
-            LineBuilder.buildLines(cfg, lines, colors, graphEntries, rowKinds);
-            return new LineCache(lines, colors, graphEntries, rowKinds);
+            LineBuilder.buildLines(cfg, lines, colors, runs, graphEntries, rowKinds);
+            return new LineCache(lines, colors, runs, graphEntries, rowKinds);
         });
     }
 }

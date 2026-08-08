@@ -59,7 +59,9 @@ public class MtssConfig {
         WEATHER, DIFFICULTY,
         SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY,
         // ── Server / session ─────────────────────────────────────────────
-        PLAYERS_ONLINE, DISTANCE_FROM_SPAWN, CHUNK_POS, VERTICAL_SPEED
+        PLAYERS_ONLINE, DISTANCE_FROM_SPAWN, CHUNK_POS, VERTICAL_SPEED,
+        // ── Targeting / movement ────────────────────────────────────────
+        LOOKING_AT, MOVING
     }
 
     /**
@@ -80,8 +82,8 @@ public class MtssConfig {
     public static StatCategory categoryOf(Stat stat) {
         return switch (stat) {
             case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE -> StatCategory.PERFORMANCE;
-            case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM, SPEED, VERTICAL_SPEED -> StatCategory.PLAYER;
-            case ENTITIES, CHUNKS, BIOME, DIMENSION, WEATHER, DIFFICULTY, LIGHT_LEVEL, SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY -> StatCategory.WORLD;
+            case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM, SPEED, VERTICAL_SPEED, MOVING -> StatCategory.PLAYER;
+            case ENTITIES, CHUNKS, BIOME, DIMENSION, WEATHER, DIFFICULTY, LIGHT_LEVEL, SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY, LOOKING_AT -> StatCategory.WORLD;
             case COORDS, X, Y, Z, FACING, YAW, PITCH, CHUNK_POS, DISTANCE_FROM_SPAWN -> StatCategory.POSITION;
         };
     }
@@ -511,8 +513,15 @@ public class MtssConfig {
                     }
                     return cfg;
                 }
-            } catch (IOException e) {
-                System.err.println("[MTSS] Failed to load config: " + e.getMessage());
+            } catch (IOException | com.google.gson.JsonSyntaxException | com.google.gson.JsonIOException e) {
+                // Corrupt/truncated JSON (e.g. from a crash before the atomic-save
+                // fix, or manual editing gone wrong) used to silently fall through
+                // to fresh defaults, discarding the user's lists with no trace.
+                // Preserve the broken file next to a timestamped ".bak" instead,
+                // so a config that fails to parse is recoverable rather than
+                // just gone, then continue on to fresh defaults below.
+                System.err.println("[MTSS] Failed to load config (" + e.getMessage() + "); backing up and starting fresh.");
+                backupCorruptConfig();
             }
         }
         MtssConfig defaults = new MtssConfig();
@@ -522,11 +531,51 @@ public class MtssConfig {
         return defaults;
     }
 
+    /** Copies an unparsable mtss.json aside as "mtss.json.bak-<timestamp>" instead of letting it be silently overwritten. Best-effort — a failure here still lets startup continue. */
+    private static void backupCorruptConfig() {
+        try {
+            Path backup = CONFIG_PATH.resolveSibling(
+                    CONFIG_PATH.getFileName() + ".bak-" + System.currentTimeMillis());
+            Files.copy(CONFIG_PATH, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            System.err.println("[MTSS] Backed up unreadable config to " + backup);
+        } catch (IOException copyFailed) {
+            System.err.println("[MTSS] Could not back up unreadable config: " + copyFailed.getMessage());
+        }
+    }
+
+    /**
+     * Writes the config atomically: serialize to a sibling ".tmp" file, then
+     * {@link Files#move} it over the real path. A plain
+     * {@code Files.newBufferedWriter(CONFIG_PATH)} truncates the existing
+     * file before writing a byte of the new content — if the game (or the
+     * process) dies mid-write, e.g. a crash, alt-F4, or the OS killing a
+     * hung JVM, {@code mtss.json} is left as a partial/empty file and every
+     * list the user configured is gone on next launch. {@link Files#move}
+     * with {@code ATOMIC_MOVE} guarantees the destination is either the old
+     * complete file or the new complete file, never a half-written one, so
+     * a crash during save can lose at most the in-flight edit, never the
+     * whole config. Falls back to a non-atomic move if the filesystem
+     * doesn't support atomic renames across these paths (rare, but some
+     * network/overlay filesystems don't) rather than failing the save outright.
+     */
     public void save() {
-        try (Writer w = Files.newBufferedWriter(CONFIG_PATH)) {
-            GSON.toJson(this, w);
+        Path tmp = CONFIG_PATH.resolveSibling(CONFIG_PATH.getFileName() + ".tmp");
+        try {
+            try (Writer w = Files.newBufferedWriter(tmp)) {
+                GSON.toJson(this, w);
+            }
+            try {
+                Files.move(tmp, CONFIG_PATH,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmp, CONFIG_PATH, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             System.err.println("[MTSS] Failed to save config: " + e.getMessage());
+            // Best-effort cleanup so a failed save doesn't leave a stray .tmp
+            // file behind to confuse the next save attempt.
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
         }
     }
 }

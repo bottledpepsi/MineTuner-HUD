@@ -373,6 +373,22 @@ public class MtssGuiScreen extends Screen {
             }
             return true;
         }
+        if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
+            // Search field lives inside ReorderPanel's own row layout rather
+            // than a MenuKind case (see ReorderPanel's UiState doc) — same
+            // Escape-to-unfocus / Enter-to-confirm / Backspace pattern as
+            // RENAME and TEMPLATE_EDIT above, just against reorderUiState
+            // instead of a local StringBuilder field.
+            if (keyCode == 256 || keyCode == 257 || keyCode == 335) { // Escape or Enter — both just drop focus, filter text stays either way
+                reorderUiState.toggleSearchFocus();
+                return true;
+            }
+            if (keyCode == 259) { // Backspace
+                reorderUiState.backspaceSearch();
+                return true;
+            }
+            return true;
+        }
         if (keyCode == 256) { onClose(); return true; }
         return super.keyPressed(event);
     }
@@ -392,6 +408,10 @@ public class MtssGuiScreen extends Screen {
             // and tokens and run longer — still bounded so it can't grow unbounded.
             if (codepoint >= 32 && templateEditBuffer.length() < 200)
                 templateEditBuffer.append(Character.toChars(codepoint));
+            return true;
+        }
+        if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
+            if (codepoint >= 32) reorderUiState.appendSearch((char) codepoint); // stat names are plain ASCII, so no surrogate-pair handling needed here unlike the two buffers above
             return true;
         }
         return super.charTyped(event);

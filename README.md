@@ -186,6 +186,8 @@ Wrap a stat's token name in curly braces to interpolate it: `{tps}` inserts the 
 | `{biome}` | Biome | — |
 | `{light}` | Light Level | — |
 | `{dimension}` | Dimension | — |
+| `{lookingat}` | Looking At | Block or entity name under the crosshair; empty string when nothing's targeted |
+| `{moving}` | Moving | On/off — true when the player has meaningful horizontal movement |
 
 Add `:N` after any decimals-capable token to override its decimal places, e.g. `{tps:2}` for two decimal places, `{cpu:0}` for a whole number. Omit it to use that stat's normal default (the same default classic mode uses).
 
@@ -210,8 +212,14 @@ To show a literal `{` or `}` in a template line (rather than starting a token), 
 #### Unrecognized tokens
 A typo'd or unknown token — `{tsp}`, `{ping:2}` (Ping has no decimals), `{tps:abc}`, `{ping:graph=true}` (Ping has no graph history), `{tps:graph=yes}` (only `true`/`false` are recognized) — is not silently dropped or treated as an error. It renders back out as literal text (braces included, e.g. `{tsp}` shows up on screen exactly like that), so a mistake is visible and easy to spot and fix rather than quietly disappearing.
 
-#### Coloring and current limitations
-Template lines render in a single flat color per line — either the list's custom color (**Color / Scale... → Use Custom Color**) if enabled, or plain white otherwise. Per-token inline coloring (so different parts of the same line could show their own threshold color) is **not yet supported** — it's a natural follow-up but out of scope for the current version. Classic mode's per-stat threshold coloring and Show Prefix setting don't apply in Template Mode either; since you're writing the literal text yourself, you simply don't type a label if you don't want one.
+#### Coloring
+By default, a template line renders in a single flat color: either the list's custom color (**Color / Scale... → Use Custom Color**) if enabled, or plain white otherwise. Add `color=#RRGGBB` (or the 3-digit shorthand `color=#RGB`, same as CSS) to any token's modifiers to override just that token's color, independent of the rest of the line — e.g. `TPS: {tps:color=#55FF55}` renders `TPS: ` in the line's normal color and the TPS number in green, no matter what the line's own color is set to. Literal text and any token without a `color=` modifier keep using the line's normal color.
+
+Combine it with other modifiers using a comma, e.g. `{cpu:0,color=#FF5555}` for zero decimals and a fixed red. `color=` and `graph=true` on the same token don't combine — a graph row draws its own graph-native coloring (see Graph tokens above), so `color=` is only meaningful on a token rendering as text.
+
+Example: `HP {health:color=#FF5555} | Ping {ping:color=#55FFFF}ms` always shows HP in red and Ping in cyan, regardless of either stat's actual value — useful when you want a consistent color scheme rather than threshold-based coloring. (Per-token *threshold* coloring — i.e. `{health}` automatically turning red at low HP, the way classic mode's Health row does — isn't available in Template Mode; `color=` is a fixed override, not a live threshold. If you want threshold-reactive coloring, use classic mode for that stat instead.)
+
+Classic mode's Show Prefix setting doesn't apply in Template Mode; since you're writing the literal text yourself, you simply don't type a label if you don't want one.
 
 ### Config file
 Settings are saved automatically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually for anything the in-game GUI exposes.

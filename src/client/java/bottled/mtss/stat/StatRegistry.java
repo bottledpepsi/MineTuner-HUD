@@ -22,7 +22,9 @@ import bottled.mtss.stat.stats.HealthStat;
 import bottled.mtss.stat.stats.HeldItemStat;
 import bottled.mtss.stat.stats.HungerStat;
 import bottled.mtss.stat.stats.LightLevelStat;
+import bottled.mtss.stat.stats.LookingAtStat;
 import bottled.mtss.stat.stats.MemoryStat;
+import bottled.mtss.stat.stats.MovingStat;
 import bottled.mtss.stat.stats.MsptStat;
 import bottled.mtss.stat.stats.PingStat;
 import bottled.mtss.stat.stats.PitchStat;
@@ -123,6 +125,10 @@ public final class StatRegistry {
         register(new PlayersOnlineStat());
         register(new ChunkPosStat());
         register(new DistanceFromSpawnStat());
+
+        // ── Targeting / movement ─────────────────────────────────────────
+        register(new LookingAtStat());
+        register(new MovingStat());
     }
 
     /** Looks up a stat's definition. Every {@link MtssConfig.Stat} constant must have one registered above. */

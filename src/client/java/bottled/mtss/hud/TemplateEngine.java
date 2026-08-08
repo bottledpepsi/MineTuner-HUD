@@ -28,10 +28,16 @@ import java.util.Set;
  *       normal {@code GraphStyle} settings (same lazily-created per-list
  *       settings classic mode's graph mode uses). A graph token must be the
  *       line's only content — see "Graph tokens" below.</li>
+ *   <li>{@code {token:color=#RRGGBB}} — renders just that token's value in a
+ *       fixed color, overriding both the list's normal text color and any
+ *       threshold coloring for that one value. {@code #RGB} shorthand
+ *       (3 hex digits) is also accepted, same as CSS. See "Inline coloring"
+ *       below.</li>
  *   <li>Modifiers after {@code :} are comma-separated, e.g.
  *       {@code {tps:2,graph=true}} sets both decimals and graph mode at
- *       once. A bare number is always decimals; {@code graph=true} /
- *       {@code graph=false} toggles graph mode explicitly.</li>
+ *       once, and {@code {tps:2,color=#55FF55}} sets decimals and an inline
+ *       color together. A bare number is always decimals; {@code graph=true}
+ *       / {@code graph=false} toggles graph mode explicitly.</li>
  *   <li>{@code "{{"} and {@code "}}"} escape literal {@code {} and {@code }}.</li>
  *   <li>Anything else in braces that isn't a known token is malformed and
  *       renders back out as plain text, so a typo is visible, not silent.</li>
@@ -42,6 +48,18 @@ import java.util.Set;
  * Token names and their decimal support both come from {@link StatRegistry}
  * now — a new stat's token "just works" here as soon as it's registered.
  * Full token table: README's "Template Mode" section.
+ *
+ * <h2>Inline coloring</h2>
+ * A template line renders as a single flat color by default (the list's
+ * override color, or white) — the same as before this feature existed, so
+ * an unmodified template's appearance never changes. Adding
+ * {@code color=#RRGGBB} to one token's modifiers colors just that token's
+ * rendered value; every other token and all literal text on the line keep
+ * the line's normal color. This is a per-token override, not a per-stat
+ * default — it doesn't touch {@code StatDefinition.color()} or the
+ * threshold system, so classic mode and graph-row coloring are unaffected.
+ * Rendering therefore produces a sequence of colored runs
+ * ({@link ColoredRun}) instead of one flat string — see {@link #renderRuns}.
  *
  * <h2>Graph tokens</h2>
  * A classic-mode stat line is either all text or all graph — there's no such
@@ -64,8 +82,11 @@ public final class TemplateEngine {
     /** A run of plain text, copied through unchanged. */
     public record LiteralToken(String text) implements Token {}
 
-    /** A {@code {statname}}, {@code {statname:N}}, and/or {@code {statname:graph=true}} reference. decimals is -1 if omitted. */
-    public record StatToken(Stat stat, int decimals, boolean asGraph) implements Token {}
+    /** A {@code {statname}}, {@code {statname:N}}, {@code {statname:graph=true}}, and/or {@code {statname:color=#RRGGBB}} reference. decimals is -1 if omitted, color is null if omitted. */
+    public record StatToken(Stat stat, int decimals, boolean asGraph, Integer color) implements Token {}
+
+    /** One contiguously-colored run of rendered text, e.g. one token's value or a literal-text span. Never empty — {@link #renderRuns} skips zero-length runs. */
+    public record ColoredRun(String text, int color) {}
 
     // ── Parse cache ──────────────────────────────────────────────────────────
     // Keyed per list. Reparses only when that list's template text changes,
@@ -164,6 +185,7 @@ public final class TemplateEngine {
         String name = body;
         int decimals = -1;
         boolean asGraph = false;
+        Integer color = null;
 
         int colon = body.indexOf(':');
         if (colon >= 0) {
@@ -178,11 +200,21 @@ public final class TemplateEngine {
                 int eq = mod.indexOf('=');
                 if (eq >= 0) {
                     String key = mod.substring(0, eq).trim().toLowerCase(java.util.Locale.ROOT);
-                    String value = mod.substring(eq + 1).trim().toLowerCase(java.util.Locale.ROOT);
+                    // Color's value is case-sensitive-agnostic hex, but keep the
+                    // original casing out of the lowercased "value" used for the
+                    // graph=true/false comparison below — parseHexColor lowercases
+                    // internally anyway, so this is just keeping the two checks
+                    // clearly separate rather than reusing one variable for both.
+                    String rawValue = mod.substring(eq + 1).trim();
+                    String value = rawValue.toLowerCase(java.util.Locale.ROOT);
                     if (key.equals("graph") && value.equals("true")) {
                         asGraph = true;
                     } else if (key.equals("graph") && value.equals("false")) {
                         asGraph = false;
+                    } else if (key.equals("color")) {
+                        Integer parsed = parseHexColor(rawValue);
+                        if (parsed == null) return null; // e.g. "{tps:color=red}", "{tps:color=#12}"
+                        color = parsed;
                     } else {
                         return null; // unknown key or non-boolean value, e.g. "{tps:foo=1}", "{tps:graph=yes}"
                     }
@@ -208,7 +240,31 @@ public final class TemplateEngine {
             return null; // e.g. "{ping:graph=true}" — Ping has no graph history
         }
 
-        return new StatToken(def.key(), decimals, asGraph);
+        return new StatToken(def.key(), decimals, asGraph, color);
+    }
+
+    /**
+     * Parses a CSS-style hex color: {@code #RRGGBB} or the 3-digit shorthand
+     * {@code #RGB} (each digit doubled, e.g. {@code #5F0} -&gt;
+     * {@code #55FF00}, matching CSS's own shorthand expansion). Returns an
+     * opaque ARGB int (alpha forced to 0xFF — templates aren't compositing
+     * translucent text over each other, so there's no use case for a
+     * per-token alpha channel) or null if the string isn't a valid hex color.
+     */
+    private static Integer parseHexColor(String raw) {
+        if (raw.length() < 2 || raw.charAt(0) != '#') return null;
+        String hex = raw.substring(1);
+        if (!hex.matches("[0-9a-fA-F]{3}|[0-9a-fA-F]{6}")) return null;
+        if (hex.length() == 3) {
+            StringBuilder expanded = new StringBuilder(6);
+            for (char c : hex.toCharArray()) { expanded.append(c).append(c); }
+            hex = expanded.toString();
+        }
+        try {
+            return 0xFF000000 | Integer.parseInt(hex, 16);
+        } catch (NumberFormatException e) {
+            return null; // unreachable given the regex guard above, but no reason to risk an uncaught throw from the parser
+        }
     }
 
     /** Logs each bad token once per list, not every parse. */
@@ -252,5 +308,41 @@ public final class TemplateEngine {
         int sep = text.indexOf(": ");
         if (sep >= 0) text = text.substring(sep + 2);
         return text;
+    }
+
+    /**
+     * Renders a parsed token list to a sequence of colored runs: literal
+     * text and {@code color=}-less tokens use {@code baseColor} (the list's
+     * normal text color); a token with an inline {@code color=#RRGGBB}
+     * modifier gets its own run in that color instead. Adjacent runs that
+     * end up the same color are merged, so a template with no inline colors
+     * at all collapses back down to a single run — same rendering cost as
+     * the old flat-string path in that common case.
+     */
+    public static List<ColoredRun> renderRuns(List<Token> tokens, int baseColor) {
+        List<ColoredRun> runs = new ArrayList<>();
+        StringBuilder pending = new StringBuilder();
+        int pendingColor = baseColor;
+
+        for (Token t : tokens) {
+            String text;
+            int color;
+            switch (t) {
+                case LiteralToken lit -> { text = lit.text(); color = baseColor; }
+                case StatToken st -> { text = renderStat(st); color = st.color() != null ? st.color() : baseColor; }
+            }
+            if (text.isEmpty()) continue;
+
+            if (color == pendingColor) {
+                pending.append(text);
+            } else {
+                if (!pending.isEmpty()) runs.add(new ColoredRun(pending.toString(), pendingColor));
+                pending.setLength(0);
+                pending.append(text);
+                pendingColor = color;
+            }
+        }
+        if (!pending.isEmpty()) runs.add(new ColoredRun(pending.toString(), pendingColor));
+        return runs;
     }
 }

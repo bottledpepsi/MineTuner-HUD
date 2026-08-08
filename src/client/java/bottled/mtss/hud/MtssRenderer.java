@@ -8,6 +8,8 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.List;
+
 
 public class MtssRenderer {
 
@@ -78,8 +80,7 @@ public class MtssRenderer {
         int cursorY = baseY;
         for (RowKind kind : cache.rowKinds()) {
             if (kind == RowKind.TEXT) {
-                graphics.text(font, cache.lines().get(textIdx), baseX, cursorY,
-                        cache.colors().get(textIdx), shadow);
+                drawColoredRuns(graphics, font, cache.runs().get(textIdx), baseX, cursorY, shadow);
                 textIdx++;
                 cursorY += lineH;
             } else {
@@ -88,6 +89,24 @@ public class MtssRenderer {
                 graphIdx++;
                 cursorY += entry.style().height + 1;
             }
+        }
+    }
+
+    /**
+     * Draws one text row as a sequence of colored runs left-to-right, each
+     * positioned after the previous run's rendered width — the general form
+     * of what a single {@code graphics.text(...)} call did before inline
+     * template coloring existed. The overwhelming majority of rows (every
+     * classic-mode row, and any template row with no {@code color=}
+     * modifier) are still exactly one run, so this is one draw call in
+     * those cases, same as before.
+     */
+    private static void drawColoredRuns(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
+                                        List<TemplateEngine.ColoredRun> runs, int x, int y, boolean shadow) {
+        int cursorX = x;
+        for (TemplateEngine.ColoredRun run : runs) {
+            graphics.text(font, run.text(), cursorX, y, run.color(), shadow);
+            cursorX += font.width(run.text());
         }
     }
 }

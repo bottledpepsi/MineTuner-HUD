@@ -28,6 +28,7 @@ public final class SourceRegistry {
         register(new WorldCountsSource());        // entities, chunks, dimension
         register(new PlayerPositionSource());     // x/y/z, facing, speed
         register(new PlayerEnvironmentSource());  // light level, biome
+        register(new TargetingSource());          // crosshair target block/entity, moving state
         register(new PlayerVitalsSource());       // health, hunger, saturation, armor, air, xp, game mode, held item
         register(new WorldStateSource());         // time, moon phase, weather, difficulty, chunk pos, distance from spawn, players online
         register(new RenderedSectionsSource());

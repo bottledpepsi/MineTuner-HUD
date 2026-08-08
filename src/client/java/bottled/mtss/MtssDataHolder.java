@@ -63,6 +63,14 @@ public final class MtssDataHolder {
     // ── Session ───────────────────────────────────────────────────────────────
     public static int    playersOnline = 0;
 
+    // ── Targeting / movement ─────────────────────────────────────────────────
+    /** Empty when nothing is targeted (crosshair over air/sky at max reach). */
+    public static String lookingAtName = "";
+    /** "block", "entity", or "" (nothing targeted) — lets format() phrase the two cases differently. */
+    public static String lookingAtKind = "";
+    /** True while the player has non-negligible horizontal movement (see PlayerPositionSource's threshold). */
+    public static boolean isMoving = false;
+
     // ── System (throttled) ────────────────────────────────────────────────────
     public static long   memUsedMb  = 0;
     public static long   memMaxMb   = 0;
@@ -485,4 +493,19 @@ public final class MtssDataHolder {
     public static String getFormattedDistanceFromSpawn()             { return getFormattedDistanceFromSpawn(0); }
     public static String getFormattedDistanceFromSpawn(int decimals) { return t("mtss.stat.distance_from_spawn", fmt(distanceFromSpawn, decimals)); }
     public static String getRawDistanceFromSpawn(int decimals)       { return fmt(distanceFromSpawn, decimals); }
+
+    // ── Targeting / movement ──────────────────────────────────────────────────
+
+    /** Empty string when nothing is targeted, same "skip this line" convention as MSPT/Air. */
+    public static String getFormattedLookingAt() {
+        return lookingAtName.isEmpty() ? "" : t("mtss.stat.looking_at", lookingAtName);
+    }
+    /** Bare targeted-thing name, or a translated placeholder for Template Mode (never blank, unlike format()). */
+    public static String getRawLookingAt() {
+        return lookingAtName.isEmpty() ? t("mtss.stat.looking_at.none") : lookingAtName;
+    }
+
+    public static String getFormattedMoving() {
+        return t("mtss.stat.moving", isMoving ? t("gui.mtss.menu.on") : t("gui.mtss.menu.off"));
+    }
 }

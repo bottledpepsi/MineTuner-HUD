@@ -14,15 +14,15 @@ final class LineBuilder {
     private LineBuilder() {}
 
     public static void buildLines(MtssConfig.StatListConfig cfg,
-                                  List<String> lines, List<Integer> colors,
+                                  List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                                   List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         // Template mode is a separate path, opt-in per list. Classic mode's
         // loop below is untouched either way.
         if (cfg.useTemplate) {
-            buildTemplateLines(cfg, lines, colors, graphEntries, rowKinds);
+            buildTemplateLines(cfg, lines, colors, runs, graphEntries, rowKinds);
             return;
         }
-        buildClassicLines(cfg, lines, colors, graphEntries, rowKinds);
+        buildClassicLines(cfg, lines, colors, runs, graphEntries, rowKinds);
     }
 
     /**
@@ -38,11 +38,14 @@ final class LineBuilder {
      * so a stat's graph looks identical whether it's toggled on via the
      * per-stat settings panel or written as a template token.
      * <p>
-     * Every TEXT line renders in one flat color (the list's override color,
-     * or white). Per-token inline coloring isn't built yet.
+     * Every TEXT line's overall color still comes from the list's override
+     * color (or white) — a token can additionally carry its own
+     * {@code color=#RRGGBB} modifier, in which case that token's run uses
+     * that color instead while the rest of the line keeps the base color
+     * (see {@link TemplateEngine#renderRuns}).
      */
     private static void buildTemplateLines(MtssConfig.StatListConfig cfg,
-                                           List<String> lines, List<Integer> colors,
+                                           List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                                            List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         int color = cfg.useCustomColor ? cfg.overrideColor : 0xFFFFFFFF;
         List<List<TemplateEngine.Token>> parsedLines = TemplateEngine.getParsedLines(cfg);
@@ -56,15 +59,17 @@ final class LineBuilder {
                 rowKinds.add(RowKind.GRAPH);
                 continue;
             }
+            List<TemplateEngine.ColoredRun> lineRuns = TemplateEngine.renderRuns(tokens, color);
             lines.add(TemplateEngine.render(tokens));
             colors.add(color);
+            runs.add(lineRuns);
             rowKinds.add(RowKind.TEXT);
         }
     }
 
     /** Classic mode: unchanged per-Stat line building. */
     private static void buildClassicLines(MtssConfig.StatListConfig cfg,
-                                  List<String> lines, List<Integer> colors,
+                                  List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                                   List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
             // Every stat's behavior comes from its StatDefinition now — no
@@ -99,6 +104,7 @@ final class LineBuilder {
             if (cfg.useCustomColor) color = cfg.overrideColor;
             lines.add(text);
             colors.add(color);
+            runs.add(List.of(new TemplateEngine.ColoredRun(text, color))); // classic mode has no inline-color concept — always one flat run
             rowKinds.add(RowKind.TEXT);
         }
     }

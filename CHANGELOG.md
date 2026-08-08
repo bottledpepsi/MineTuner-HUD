@@ -5,6 +5,63 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Search filter in the stat toggle/reorder panel.** A search row under the
+  title (click to focus, type to filter, ✕ to clear) narrows the stat list
+  to names containing the typed text, auto-expanding only the categories
+  that have a match and hiding the rest — useful now that the panel spans
+  40+ stats across four categories and finding one by scrolling/expanding
+  by hand was getting tedious. Reordering (▲/▼) still operates against the
+  stat's real position in the full (unfiltered) category, so a filtered
+  view never scrambles `statOrder`. New `ReorderPanel.UiState` fields
+  (`search`, `searchFocused`) alongside the existing expand/scroll state;
+  keystrokes route through `MtssGuiScreen`'s existing keyPressed/charTyped
+  dispatch, gated on `reorderOpen && reorderUiState.isSearchFocused()`, the
+  same pattern RENAME and TEMPLATE_EDIT already use for their own text
+  buffers.
+- **`Looking At` and `Moving` stats** — `Looking At` shows the name of the
+  block or entity currently under the crosshair (empty/skipped when nothing's
+  targeted), reading vanilla's own `mc.hitResult` rather than raycasting
+  separately. `Moving` shows an on/off state for whether the player currently
+  has meaningful horizontal movement, using the same "moving" epsilon
+  `SpeedStat`'s coloring already treats as stationary, so the two never
+  disagree about what counts as "still". Both are `PER_FRAME`-cadence,
+  backed by a new `TargetingSource`, and available in both classic mode
+  (`Stat.LOOKING_AT` / `Stat.MOVING`) and Template Mode (`{lookingat}`,
+  `{moving}`).
+- **`{token:color=#RRGGBB}` Template Mode syntax** — colors a single token's
+  rendered value independently of the rest of the line, overriding both the
+  line's normal color and (for that one token) any threshold coloring. The
+  3-digit CSS shorthand (`#RGB`) is also accepted. Literal text and any
+  token without a `color=` modifier keep rendering in the line's usual
+  color, so existing templates are pixel-identical to before. Implemented
+  as a new `TemplateEngine.ColoredRun`/`renderRuns()` alongside the existing
+  flat `render()`; `LineCache` gained a parallel `runs` list threaded
+  through `LineBuilder` (classic-mode rows now produce a trivial one-run
+  list, so `MtssRenderer.drawRows` has one draw path for both modes) and
+  `MtssRenderer` draws each row as a left-to-right sequence of colored runs
+  instead of one string. `color=` combines with the decimals modifier via a
+  comma (`{cpu:0,color=#FF5555}`) the same way `graph=true` already does,
+  but doesn't combine *with* `graph=true` — a graph row uses its own
+  graph-native coloring, so `color=` only applies to a token rendering as
+  text.
+
+### Fixed
+- **Config saves are now atomic.** `MtssConfig.save()` used to write
+  straight into `mtss.json` via a truncating `Files.newBufferedWriter`,
+  which meant a crash, forced quit, or killed process mid-write left a
+  partial or empty file — and every configured list was gone on next
+  launch. Saves now go to a sibling `.tmp` file first, then
+  `Files.move(..., ATOMIC_MOVE)` the completed write over the real path
+  (falling back to a plain move on filesystems that don't support atomic
+  renames), so the file on disk is always either the previous complete
+  config or the new one, never a half-written one.
+- **Unparsable config is backed up instead of silently discarded.** Previously,
+  if `mtss.json` failed to parse (corruption, manual editing gone wrong, or a
+  crash from before the atomic-save fix above), `load()` fell straight
+  through to fresh defaults with no trace of what was lost. It now copies the
+  broken file aside as `mtss.json.bak-<timestamp>` before writing defaults,
+  so a bad config is recoverable rather than just gone.
+
 - **`{token:graph=true}` Template Mode syntax** — renders a graphable stat as
   a rolling history graph instead of text, reusing that stat's normal
   `GraphStyle` settings (the same ones classic mode's per-stat "Render as
