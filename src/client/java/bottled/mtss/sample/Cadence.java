@@ -1,13 +1,13 @@
 package bottled.mtss.sample;
 
-/** How often a {@link StatSource} runs. Makes the mod's existing implicit cadences explicit. */
+/** How often a { StatSource} runs. */
 public enum Cadence {
-    /** Every render frame — cheap reads (position, entity/chunk counts). */
+    /** Every render frame. */
     PER_FRAME,
-    /** At most once per game tick (~50ms) — values that only change on tick rate. */
+    /** At most once per game tick (~50ms). */
     PER_TICK,
-    /** At most once per 500ms — expensive reads (MXBean polls). Matches today's updateSlowMetrics() throttle. */
+    /** At most once per 500ms. */
     THROTTLED,
-    /** Never polled by the driver — pushed externally (e.g. a Mixin on a packet handler, like TPS today). Registered here for discoverability even though sample() fires elsewhere. */
+    /** Never polled by the driver. */
     EVENT_PUSHED
 }

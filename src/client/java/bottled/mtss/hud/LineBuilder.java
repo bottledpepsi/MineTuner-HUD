@@ -11,12 +11,13 @@ import java.util.List;
 
 final class LineBuilder {
 
-    private LineBuilder() {}
+    private LineBuilder() {
+    }
 
     public static void buildLines(MtssConfig.StatListConfig cfg,
                                   List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                                   List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
-        // Template mode is a separate path, opt-in per list. Classic mode's
+        // Template mode is a separate path, opt-in per list.
         // loop below is untouched either way.
         if (cfg.useTemplate) {
             buildTemplateLines(cfg, lines, colors, runs, graphEntries, rowKinds);
@@ -25,36 +26,18 @@ final class LineBuilder {
         buildClassicLines(cfg, lines, colors, runs, graphEntries, rowKinds);
     }
 
-    /**
-     * Template mode: renders {@code cfg.templateLines} through
-     * {@link TemplateEngine} instead of the classic per-Stat switch.
-     * <p>
-     * Normally every line is a TEXT row — a template line can mix multiple
-     * stats, so it doesn't map to a single Stat the way a graph row does.
-     * The one exception is a line whose entire content is a single
-     * {@code {token:graph=true}} token (see {@link TemplateEngine}'s class
-     * doc "Graph tokens" section): that becomes a GRAPH row instead, built
-     * with the exact same {@link #buildGraphEntry} helper classic mode uses,
-     * so a stat's graph looks identical whether it's toggled on via the
-     * per-stat settings panel or written as a template token.
-     * <p>
-     * Every TEXT line's overall color still comes from the list's override
-     * color (or white) — a token can additionally carry its own
-     * {@code color=#RRGGBB} modifier, in which case that token's run uses
-     * that color instead while the rest of the line keeps the base color
-     * (see {@link TemplateEngine#renderRuns}).
-     */
+    /** Template mode. */
     private static void buildTemplateLines(MtssConfig.StatListConfig cfg,
                                            List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                                            List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         int color = cfg.useCustomColor ? cfg.overrideColor : 0xFFFFFFFF;
         List<List<TemplateEngine.Token>> parsedLines = TemplateEngine.getParsedLines(cfg);
         for (List<TemplateEngine.Token> tokens : parsedLines) {
-            // A graph row requires the line to be exactly one graph-flagged
-            // stat token — no literal text, no other tokens alongside it.
+            // A graph row requires the line to be exactly one graph-flagged.
+            // stat token.
             if (tokens.size() == 1 && tokens.get(0) instanceof TemplateEngine.StatToken st && st.asGraph()) {
                 GraphEntry entry = buildGraphEntry(cfg, st.stat());
-                if (entry == null) continue; // no history yet, same as classic mode skipping unavailable stats
+                if (entry == null) continue; // no history yet, same as classic mode skipping unavailable stats.
                 graphEntries.add(entry);
                 rowKinds.add(RowKind.GRAPH);
                 continue;
@@ -67,61 +50,49 @@ final class LineBuilder {
         }
     }
 
-    /** Classic mode: unchanged per-Stat line building. */
+    /** Classic mode. */
     private static void buildClassicLines(MtssConfig.StatListConfig cfg,
-                                  List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
-                                  List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
+                                          List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
+                                          List<GraphEntry> graphEntries, List<RowKind> rowKinds) {
         for (MtssConfig.Stat stat : cfg.getVisibleStats()) {
-            // Every stat's behavior comes from its StatDefinition now — no
+            // Every stat's behavior comes from its StatDefinition now.
             // per-stat switch here, so a new stat needs no changes in this file.
             StatDefinition def = StatRegistry.get(stat);
 
-            // getStatSettings() lazily creates settings for any stat, so this
+            // getStatSettings() lazily creates settings for any stat, so this.
             // is safe even for stats with no settings entry written to disk.
             boolean asGraph = def.supportsGraph() && cfg.getStatSettings(stat).renderAsGraph;
 
             if (asGraph) {
                 GraphEntry entry = buildGraphEntry(cfg, stat);
-                // Nothing to draw yet (unsupported CPU, remote-server MSPT, etc.) — same as text mode skipping unavailable stats.
+                // Nothing to draw yet (unsupported CPU, remote-server MSPT, etc.).
                 if (entry == null) continue;
                 graphEntries.add(entry);
                 rowKinds.add(RowKind.GRAPH);
                 continue;
             }
 
-            // Classic text row: format + color both come straight from the
+            // Classic text row.
             // stat's own definition, so this block never needs a new case.
             int decimals = cfg.getStatSettings(stat).decimals;
-            String text  = def.format(decimals);
-            int    color = def.color(cfg.getThreshold(stat));
+            String text = def.format(decimals);
+            int color = def.color(cfg.getThreshold(stat));
             if (text == null || text.isEmpty()) continue;
-            // Strip the "Label: " prefix when showPrefix is off
+            // Strip the "Label.
             if (!cfg.getStatSettings(stat).showPrefix) {
                 int sep = text.indexOf(": ");
                 if (sep >= 0) text = text.substring(sep + 2);
             }
-            // Per-list color override replaces threshold coloring
+            // Per-list color override replaces threshold coloring.
             if (cfg.useCustomColor) color = cfg.overrideColor;
             lines.add(text);
             colors.add(color);
-            runs.add(List.of(new TemplateEngine.ColoredRun(text, color))); // classic mode has no inline-color concept — always one flat run
+            runs.add(List.of(new TemplateEngine.ColoredRun(text, color))); // classic mode has no inline-color concept.
             rowKinds.add(RowKind.TEXT);
         }
     }
 
-    /**
-     * Builds a graph row's full {@link GraphEntry} for one stat: history,
-     * smoothing, scale bounds, peak markers, label, and threshold color.
-     * Shared by classic mode's per-stat "Render as Graph" toggle and template
-     * mode's {@code {token:graph=true}} tokens, so a stat's graph looks and
-     * behaves identically no matter which mode requested it — both read the
-     * same lazily-created {@code cfg.getStatSettings(stat)} (decimals,
-     * GraphStyle) and the same {@code cfg.getThreshold(stat)}.
-     * <p>
-     * Returns {@code null} when the stat has no history yet (unsupported
-     * CPU, remote-server MSPT, etc.) — callers skip the row, same as text
-     * mode skipping unavailable stats.
-     */
+    /** Builds a graph row's full { GraphEntry} for one stat. */
     private static GraphEntry buildGraphEntry(MtssConfig.StatListConfig cfg, MtssConfig.Stat stat) {
         StatDefinition def = StatRegistry.get(stat);
 
@@ -132,29 +103,29 @@ final class LineBuilder {
         float[] rawHistory = def.history();
         if (rawHistory.length == 0) return null;
 
-        // Smoothed into a separate array each frame; the ring buffer itself is never mutated.
+        // Smoothed into a separate array each frame.
         float[] displayHistory = applySmoothing(rawHistory, style.smoothing);
 
         // Current-value color, also used for CURRENT_THRESHOLD mode and the label color.
-        // Stats with no threshold of their own (MSPT/Speed) ignore the
-        // custom argument or resolve it to a related stat's threshold —
-        // see their StatDefinition for specifics.
+        // Stats with no threshold of their own (MSPT/Speed) ignore the.
+        // custom argument or resolve it to a related stat's threshold.
+        // their StatDefinition for specifics.
         int currentColor = def.color(cfg.getThreshold(stat));
-        // Per-list color override beats everything: override > per-stat threshold > default.
+        // Per-list color override beats everything.
         if (cfg.useCustomColor) currentColor = cfg.overrideColor;
 
-        // Same formatted string text mode would show, so switching a stat
+        // Same formatted string text mode would show, so switching a stat.
         // between text and graph doesn't change how the number reads.
         String label = def.format(decimals);
         if (!statSettings.showPrefix) {
             int sep = label.indexOf(": ");
             if (sep >= 0) label = label.substring(sep + 2);
         }
-        // MSPT can go unavailable mid-session (e.g. leaving singleplayer) while
-        // its history still has old samples — fall back to the last raw value
-        // instead of showing a blank label. Routed through formatAxisValue (the
-        // same helper used for minValueLabel/maxValueLabel below) instead of
-        // printing the raw float, so the fallback still respects the stat's
+        // MSPT can go unavailable mid-session (e.g.
+        // its history still has old samples.
+        // instead of showing a blank label.
+        // same helper used for minValueLabel/maxValueLabel below) instead of.
+        // printing the raw float, so the fallback still respects the stat's.
         // normal decimal formatting.
         if (label.isEmpty()) label = def.formatAxisValue(rawHistory[rawHistory.length - 1]);
 
@@ -162,20 +133,23 @@ final class LineBuilder {
         float scaleMin, scaleMax;
         if (style.autoScale) {
             float rawMin = Float.MAX_VALUE, rawMax = -Float.MAX_VALUE;
-            for (float v : displayHistory) { if (v < rawMin) rawMin = v; if (v > rawMax) rawMax = v; }
+            for (float v : displayHistory) {
+                if (v < rawMin) rawMin = v;
+                if (v > rawMax) rawMax = v;
+            }
             float range = rawMax - rawMin;
-            // 10% headroom so the line doesn't touch the plot edges; fixed +/-1 pad for a flat history.
+            // 10% headroom so the line doesn't touch the plot edges.
             float pad = range > 1e-4f ? range * 0.10f : 1f;
             scaleMin = rawMin - pad;
             scaleMax = rawMax + pad;
         } else {
-            // Fixed mode: just the user's configured numbers, no rescale math per frame.
+            // Fixed mode.
             scaleMin = style.fixedMin;
             scaleMax = style.fixedMax;
         }
-        if (scaleMax - scaleMin < 1e-4f) scaleMax = scaleMin + 1f; // guard divide-by-zero below
+        if (scaleMax - scaleMin < 1e-4f) scaleMax = scaleMin + 1f; // guard divide-by-zero below.
 
-        // Highest/lowest visible sample, computed on the smoothed series so
+        // Highest/lowest visible sample, computed on the smoothed series so.
         // the marker matches what's drawn.
         int peakMinIdx = 0, peakMaxIdx = 0;
         for (int i = 1; i < displayHistory.length; i++) {
@@ -186,7 +160,7 @@ final class LineBuilder {
         String minValueLabel = rawHistory.length >= 2 ? def.formatAxisValue(displayHistory[peakMinIdx]) : "";
         String maxValueLabel = rawHistory.length >= 2 ? def.formatAxisValue(displayHistory[peakMaxIdx]) : "";
 
-        // Same threshold as currentColor above, carried onto the entry so
+        // Same threshold as currentColor above, carried onto the entry so.
         // PER_SEGMENT_THRESHOLD coloring uses the same cutoffs for every sample.
         MtssConfig.ThresholdSettings entryThreshold = def.supportsThreshold()
                 ? cfg.getThreshold(stat) : null;
@@ -195,11 +169,7 @@ final class LineBuilder {
                 minValueLabel, maxValueLabel, scaleMin, scaleMax, peakMinIdx, peakMaxIdx, style, entryThreshold);
     }
 
-    /**
-     * Moving average over the last {@code window} samples, into a new array
-     * (input is never mutated). window &lt;= 1 returns the input unchanged.
-     * Runs once per graph per frame, not per pixel-column.
-     */
+    /** Moving average over the last { window} samples, into a new array (input is. */
     private static float[] applySmoothing(float[] raw, int window) {
         if (window <= 1 || raw.length < 2) return raw;
         float[] out = new float[raw.length];

@@ -5,16 +5,54 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Cloth Config screen** — a searchable, single-scroll alternative to the
+  custom in-game editor, covering every field in `mtss.json` at once,
+  including several that previously had no in-game control anywhere:
+  - **General**: overlay enabled.
+  - **Hardware Sensors** (new UI — previously config-file-only, see the
+    `hardwareSensorsEnabled` entry below in this section): enabled toggle,
+    LHM base URL (validated as a proper `http(s)://` URL before it's
+    accepted), poll interval, and per-request timeout.
+  - **GUI Tuning** (new UI, new config fields — see below): the editor's
+    max visible rows, row height, panel widths, panel padding, drag-snap
+    threshold, and text-scale bounds.
+  - **Lists**: one collapsible sub-category per existing list (position,
+    anchor corner, snap behavior, background/shadow/color/text-scale,
+    Template Mode lines), nested one level deeper into a per-stat
+    sub-category for every stat's enabled/decimals/prefix/graph-style/
+    threshold settings — the same settings `StatSettingsPanel` and
+    `ThresholdPanel` expose in the custom GUI, just reachable without
+    clicking through each stat individually. Rebuilt fresh every time the
+    screen opens (lists are user-created at runtime, so this can't be a
+    static one-shot tree), and every value-holding entry has a working
+    per-entry **Reset** button (`setDefaultValue`), matching whatever that
+    field's built-in default is.
+  - Reachable three ways, all opening the identical screen against the
+    same live config: **ModMenu** (new `MtssModMenuIntegration`
+    entrypoint, if the player has ModMenu installed), the new
+    **`/mtss config`** command (works without ModMenu), and a second row
+    (**"Open Full Config"**) in the custom GUI's empty-space right-click
+    menu.
+  - New dependency: `cloth-config-fabric` (hard dependency — the mod now
+    references its classes directly). `modmenu` is a `compileOnly`/
+    `suggests` soft dependency, not bundled.
+- **New configurable GUI/hardware-sensor tuning fields on `MtssConfig`**:
+  `reorderPanelMaxVisibleRows`, `panelRowHeight`, `panelWidth`,
+  `widePanelWidth`, `panelPadding`, `dragSnapThresholdPx`,
+  `textScaleMin`/`textScaleMax`, `hardwareSensorPollIntervalMs`,
+  `hardwareSensorRequestTimeoutMs` — see "Changed" below for what each one
+  replaces and how live updates propagate.
 - **Optional hardware sensor stats (`GPU Temp`, `GPU Clock`, `GPU Usage`,
   `VRAM Used`), via LibreHardwareMonitor.** Off by default, opt-in via
-  `hardwareSensorsEnabled` + `hardwareSensorBaseUrl` in `mtss.json` (no GUI
-  toggle yet — same config-file-only precedent as `GraphStyle`). MTSS
+  `hardwareSensorsEnabled` + `hardwareSensorBaseUrl` in `mtss.json`, or the
+  new Cloth Config screen's Hardware Sensors category (see above). MTSS
   doesn't talk to any GPU driver, SDK, or shared memory itself; it polls
   [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)'s
   built-in Remote Web Server (a plain loopback HTTP JSON endpoint LHM can
   optionally serve) via the JDK's own `HttpClient` — no native bindings, no
   new required dependency. Polling runs on a new dedicated background
-  thread (`HardwareSensorPoller`, 1.5s cadence, ~300ms request timeout) —
+  thread (`HardwareSensorPoller`, 1.5s cadence and ~300ms request timeout
+  by default, both now configurable — see "Changed" above) —
   never the render thread, since an HTTP round-trip is far less predictable
   than the existing MXBean-based THROTTLED sources. Every failure mode (LHM
   not installed/running, remote web server off, wrong port, firewall,
@@ -159,6 +197,36 @@ All notable changes to MineTuner Statistics Server are documented in this file.
     scope for this pass — this is a "one line at a time" flow.
 
 ### Changed
+- **Several previously-hardcoded UI/behavior constants are now configurable**
+  (via `mtss.json` directly, or the new Cloth Config screen — see "Added"
+  above). All default to the exact value they replace, so nothing about the
+  editor's look or hardware-sensor behavior changes for anyone who doesn't
+  explicitly edit one:
+  - `ReorderPanel.MAX_VISIBLE_ROWS` (was `16`) → `reorderPanelMaxVisibleRows`.
+  - `PanelChrome.ROW_H` / `PANEL_W` / `PANEL_PAD` / `WIDE_PANEL_W` (were
+    `13` / `160` / `4` / `216`) → `panelRowHeight` / `panelWidth` /
+    `panelPadding` / `widePanelWidth`. These were `static final` fields
+    statically imported at ~340 call sites across the panel package;
+    converted to plain `static` fields kept in sync with config via a new
+    `PanelChrome.syncFromConfig` (and a matching `ReorderPanel.syncFromConfig`
+    for its own locally-aliased copies), so every existing call site keeps
+    compiling and rendering unchanged, but now reflects live config.
+  - `MtssGuiScreen.SNAP_THRESHOLD` (was `6`) → `dragSnapThresholdPx`.
+  - `ColorScalePanel`'s hardcoded `0.5f`/`2.0f` text-scale bounds →
+    `textScaleMin`/`textScaleMax`.
+  - `HardwareSensorPoller.POLL_INTERVAL_MS` (was `1500`) →
+    `hardwareSensorPollIntervalMs`, now re-read live every poll cycle (a
+    config change applies on the very next sleep, no restart).
+    `HardwareSensorPoller.REQUEST_TIMEOUT` (was `300`) →
+    `hardwareSensorRequestTimeoutMs`; the per-request timeout is likewise
+    read live each call, but the `HttpClient`'s own connect timeout is
+    baked in at construction, so a changed value there triggers a clean
+    poller restart (`HardwareSensorPoller.reconcileWithConfig`) instead.
+  - All of the above are validated on every config load and save
+    (`MtssConfig.clampGuiTuning`) — e.g. a zero/negative row height or an
+    inverted text-scale range can't make it into a running config, whether
+    it came from hand-editing `mtss.json` or an extreme Cloth Config value.
+
 - **Right-click menu redesigned.** The per-list context menu was a flat list
   of 8 rows (Reorder/Edit Template, Rename, Background, Shadow, Color/Scale,
   Duplicate, Delete, Template Mode); it's now 4 grouped rows with icons:

@@ -7,7 +7,18 @@ import bottled.mtss.stat.StatDefinition;
 /** World difficulty (peaceful/easy/normal/hard). */
 public final class DifficultyStat implements StatDefinition {
 
-    @Override public MtssConfig.Stat key() { return MtssConfig.Stat.DIFFICULTY; }
-    @Override public String token() { return "difficulty"; }
-    @Override public String format(int decimals) { return MtssDataHolder.getFormattedDifficulty(); }
+    @Override
+    public MtssConfig.Stat key() {
+        return MtssConfig.Stat.DIFFICULTY;
+    }
+
+    @Override
+    public String token() {
+        return "difficulty";
+    }
+
+    @Override
+    public String format(int decimals) {
+        return MtssDataHolder.getFormattedDifficulty();
+    }
 }

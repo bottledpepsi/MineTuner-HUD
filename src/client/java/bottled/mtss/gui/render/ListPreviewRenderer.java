@@ -10,19 +10,13 @@ import net.minecraft.client.resources.language.I18n;
 
 public final class ListPreviewRenderer {
 
-    private ListPreviewRenderer() {}
-
     private static final int SNAP_LINE_COL = 0xBBFFFFFF;
-    private static final int SNAP_HIT_COL  = 0xFFFFAA00;
-    private static final int SNAP_TICK     = 6;
+    private static final int SNAP_HIT_COL = 0xFFFFAA00;
+    private static final int SNAP_TICK = 6;
+    private ListPreviewRenderer() {
+    }
 
-    /**
-     * Draws one list's box: background, hover/drag outline, and its rows
-     * (or the "no stats configured" placeholder if it has none).
-     *
-     * @param isBeingDragged whether this list is the one currently being dragged, in which case
-     *                       (dragLiveX, dragLiveY) is used as its position instead of its anchor.
-     */
+    /** Draws one list's box. */
     public static void drawList(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                                 MtssConfig.StatListConfig lc, int mx, int my,
                                 boolean isBeingDragged, int dragLiveX, int dragLiveY,
@@ -30,11 +24,11 @@ public final class ListPreviewRenderer {
         LineCache cache = LineCache.getCachedLines(lc);
         boolean empty = cache.rowKinds().isEmpty();
 
-        // For the empty placeholder, use the old single-line sizing (no
-        // LineCache row to measure) — MtssRenderer.render() skips empty lists
-        // entirely, so there's no scaled size to match here. Otherwise use
-        // LineCache.boxW/boxH scaled by textScale — the same math
-        // MtssRenderer.render() uses, so the preview, hit-boxes, and
+        // For the empty placeholder, use the old single-line sizing (no.
+        // LineCache row to measure).
+        // entirely, so there's no scaled size to match here.
+        // LineCache.boxW/boxH scaled by textScale.
+        // MtssRenderer.render() uses, so the preview, hit-boxes, and.
         // drag/anchor math all agree with the live overlay.
         int lineH = font.lineHeight + 1;
         float scale = lc.textScale <= 0f ? 1f : lc.textScale;
@@ -54,7 +48,8 @@ public final class ListPreviewRenderer {
             wy = Math.max(0, Math.min(screenH - boxH, dragLiveY));
         } else {
             int[] pos = ListPositioner.getPosition(lc, screenW, screenH, boxW, boxH);
-            wx = pos[0]; wy = pos[1];
+            wx = pos[0];
+            wy = pos[1];
         }
 
         if (lc.showBackground || empty) {
@@ -71,8 +66,8 @@ public final class ListPreviewRenderer {
         } else if (scale == 1f) {
             MtssRenderer.drawRows(g, font, cache, wx + 2, wy + 2, shadow);
         } else {
-            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0) —
-            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s
+            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0).
+            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s.
             // scaled branch, so the preview matches the live overlay exactly.
             var matrices = g.pose();
             matrices.pushMatrix();
@@ -87,7 +82,7 @@ public final class ListPreviewRenderer {
     public static void drawSnapLines(GuiGraphicsExtractor g, int screenW, int screenH,
                                      MtssConfig.SnapX dragSnapX, MtssConfig.SnapY dragSnapY,
                                      int dragLiveX, int dragLiveY, int dragBoxW, int dragBoxH) {
-        int cx = screenW  / 2;
+        int cx = screenW / 2;
         int cy = screenH / 2;
         if (dragSnapX != MtssConfig.SnapX.NONE) {
             g.fill(cx, 0, cx + 1, screenH, SNAP_LINE_COL);

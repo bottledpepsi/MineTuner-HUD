@@ -11,27 +11,38 @@ import java.util.Map;
 public record LineCache(List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                         List<LineCache.GraphEntry> graphEntries, List<LineCache.RowKind> rowKinds) {
 
-    // `lines`/`colors` stay the flat single-color view every existing reader
-    // (width measurement, drag-preview rendering, getListBounds sizing) was
-    // built against — `runs` is parallel to them (same index = same text
-    // row) and only carries information beyond "one flat color" when a
-    // template line actually used an inline color=# modifier; the renderer
-    // uses `runs` to draw, everything else keeps reading `lines`/`colors`
-    // unchanged. `lines.get(i)` is always the same characters as
-    // `runs.get(i)` joined together, so anything measuring wrapped text
+    // `lines`/`colors` stay the flat single-color view every existing reader.
+    // (width measurement, drag-preview rendering, getListBounds sizing) was.
+    // built against.
+    // row) and only carries information beyond "one flat color" when a.
+    // template line actually used an inline color=# modifier.
+    // uses `runs` to draw, everything else keeps reading `lines`/`colors`.
+    // unchanged.
+    // `runs.get(i)` joined together, so anything measuring wrapped text.
     // width doesn't need to change just because coloring got richer.
 
-    public record GraphEntry(MtssConfig.Stat stat, float[] rawHistory, float[] displayHistory,
-                             int color, String label, String minValueLabel, String maxValueLabel,
-                             float scaleMin, float scaleMax, int peakMinIdx, int peakMaxIdx,
-                             MtssConfig.GraphStyle style, MtssConfig.ThresholdSettings threshold) {}
-
-    /** Which underlying list a given display row pulls from. */
-    public enum RowKind { TEXT, GRAPH }
-
-    /** Fallback size for the empty-list placeholder; real graphs size themselves from GraphStyle.width/height. */
+    /** Fallback size for the empty-list placeholder. */
     public static final int GRAPH_W = 80;
     public static final int GRAPH_H = 28;
+    private static final Map<Integer, LineCache> FRAME_CACHE = new HashMap<>();
+
+    /** Advances the cache generation. */
+    public static void tickCache() {
+        FRAME_CACHE.clear();
+    }
+
+    /** Returns cached lines for this list, building them if needed this frame. */
+    public static LineCache getCachedLines(MtssConfig.StatListConfig cfg) {
+        return FRAME_CACHE.computeIfAbsent(cfg.id, id -> {
+            List<String> lines = new ArrayList<>();
+            List<Integer> colors = new ArrayList<>();
+            List<List<TemplateEngine.ColoredRun>> runs = new ArrayList<>();
+            List<GraphEntry> graphEntries = new ArrayList<>();
+            List<RowKind> rowKinds = new ArrayList<>();
+            LineBuilder.buildLines(cfg, lines, colors, runs, graphEntries, rowKinds);
+            return new LineCache(lines, colors, runs, graphEntries, rowKinds);
+        });
+    }
 
     public int boxW(net.minecraft.client.gui.Font font) {
         int textW = lines.stream().mapToInt(font::width).max().orElse(0);
@@ -40,6 +51,8 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
                 .max().orElse(GRAPH_W);
         return Math.max(textW, graphW) + 4;
     }
+
+    // separator
 
     public int boxH(net.minecraft.client.gui.Font font) {
         int lineH = font.lineHeight + 1;
@@ -55,25 +68,12 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
         return h;
     }
 
-    // ── Frame cache ─────────────────────────────────────────────────────────
+    /** Which underlying list a given display row pulls from. */
+    public enum RowKind {TEXT, GRAPH}
 
-    private static final Map<Integer, LineCache> FRAME_CACHE = new HashMap<>();
-
-    /** Advances the cache generation — call once per frame. */
-    public static void tickCache() {
-        FRAME_CACHE.clear();
-    }
-
-    /** Returns cached lines for this list, building them if needed this frame. */
-    public static LineCache getCachedLines(MtssConfig.StatListConfig cfg) {
-        return FRAME_CACHE.computeIfAbsent(cfg.id, id -> {
-            List<String>     lines        = new ArrayList<>();
-            List<Integer>    colors       = new ArrayList<>();
-            List<List<TemplateEngine.ColoredRun>> runs = new ArrayList<>();
-            List<GraphEntry> graphEntries = new ArrayList<>();
-            List<RowKind>    rowKinds     = new ArrayList<>();
-            LineBuilder.buildLines(cfg, lines, colors, runs, graphEntries, rowKinds);
-            return new LineCache(lines, colors, runs, graphEntries, rowKinds);
-        });
+    public record GraphEntry(MtssConfig.Stat stat, float[] rawHistory, float[] displayHistory,
+                             int color, String label, String minValueLabel, String maxValueLabel,
+                             float scaleMin, float scaleMax, int peakMinIdx, int peakMaxIdx,
+                             MtssConfig.GraphStyle style, MtssConfig.ThresholdSettings threshold) {
     }
 }

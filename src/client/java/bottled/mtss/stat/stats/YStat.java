@@ -4,15 +4,26 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/**
- * Your block-rounded Y coordinate on its own, primarily for Template Mode's
- * {@code {y}} token so a line can be built like {@code "{x} {y} {z}"} instead
- * of the fixed "XYZ: x / y / z" layout {@link CoordsStat} gives.
- */
+/** Your block-rounded Y coordinate on its own, primarily for Template Mode's {. */
 public final class YStat implements StatDefinition {
 
-    @Override public MtssConfig.Stat key() { return MtssConfig.Stat.Y; }
-    @Override public String token() { return "y"; }
-    @Override public String format(int decimals) { return MtssDataHolder.getFormattedY(); }
-    @Override public String rawValue(int decimals) { return MtssDataHolder.getRawY(); }
+    @Override
+    public MtssConfig.Stat key() {
+        return MtssConfig.Stat.Y;
+    }
+
+    @Override
+    public String token() {
+        return "y";
+    }
+
+    @Override
+    public String format(int decimals) {
+        return MtssDataHolder.getFormattedY();
+    }
+
+    @Override
+    public String rawValue(int decimals) {
+        return MtssDataHolder.getRawY();
+    }
 }

@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 public interface GuiPanel {
 
-    /** Draws this panel at its resolved position, given the current mouse position for hover highlighting. */
+    /** Draws this panel at its resolved position, given the current mouse position. */
     void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font, int mx, int my);
 
     /** Whether (mx, my) falls inside this panel's bounds. */

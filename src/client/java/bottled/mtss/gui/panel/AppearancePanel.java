@@ -5,23 +5,21 @@ import bottled.mtss.gui.render.PanelChrome;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.language.I18n;
 
-import static bottled.mtss.gui.render.PanelChrome.PANEL_PAD;
-import static bottled.mtss.gui.render.PanelChrome.PANEL_W;
-import static bottled.mtss.gui.render.PanelChrome.ROW_H;
+import static bottled.mtss.gui.render.PanelChrome.*;
 
 
 public final class AppearancePanel {
 
-    private AppearancePanel() {}
-
-    // ── Row indices ────────────────────────────────────────────────────────
-    public static final int AP_RENAME        = 0;
-    public static final int AP_BG            = 1;
-    public static final int AP_SHADOW        = 2;
-    public static final int AP_COLOR_SCALE   = 3;
+    // separator
+    public static final int AP_RENAME = 0;
+    public static final int AP_BG = 1;
+    public static final int AP_SHADOW = 2;
+    public static final int AP_COLOR_SCALE = 3;
     public static final int AP_TEMPLATE_MODE = 4;
-    public static final int AP_BACK          = 5;
-    public static final int AP_COUNT         = 6;
+    public static final int AP_BACK = 5;
+    public static final int AP_COUNT = 6;
+    private AppearancePanel() {
+    }
 
     public static int panelHeight() {
         return PANEL_PAD * 2 + ROW_H * AP_COUNT;
@@ -30,20 +28,20 @@ public final class AppearancePanel {
     public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                               int mx, int my, int menuX, int menuY, int screenW, int screenH,
                               MtssConfig.StatListConfig lc) {
-        String onOff_bg  = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
-                                              : " §c" + I18n.get("gui.mtss.menu.off");
-        String onOff_sh  = lc.textShadow     ? " §a" + I18n.get("gui.mtss.menu.on")
-                                              : " §c" + I18n.get("gui.mtss.menu.off");
-        String onOff_tpl = lc.useTemplate    ? " §a" + I18n.get("gui.mtss.menu.on")
-                                              : " §c" + I18n.get("gui.mtss.menu.off");
+        String onOff_bg = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
+                : " §c" + I18n.get("gui.mtss.menu.off");
+        String onOff_sh = lc.textShadow ? " §a" + I18n.get("gui.mtss.menu.on")
+                : " §c" + I18n.get("gui.mtss.menu.off");
+        String onOff_tpl = lc.useTemplate ? " §a" + I18n.get("gui.mtss.menu.on")
+                : " §c" + I18n.get("gui.mtss.menu.off");
 
         String[] labels = new String[AP_COUNT];
-        labels[AP_RENAME]        = "§e" + I18n.get("gui.mtss.menu.rename");
-        labels[AP_BG]            = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
-        labels[AP_SHADOW]        = "§f" + I18n.get("gui.mtss.menu.shadow")     + onOff_sh;
-        labels[AP_COLOR_SCALE]   = "§f" + I18n.get("gui.mtss.menu.color_scale") + " »";
+        labels[AP_RENAME] = "§e" + I18n.get("gui.mtss.menu.rename");
+        labels[AP_BG] = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
+        labels[AP_SHADOW] = "§f" + I18n.get("gui.mtss.menu.shadow") + onOff_sh;
+        labels[AP_COLOR_SCALE] = "§f" + I18n.get("gui.mtss.menu.color_scale") + " »";
         labels[AP_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOff_tpl;
-        labels[AP_BACK]          = "§7" + I18n.get("gui.mtss.stat_settings.back");
+        labels[AP_BACK] = "§7" + I18n.get("gui.mtss.stat_settings.back");
 
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelHeight(), screenH);
@@ -56,7 +54,7 @@ public final class AppearancePanel {
         return PanelChrome.isInsidePanel(mx, my, px, py, PANEL_W, panelH);
     }
 
-    /** Returns the clicked row index (AP_* constant), or -1 if the click missed every row. */
+    /** Returns the clicked row index (AP_* constant), or -1 if the click missed. */
     public static int rowAt(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW), py = PanelChrome.clampY(menuY, panelHeight(), screenH);
         if (mx < px || mx > px + PANEL_W) return -1;

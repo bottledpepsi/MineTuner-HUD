@@ -15,7 +15,6 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -27,7 +26,7 @@ public class MtssClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(MtssMod.MOD_ID, "main"));
 
-    /** Opens the editor. No default key — bind it in Controls. */
+    /** Opens the editor. */
     private static final KeyMapping OPEN_GUI_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.mtss.open_gui",
@@ -36,7 +35,7 @@ public class MtssClient implements ClientModInitializer {
                     CATEGORY
             ));
 
-    /** Shows/hides the overlay without opening the editor. Unbound by default. */
+    /** Shows/hides the overlay without opening the editor. */
     private static final KeyMapping TOGGLE_OVERLAY_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.mtss.toggle_overlay",
@@ -49,9 +48,9 @@ public class MtssClient implements ClientModInitializer {
     public void onInitializeClient() {
         MtssConfig.getInstance();
 
-        // Opt-in only: startIfEnabled() checks hardwareSensorsEnabled itself
-        // and is a no-op (doesn't even create the thread) when it's false,
-        // so a user who hasn't turned this on sees zero behavior change —
+        // Opt-in only.
+        // and is a no-op (doesn't even create the thread) when it's false,.
+        // so a user who hasn't turned this on sees zero behavior change.
         // no thread, no startup cost, no network activity.
         HardwareSensorPoller.startIfEnabled();
 

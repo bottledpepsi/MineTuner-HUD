@@ -3,14 +3,15 @@ package bottled.mtss.hud;
 
 final class ColorMath {
 
-    private ColorMath() {}
+    private ColorMath() {
+    }
 
     /** Replaces an ARGB color's alpha channel, keeping RGB intact. */
     static int withAlpha(int argb, int alpha) {
         return (argb & 0x00FFFFFF) | (alpha << 24);
     }
 
-    /** Lightens an RGB color's channels toward white by ~35%, used for the stroke line's brighter cap. */
+    /** Lightens an RGB color's channels toward white by ~35%, used for the stroke. */
     static int brighten(int argb) {
         int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
         r = Math.min(255, r + (255 - r) * 35 / 100);

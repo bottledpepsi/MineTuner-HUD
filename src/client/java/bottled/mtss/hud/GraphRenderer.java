@@ -8,16 +8,17 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 final class GraphRenderer {
 
-    private GraphRenderer() {}
+    private GraphRenderer() {
+    }
 
     static void drawGraph(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
-                                  GraphEntry entry, int x, int y, int w, int h) {
+                          GraphEntry entry, int x, int y, int w, int h) {
         MtssConfig.GraphStyle style = entry.style();
         float[] display = entry.displayHistory();
         int n = display.length;
 
-        // ── 1. Background panel ──────────────────────────────────────────
-        // Separate from the list's own showBackground, so the graph still
+        // separator
+        // Separate from the list's own showBackground, so the graph still.
         // reads as its own widget even when the list background is off.
         if (style.showPanelBackground) {
             graphics.fill(x, y, x + w, y + h, 0x30FFFFFF);
@@ -27,13 +28,13 @@ final class GraphRenderer {
             graphics.outline(x, y, w, h, 0x40FFFFFF);
         }
 
-        int plotW = w - 2;   // inset 1px on each side to stay inside the border
+        int plotW = w - 2;   // inset 1px on each side to stay inside the border.
         int plotH = h - 2;
         int plotX = x + 1;
         int plotY = y + 1;
         if (plotW <= 0 || plotH <= 0 || n == 0) return;
 
-        // ── 2. Gridlines (drawn behind the data) ──────────────────────────
+        // separator
         if (style.showGridlines && plotH >= 12) {
             for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
                 int gy = plotY + Math.round(plotH * (1f - frac));
@@ -43,10 +44,10 @@ final class GraphRenderer {
             }
         }
 
-        // ── 3 & 4. Filled area (gradient-faded) + interpolated stroke line ──
+        // separator
         drawPlotLine(graphics, entry, style, display, n, plotX, plotY, plotW, plotH);
 
-        // ── Peak/min markers ──────────────────────────────────────────────
+        // separator
         if (style.showPeakMarkers && n >= 2 && plotW >= 10) {
             float peakMaxTopY = lerpTopY(entry, n, plotH, entry.peakMaxIdx());
             float peakMinTopY = lerpTopY(entry, n, plotH, entry.peakMinIdx());
@@ -54,7 +55,7 @@ final class GraphRenderer {
             drawPeakMarker(graphics, entry.peakMinIdx(), n, plotX, plotY, plotW, peakMinTopY, 0xFFAAAAAA);
         }
 
-        // ── Value readout ─────────────────────────────────────────────────
+        // separator
         String label = entry.label();
         if (style.valueDisplay != MtssConfig.GraphValueDisplay.NONE && !label.isEmpty()) {
             int labelW = font.width(label);
@@ -79,38 +80,38 @@ final class GraphRenderer {
         float scaleMin = entry.scaleMin(), scaleMax = entry.scaleMax();
         float range = Math.max(1e-4f, scaleMax - scaleMin);
 
-        // Precompute each column's interpolated top-Y and nearest sample index
+        // Precompute each column's interpolated top-Y and nearest sample index.
         // once, shared by the fill and stroke passes below.
         int[] colTopY = new int[plotW];
         int[] colSampleIdx = new int[plotW];
         for (int col = 0; col < plotW; col++) {
-            // Fractional position along the sample series this column represents,
+            // Fractional position along the sample series this column represents,.
             // interpolated between the two nearest samples.
             float t = (n <= 1) ? 0f : (col / (float) Math.max(1, plotW - 1)) * (n - 1);
             int i0 = (int) Math.floor(t);
             int i1 = Math.min(n - 1, i0 + 1);
             float frac = t - i0;
             float v = display[i0] + (display[i1] - display[i0]) * frac;
-            float norm = Math.max(0f, Math.min(1f, (v - scaleMin) / range)); // 0..1, clamped
+            float norm = Math.max(0f, Math.min(1f, (v - scaleMin) / range)); // 0.1, clamped.
             int barH = Math.max(1, Math.round(norm * (plotH - 1)));
             colTopY[col] = plotY + plotH - barH;
             colSampleIdx[col] = Math.round(t);
         }
 
-        int baseY = plotY + plotH; // exclusive bottom, shared by every column
+        int baseY = plotY + plotH; // exclusive bottom, shared by every column.
 
-        // Precompute each column's fill color once, so the run-merging loops
+        // Precompute each column's fill color once, so the run-merging loops.
         // below don't re-invoke the threshold/gradient lookup per column.
         int[] colColor = new int[plotW];
         for (int col = 0; col < plotW; col++) {
             colColor[col] = colorForColumn(entry, style, colSampleIdx[col]);
         }
 
-        // ── Filled area (2-band gradient-faded) ──────────────────────────
-        // Adjacent columns sharing the same (topY, color) — common, since
-        // norm rounds to integer pixel heights and color only changes at
-        // threshold boundaries — are merged into one wide fill() instead of
-        // many single-pixel ones. This is the main cost of graph rendering:
+        // separator
+        // Adjacent columns sharing the same (topY, color).
+        // norm rounds to integer pixel heights and color only changes at.
+        // threshold boundaries.
+        // many single-pixel ones.
         // with several graphs on screen, per-column fills add up fast.
         int runStart = 0;
         while (runStart < plotW) {
@@ -132,8 +133,8 @@ final class GraphRenderer {
             runStart = runEnd;
         }
 
-        // ── Stroke: a brighter 1px cap along the top edge ─────────────────
-        // Second pass so it draws on top of neighboring fills. Same run-merging.
+        // separator
+        // Second pass so it draws on top of neighboring fills.
         int[] strokeColor = new int[plotW];
         for (int col = 0; col < plotW; col++) {
             strokeColor[col] = ColorMath.withAlpha(ColorMath.brighten(colColor[col]), 0xFF);
@@ -177,7 +178,8 @@ final class GraphRenderer {
             case FIXED_ACCENT -> style.accentColor;
             case PER_SEGMENT_THRESHOLD -> StatRegistry.get(entry.stat())
                     .colorFor(entry.displayHistory()[sampleIdx], entry.threshold());
-            case GRADIENT -> gradientColorForValue(entry.displayHistory()[sampleIdx], entry.scaleMin(), entry.scaleMax());
+            case GRADIENT ->
+                    gradientColorForValue(entry.displayHistory()[sampleIdx], entry.scaleMin(), entry.scaleMax());
         };
     }
 
@@ -185,7 +187,7 @@ final class GraphRenderer {
         float range = scaleMax - scaleMin;
         float t = range > 1e-4f ? (value - scaleMin) / range : 0.5f;
         t = Math.max(0f, Math.min(1f, t));
-        // 4-stop gradient: blue (0) -> green (1/3) -> yellow (2/3) -> red (1)
+        // 4-stop gradient.
         int[][] stops = {{0x40, 0x80, 0xFF}, {0x55, 0xFF, 0x55}, {0xFF, 0xFF, 0x55}, {0xFF, 0x55, 0x55}};
         float scaled = t * (stops.length - 1);
         int idx = Math.min(stops.length - 2, (int) scaled);
