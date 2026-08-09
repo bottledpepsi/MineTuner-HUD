@@ -5,6 +5,33 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Optional hardware sensor stats (`GPU Temp`, `GPU Clock`, `GPU Usage`,
+  `VRAM Used`), via LibreHardwareMonitor.** Off by default, opt-in via
+  `hardwareSensorsEnabled` + `hardwareSensorBaseUrl` in `mtss.json` (no GUI
+  toggle yet — same config-file-only precedent as `GraphStyle`). MTSS
+  doesn't talk to any GPU driver, SDK, or shared memory itself; it polls
+  [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)'s
+  built-in Remote Web Server (a plain loopback HTTP JSON endpoint LHM can
+  optionally serve) via the JDK's own `HttpClient` — no native bindings, no
+  new required dependency. Polling runs on a new dedicated background
+  thread (`HardwareSensorPoller`, 1.5s cadence, ~300ms request timeout) —
+  never the render thread, since an HTTP round-trip is far less predictable
+  than the existing MXBean-based THROTTLED sources. Every failure mode (LHM
+  not installed/running, remote web server off, wrong port, firewall,
+  unexpected JSON shape, a sensor category missing from a given card's
+  tree) degrades identically: the affected stat(s) simply don't render,
+  same as MSPT on a remote server — never a crash, never a stuck/stale
+  value. Sensors are matched by `SensorType` + name substring rather than a
+  fixed tree path, since LHM's node layout varies by vendor and GPU count;
+  first match wins (multi-GPU selection is out of scope for this pass). New
+  `Stat.GPU_TEMP` / `GPU_CLOCK` / `GPU_USAGE` / `VRAM_USED` constants, each
+  with its own `StatDefinition` (`GpuTempStat`, `GpuClockStat`,
+  `GpuUsageStat`, `VramUsedStat`) and Template Mode token (`{gpu_temp}`,
+  `{gpu_clock}`, `{gpu_usage}`, `{vram_used}`); GPU Temp has threshold
+  coloring (<70°C green, <85°C yellow, ≥85°C red — a general "hot GPU"
+  signal, not a specific card's real throttle point), the other three don't
+  since high clock/usage during gameplay isn't itself a bad sign. See the
+  README's new "Hardware Sensors" section for setup.
 - **Search filter in the stat toggle/reorder panel.** A search row under the
   title (click to focus, type to filter, ✕ to clear) narrows the stat list
   to names containing the typed text, auto-expanding only the categories

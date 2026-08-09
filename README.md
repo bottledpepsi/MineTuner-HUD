@@ -188,6 +188,10 @@ Wrap a stat's token name in curly braces to interpolate it: `{tps}` inserts the 
 | `{dimension}` | Dimension | — |
 | `{lookingat}` | Looking At | Block or entity name under the crosshair; empty string when nothing's targeted |
 | `{moving}` | Moving | On/off — true when the player has meaningful horizontal movement |
+| `{gpu_temp}` | GPU Temp | Supports `:N` decimals suffix. Opt-in — see [Hardware Sensors](#hardware-sensors-opt-in-via-librehardwaremonitor). Empty when unavailable. |
+| `{gpu_clock}` | GPU Clock | Supports `:N` decimals suffix. Opt-in, same as above. Empty when unavailable. |
+| `{gpu_usage}` | GPU Usage | Supports `:N` decimals suffix. Opt-in, same as above. Empty when unavailable. |
+| `{vram_used}` | VRAM Used | "used/maxMB". Opt-in, same as above. Empty when unavailable. |
 
 Add `:N` after any decimals-capable token to override its decimal places, e.g. `{tps:2}` for two decimal places, `{cpu:0}` for a whole number. Omit it to use that stat's normal default (the same default classic mode uses).
 
@@ -228,10 +232,53 @@ One exception: a graph's `GraphStyle` (panel background, gridlines, peak markers
 
 ---
 
+## Hardware Sensors (opt-in, via LibreHardwareMonitor)
+
+Every stat MTSS shows by default is read straight from the JVM or Minecraft's own state. GPU temperature, GPU clock speed, GPU usage, and VRAM usage aren't — no JVM API exposes them — so this is an **optional, off-by-default** integration with [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (LHM), a free, open-source (MPL 2.0) hardware monitoring tool for Windows.
+
+### How it works
+
+MTSS polls LHM's built-in **Remote Web Server** — a plain local HTTP JSON endpoint LHM can optionally serve — on a background thread, at most every 1.5 seconds. It never talks to any driver, SDK, or shared memory directly, and never touches the render thread: if LHM is slow, unreachable, or not running, the affected stats just don't render a line, the same way MSPT is hidden on a remote server. Nothing about this feature can crash the game, hang a frame, or show a stale reading as if it were current.
+
+There's no bundled native code and no vendor GPU SDK involved — this is currently a **Windows-usage pattern** in practice (that's where LHM's hardware sensor coverage is strongest), but nothing in MTSS hardcodes an OS check, so it will also work under Wine/Proton or a future non-Windows LHM build, provided the Remote Web Server is reachable at the configured URL.
+
+### Setup
+
+1. Install and run [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases).
+2. In LHM, go to **Options → Remote Web Server → Run**. By default this serves `http://localhost:8085/data.json`.
+3. In `.minecraft/config/mtss.json`, set:
+   ```json
+   "hardwareSensorsEnabled": true,
+   "hardwareSensorBaseUrl": "http://localhost:8085"
+   ```
+   (Change the port in `hardwareSensorBaseUrl` if you configured LHM's Remote Web Server to use a non-default one.) There's no GUI toggle for this yet — same as `GraphStyle` above, it's config-file-only for now.
+4. Restart Minecraft (or rejoin the world) so the background poller picks up the new setting. Add `{gpu_temp}`, `{gpu_clock}`, `{gpu_usage}`, or `{vram_used}` to a Template Mode list, or enable the equivalent stats from the Edit Stats panel, to see them.
+
+### New stats
+
+| Stat | Description | Notes |
+|---|---|---|
+| **GPU Temp** | GPU core temperature in °C | Color-coded: <70°C green, <85°C yellow, ≥85°C red — a conservative "getting warm / hot" signal, not a specific card's actual throttle point (LHM's tree doesn't expose that). |
+| **GPU Clock** | GPU core clock speed in MHz | No threshold coloring — clock varies by workload/boost behavior, not health. |
+| **GPU Usage** | GPU utilization % | No threshold coloring — high usage during gameplay is expected, not a warning sign. |
+| **VRAM Used** | VRAM used / total, in MB | Renders only once both used and total are available from this card's sensor tree. |
+
+### If a stat doesn't show up
+
+This feature degrades silently by design, which means a missing stat usually isn't a bug — check, in order:
+- `hardwareSensorsEnabled` is `true` in `mtss.json`.
+- LHM is running and its Remote Web Server shows as active in LHM's own UI.
+- `hardwareSensorBaseUrl` matches the port LHM's Remote Web Server is actually using.
+- Nothing local (firewall, antivirus) is blocking the loopback connection.
+- Your GPU's specific sensor tree in LHM actually exposes that category — coverage varies by vendor/driver. Multi-GPU systems use the first matching sensor found; picking a specific GPU is not currently supported.
+
+---
+
 ## Compatibility
 
 - **Client-side only** — works on any server (vanilla, Paper, Fabric, etc.)
 - **MSPT** is only displayed on singleplayer and LAN worlds — it's silently hidden on remote servers where the data isn't accessible
+- **GPU/VRAM sensor stats** are opt-in and require [LibreHardwareMonitor](#hardware-sensors-opt-in-via-librehardwaremonitor) running separately with its Remote Web Server enabled; they're silently hidden if that isn't set up
 - Does not conflict with other HUD mods — MineTuner Statistics Server registers its overlay via Fabric API's `HudElementRegistry` and attaches before the chat layer
 
 ---

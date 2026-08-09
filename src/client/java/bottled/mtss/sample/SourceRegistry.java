@@ -37,6 +37,13 @@ public final class SourceRegistry {
         // Server tick rate is EVENT_PUSHED via
         // ClientPacketListenerMixin#mtss$onTickingState — not driven from
         // here, listed for discoverability only.
+        // Hardware sensors (GPU temp/clock/usage, VRAM) are EVENT_PUSHED via
+        // HardwareSensorPoller's own background thread — see
+        // bottled.mtss.sample.sources.HardwareSensorSource's class doc.
+        // Not driven from here either, and not registered as an instance:
+        // sample() would never be called (EVENT_PUSHED), so a real
+        // registration here would misleadingly suggest SamplingDriver
+        // drives it — same reasoning as why TPS above is comment-only.
     }
 
     // Registration only ever happens once, in the static initializer above,

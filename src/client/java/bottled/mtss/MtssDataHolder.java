@@ -77,6 +77,26 @@ public final class MtssDataHolder {
     public static double cpuPercent = -1.0;
     public static long   gcTimeMs   = 0;
 
+    // ── Hardware sensors (opt-in, via LibreHardwareMonitor) ─────────────────────
+    // Unlike every other field in this class, these are written from
+    // HardwareSensorPoller's dedicated background thread (bottled.mtss.sample),
+    // not the render thread — sampleAll() never blocks on network I/O, see
+    // that class's doc for why. `volatile` gives the render thread a
+    // guaranteed-fresh read without needing a lock for what's otherwise a
+    // simple "poll thread writes, render thread reads" handoff. -1 means
+    // "not available right now" (LHM not running/reachable, remote web
+    // server off, sensor missing from this system's tree, or hardware
+    // sensors not enabled in config at all) — same "N/A, skip the line"
+    // convention as cpuPercent above; see GpuTempStat & co. for how that's
+    // surfaced.
+    public static volatile double gpuTempC        = -1.0;
+    public static volatile double gpuClockMhz      = -1.0;
+    public static volatile double gpuUsagePercent  = -1.0;
+    public static volatile double vramUsedMb       = -1.0;
+    public static volatile double vramMaxMb        = -1.0;
+    /** True once the poller has successfully reached LHM at least once this session — lets stats distinguish "never connected" from "was up, now flaky" if that's ever useful; not currently branched on. */
+    public static volatile boolean hardwareSensorsReachable = false;
+
     // ── History (for graphs) ─────────────────────────────────────────
     private static final int HISTORY_SIZE = 2000;
 
@@ -90,6 +110,10 @@ public final class MtssDataHolder {
     private static final RingBuffer healthHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer hungerHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer armorHistory  = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer gpuTempHistory  = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer gpuClockHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer gpuUsageHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer vramUsedHistory = new RingBuffer(HISTORY_SIZE);
 
     /** Minimal fixed-size float ring buffer with copy-out reads. Not thread-safe (client render thread only). */
     private static final class RingBuffer {
@@ -151,6 +175,14 @@ public final class MtssDataHolder {
         if (maxHealth > 0) healthHistory.push(100f * health / maxHealth);
         hungerHistory.push(hunger);
         armorHistory.push(armor);
+
+        // Hardware sensors: same "skip while unavailable" guard as CPU/Ping
+        // above, so a flat run of -1 (LHM not running, or feature disabled)
+        // never enters the buffer as if it were a real reading.
+        if (gpuTempC >= 0)       gpuTempHistory.push((float) gpuTempC);
+        if (gpuClockMhz >= 0)    gpuClockHistory.push((float) gpuClockMhz);
+        if (gpuUsagePercent >= 0) gpuUsageHistory.push((float) gpuUsagePercent);
+        if (vramUsedMb >= 0)     vramUsedHistory.push((float) vramUsedMb);
     }
 
     public static void updateSlowMetrics() {
@@ -185,6 +217,10 @@ public final class MtssDataHolder {
     public static float[] getHealthHistory() { return healthHistory.snapshot(); }
     public static float[] getHungerHistory() { return hungerHistory.snapshot(); }
     public static float[] getArmorHistory()  { return armorHistory.snapshot(); }
+    public static float[] getGpuTempHistory()   { return gpuTempHistory.snapshot(); }
+    public static float[] getGpuClockHistory()  { return gpuClockHistory.snapshot(); }
+    public static float[] getGpuUsageHistory()  { return gpuUsageHistory.snapshot(); }
+    public static float[] getVramUsedHistory()  { return vramUsedHistory.snapshot(); }
 
     // ── Color helpers ─────────────────────────────────────────────────────────
     // Each getXColor() reads live state and calls the matching xColorFor(value),
@@ -340,6 +376,30 @@ public final class MtssDataHolder {
         }
         if (armorValue >= 15) return 0xFF55FF55;
         if (armorValue >= 5)  return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
+    public static int getGpuTempColor() { return getGpuTempColor(null); }
+    public static int getGpuTempColor(ThresholdSettings custom) { return gpuTempColorFor(gpuTempC, custom); }
+
+    public static int gpuTempColorFor(double tempValue) { return gpuTempColorFor(tempValue, null); }
+    /**
+     * GPU temperature is lower-is-better: at/below goodMin -> green, at/below
+     * warnMin -> yellow, else red. Defaults (70°C green / 85°C yellow-to-red)
+     * are conservative headroom under typical thermal-throttle points for
+     * consumer NVIDIA/AMD GPUs (commonly ~83-95°C depending on the card) —
+     * meant as a general "getting warm" / "hot" signal, not a vendor-specific
+     * throttle threshold, since LHM's tree doesn't expose that per-card limit.
+     */
+    public static int gpuTempColorFor(double tempValue, ThresholdSettings custom) {
+        if (tempValue < 0) return 0xFFFFFFFF;
+        if (custom != null && custom.enabled) {
+            if (tempValue <= custom.goodMin) return 0xFF55FF55;
+            if (tempValue <= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
+        if (tempValue < 70)  return 0xFF55FF55;
+        if (tempValue < 85) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
 
@@ -507,5 +567,62 @@ public final class MtssDataHolder {
 
     public static String getFormattedMoving() {
         return t("mtss.stat.moving", isMoving ? t("gui.mtss.menu.on") : t("gui.mtss.menu.off"));
+    }
+
+    // ── Hardware sensors (opt-in, via LibreHardwareMonitor) ──────────────────
+    // -1 means "unavailable" (see the field doc above). format() follows
+    // getFormattedMspt()'s "" convention rather than getFormattedCpu()'s
+    // "show a literal N/A line" one: MSPT and hardware sensors are both
+    // *structurally* absent for most users (remote server; feature not
+    // opted into) rather than a single always-enabled stat that occasionally
+    // can't resolve a value, so skipping the line entirely (LineBuilder's
+    // existing "" == omit-this-row signal) avoids a permanent "N/A" row on
+    // every HUD that hasn't set this up — which is the common case, since
+    // it's off by default. The getRawX() variants below (Template Mode,
+    // where the user's own template text supplies the label) still return a
+    // literal "N/A" like getRawCpu()/getRawPing() do, since a template line
+    // mixing several tokens going silently blank for just one would read as
+    // a rendering glitch rather than "unavailable".
+
+    public static String getFormattedGpuTemp()             { return getFormattedGpuTemp(0); }
+    public static String getFormattedGpuTemp(int decimals) {
+        return gpuTempC >= 0 ? t("mtss.stat.gpu_temp", fmt(gpuTempC, decimals)) : "";
+    }
+    /** Bare temperature value with no "°C" suffix, for Template Mode. */
+    public static String getRawGpuTemp(int decimals) {
+        return gpuTempC >= 0 ? fmt(gpuTempC, decimals) : "N/A";
+    }
+
+    public static String getFormattedGpuClock()             { return getFormattedGpuClock(0); }
+    public static String getFormattedGpuClock(int decimals) {
+        return gpuClockMhz >= 0 ? t("mtss.stat.gpu_clock", fmt(gpuClockMhz, decimals)) : "";
+    }
+    /** Bare clock value with no "MHz" suffix, for Template Mode. */
+    public static String getRawGpuClock(int decimals) {
+        return gpuClockMhz >= 0 ? fmt(gpuClockMhz, decimals) : "N/A";
+    }
+
+    public static String getFormattedGpuUsage()             { return getFormattedGpuUsage(0); }
+    public static String getFormattedGpuUsage(int decimals) {
+        return gpuUsagePercent >= 0 ? t("mtss.stat.gpu_usage", fmt(gpuUsagePercent, decimals)) : "";
+    }
+    /** Bare usage value with no "%" suffix, for Template Mode. */
+    public static String getRawGpuUsage(int decimals) {
+        return gpuUsagePercent >= 0 ? fmt(gpuUsagePercent, decimals) : "N/A";
+    }
+
+    public static String getFormattedVramUsed() {
+        // Only render once both used and max are known — a partial reading
+        // (e.g. used present but max missing from this card's LHM tree)
+        // would otherwise show a misleading "1024/0MB".
+        return (vramUsedMb >= 0 && vramMaxMb > 0)
+                ? t("mtss.stat.vram_used", Math.round(vramUsedMb), Math.round(vramMaxMb))
+                : "";
+    }
+    /** Bare "used/maxMB" with no label, for Template Mode. */
+    public static String getRawVramUsed() {
+        return (vramUsedMb >= 0 && vramMaxMb > 0)
+                ? Math.round(vramUsedMb) + "/" + Math.round(vramMaxMb)
+                : "N/A";
     }
 }

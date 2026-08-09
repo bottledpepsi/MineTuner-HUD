@@ -18,6 +18,9 @@ import bottled.mtss.stat.stats.FacingStat;
 import bottled.mtss.stat.stats.FpsStat;
 import bottled.mtss.stat.stats.GameModeStat;
 import bottled.mtss.stat.stats.GcTimeStat;
+import bottled.mtss.stat.stats.GpuClockStat;
+import bottled.mtss.stat.stats.GpuTempStat;
+import bottled.mtss.stat.stats.GpuUsageStat;
 import bottled.mtss.stat.stats.HealthStat;
 import bottled.mtss.stat.stats.HeldItemStat;
 import bottled.mtss.stat.stats.HungerStat;
@@ -36,6 +39,7 @@ import bottled.mtss.stat.stats.SkyLightStat;
 import bottled.mtss.stat.stats.SpeedStat;
 import bottled.mtss.stat.stats.TpsStat;
 import bottled.mtss.stat.stats.VerticalSpeedStat;
+import bottled.mtss.stat.stats.VramUsedStat;
 import bottled.mtss.stat.stats.WeatherStat;
 import bottled.mtss.stat.stats.XStat;
 import bottled.mtss.stat.stats.XpLevelStat;
@@ -129,6 +133,15 @@ public final class StatRegistry {
         // ── Targeting / movement ─────────────────────────────────────────
         register(new LookingAtStat());
         register(new MovingStat());
+
+        // ── Hardware sensors (opt-in, via LibreHardwareMonitor) ───────────
+        // Off by default and simply don't render unless
+        // MtssConfig.hardwareSensorsEnabled is true and LHM is reachable —
+        // see HardwareSensorPoller's class doc for the full design.
+        register(new GpuTempStat());
+        register(new GpuClockStat());
+        register(new GpuUsageStat());
+        register(new VramUsedStat());
     }
 
     /** Looks up a stat's definition. Every {@link MtssConfig.Stat} constant must have one registered above. */

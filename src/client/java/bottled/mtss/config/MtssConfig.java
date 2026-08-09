@@ -61,7 +61,9 @@ public class MtssConfig {
         // ── Server / session ─────────────────────────────────────────────
         PLAYERS_ONLINE, DISTANCE_FROM_SPAWN, CHUNK_POS, VERTICAL_SPEED,
         // ── Targeting / movement ────────────────────────────────────────
-        LOOKING_AT, MOVING
+        LOOKING_AT, MOVING,
+        // ── Hardware sensors (opt-in, via LibreHardwareMonitor) ───────────
+        GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED
     }
 
     /**
@@ -81,7 +83,8 @@ public class MtssConfig {
     /** Which {@link StatCategory} a stat belongs to in the toggle panel. Every Stat must be covered — see the class doc above. */
     public static StatCategory categoryOf(Stat stat) {
         return switch (stat) {
-            case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE -> StatCategory.PERFORMANCE;
+            case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE,
+                 GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED -> StatCategory.PERFORMANCE;
             case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM, SPEED, VERTICAL_SPEED, MOVING -> StatCategory.PLAYER;
             case ENTITIES, CHUNKS, BIOME, DIMENSION, WEATHER, DIFFICULTY, LIGHT_LEVEL, SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY, LOOKING_AT -> StatCategory.WORLD;
             case COORDS, X, Y, Z, FACING, YAW, PITCH, CHUNK_POS, DISTANCE_FROM_SPAWN -> StatCategory.POSITION;
@@ -110,6 +113,28 @@ public class MtssConfig {
     public List<StatListConfig> lists  = new ArrayList<>();
     /** Global show/hide switch for the entire overlay */
     public boolean               overlayEnabled = true;
+
+    /**
+     * Off by default, opt-in. When true, a background poller (see
+     * {@code bottled.mtss.sample.HardwareSensorPoller}) periodically fetches
+     * {@code data.json} from a running LibreHardwareMonitor "Remote Web
+     * Server" instance and publishes GPU temperature/clock/usage and VRAM
+     * usage into {@link bottled.mtss.MtssDataHolder}. The poller only starts
+     * when this is true, and never runs on the render thread — see the
+     * class doc there. Unavailable at runtime (LHM not running, wrong port,
+     * firewall, unexpected JSON shape, etc.) degrades to the new stats
+     * simply not rendering, same as CPU% on non-HotSpot JVMs — never a
+     * crash, never a stale value shown as current.
+     */
+    public boolean hardwareSensorsEnabled = false;
+    /**
+     * Base URL of LibreHardwareMonitor's Remote Web Server, no trailing
+     * slash, e.g. {@code http://localhost:8085}. {@code /data.json} is
+     * appended when fetching. Configurable so a user running the remote web
+     * server on a non-default port isn't stuck — LHM's own default is 8085,
+     * but it's changeable in LHM's Options too.
+     */
+    public String hardwareSensorBaseUrl = "http://localhost:8085";
 
     // ── Per-stat settings ─────────────────────────────────────────────────────
     public static class StatSettings {
@@ -319,7 +344,7 @@ public class MtssConfig {
         private static Map<String, Boolean> defaultEnabledMap() {
             Map<String, Boolean> m = new LinkedHashMap<>();
             for (Stat s : Stat.values()) {
-                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
+//                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
             }
             return m;
         }

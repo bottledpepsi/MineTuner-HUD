@@ -4,6 +4,7 @@ import bottled.mtss.command.MtssCommand;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.gui.MtssGuiScreen;
 import bottled.mtss.hud.MtssRenderer;
+import bottled.mtss.sample.HardwareSensorPoller;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -47,6 +48,12 @@ public class MtssClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         MtssConfig.getInstance();
+
+        // Opt-in only: startIfEnabled() checks hardwareSensorsEnabled itself
+        // and is a no-op (doesn't even create the thread) when it's false,
+        // so a user who hasn't turned this on sees zero behavior change —
+        // no thread, no startup cost, no network activity.
+        HardwareSensorPoller.startIfEnabled();
 
         HudElementRegistry.attachElementBefore(
                 VanillaHudElements.CHAT,
