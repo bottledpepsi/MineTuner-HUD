@@ -441,7 +441,7 @@ public class MtssConfig {
         private static Map<String, Boolean> defaultEnabledMap() {
             Map<String, Boolean> m = new LinkedHashMap<>();
             for (Stat s : Stat.values()) {
-                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
+//                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
             }
             return m;
         }
