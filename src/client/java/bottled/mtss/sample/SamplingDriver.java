@@ -1,5 +1,7 @@
 package bottled.mtss.sample;
 
+import bottled.mtss.MtssMod;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -32,15 +34,13 @@ public final class SamplingDriver {
                 try {
                     src.sample(ctx);
                 } catch (Exception e) {
-                    // One bad source shouldn't take the whole overlay down.
-                    // sampling continues every frame (so it recovers on its.
-                    // own if the failure was transient) but only the first.
-                    // failure per source is logged, so a source that's.
+                    // One bad source shouldn't take the whole overlay down. Sampling continues
+                    // every frame (so it recovers on its own if the failure was transient), but
+                    // only the first failure per source is logged, so a source that's
                     // consistently broken doesn't spam the log forever.
                     if (WARNED_SOURCE_IDS.add(src.id())) {
-                        System.err.println("[MTSS] StatSource \"" + src.id()
-                                + "\" threw during sample() — its stat(s) will show stale/default "
-                                + "values until it recovers. " + e);
+                        MtssMod.LOGGER.error("StatSource \"{}\" threw during sample() — its stat(s) "
+                                + "will show stale/default values until it recovers.", src.id(), e);
                     }
                 }
             }

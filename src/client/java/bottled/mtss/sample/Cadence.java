@@ -1,6 +1,6 @@
 package bottled.mtss.sample;
 
-/** How often a { StatSource} runs. */
+/** How often a {@link StatSource} runs. */
 public enum Cadence {
     /** Every render frame. */
     PER_FRAME,

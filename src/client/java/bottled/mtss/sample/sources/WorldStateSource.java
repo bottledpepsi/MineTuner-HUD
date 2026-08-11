@@ -11,7 +11,9 @@ import net.minecraft.world.level.storage.LevelData;
 
 /** World/session-level readings that aren't tied to the player's exact block. */
 public final class WorldStateSource implements StatSource {
-    /** Lowercase name for a { Difficulty}, matching vanilla's own lowercase. */
+    /** Lowercase name for a {@link Difficulty}, matching vanilla's own lowercase
+     *  naming convention for difficulty levels (as used by e.g. the /difficulty
+     *  command). Capitalized for display later, in MtssDataHolder.getFormattedDifficulty(). */
     private static String difficultyName(Difficulty difficulty) {
         return difficulty.name().toLowerCase(java.util.Locale.ROOT);
     }
@@ -50,9 +52,8 @@ public final class WorldStateSource implements StatSource {
             MtssDataHolder.blockLight = level.getBrightness(LightLayer.BLOCK, pos);
             MtssDataHolder.canSeeSky = level.canSeeSky(pos);
 
-            // Spawn is a RespawnData record ( LevelData), not a bare.
-            // BlockPos accessor.
-            // shared/respawn position.
+            // Spawn is a RespawnData record ({@link LevelData}), not a bare BlockPos
+            // accessor — respawn.pos() below extracts the position component.
             LevelData.RespawnData respawn = level.getRespawnData();
             BlockPos spawn = respawn.pos();
             double dx = ctx.player().getX() - spawn.getX();

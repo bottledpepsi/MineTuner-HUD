@@ -11,7 +11,6 @@ import static bottled.mtss.gui.render.PanelChrome.*;
 
 public final class ThresholdPanel {
 
-    // separator
     public static final int TH_USE_CUSTOM = 0;
     public static final int TH_GOOD = 1;
     public static final int TH_WARN = 2;
@@ -28,12 +27,15 @@ public final class ThresholdPanel {
         return StatRegistry.get(stat).thresholdStep();
     }
 
-    /** Total panel height for the threshold sub-panel (fixed row count, no. */
+    /** Total panel height for the threshold sub-panel (fixed row count, no
+     *  scrolling needed since TH_COUNT never changes) plus one title-row's worth
+     *  of extra height (font.lineHeight + 2) for the stat-name header above the rows. */
     public static int panelHeight(net.minecraft.client.gui.Font font) {
         return PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
     }
 
-    /** Y-offsets (relative to the panel's top-left) for each of the threshold. */
+    /** Y-offsets (relative to the panel's top-left) for each of the threshold
+     *  panel's rows, below the title-row space {@link #panelHeight} accounts for. */
     private static int[] rowOffsets(int py, net.minecraft.client.gui.Font font) {
         int rowTop = py + PANEL_PAD + font.lineHeight + 2;
         int[] rowY = new int[TH_COUNT];
@@ -133,7 +135,10 @@ public final class ThresholdPanel {
         return Math.round(v * 10f) / 10f;
     }
 
-    /** Returns true if the click landed on the Back row (caller should return to. */
+    /** Returns true if the click landed on the Back row (caller should set
+     *  thresholdPanelOpen = false to return to the stat settings panel this was
+     *  opened from — statSettingsStat itself is left set, so it's the settings
+     *  panel and not the reorder panel underneath that reappears). */
     public static boolean handleClick(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                       net.minecraft.client.gui.Font font,
                                       MtssConfig.Stat statSettingsStat, MtssConfig.ThresholdSettings ts,

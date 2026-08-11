@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Central lookup from { MtssConfig.Stat} to its { StatDefinition}. */
+/** Central lookup from {@link MtssConfig.Stat} to its {@link StatDefinition}. */
 public final class StatRegistry {
 
     private static final Map<MtssConfig.Stat, StatDefinition> BY_KEY = new LinkedHashMap<>();
@@ -36,7 +36,7 @@ public final class StatRegistry {
         register(new LightLevelStat());
         register(new DimensionStat());
 
-        // separator
+        // --- Player vitals ---
         register(new HealthStat());
         register(new HungerStat());
         register(new SaturationStat());
@@ -49,25 +49,25 @@ public final class StatRegistry {
         register(new HeldItemStat());
         register(new VerticalSpeedStat());
 
-        // separator
+        // --- World state ---
         register(new WeatherStat());
         register(new DifficultyStat());
         register(new SkyLightStat());
         register(new BlockLightStat());
         register(new CanSeeSkyStat());
 
-        // separator
+        // --- Misc world/player ---
         register(new PlayersOnlineStat());
         register(new ChunkPosStat());
         register(new DistanceFromSpawnStat());
 
-        // separator
+        // --- Targeting ---
         register(new LookingAtStat());
         register(new MovingStat());
 
-        // separator
-        // Off by default and simply don't render unless.
-        // MtssConfig.hardwareSensorsEnabled is true and LHM is reachable.
+        // --- Hardware sensors, via LibreHardwareMonitor ---
+        // Off by default and simply don't render unless
+        // MtssConfig.hardwareSensorsEnabled is true and LHM is reachable — see
         // HardwareSensorPoller's class doc for the full design.
         register(new GpuTempStat());
         register(new GpuClockStat());
@@ -91,12 +91,19 @@ public final class StatRegistry {
         return def;
     }
 
-    /** Looks up a stat by its Template Mode token name (case already normalized by. */
+    /** Looks up a stat by its Template Mode token name (case already normalized by
+     *  the caller — see {@link bottled.mtss.hud.TemplateEngine#tryParseTokenBody}). */
     public static StatDefinition byToken(String token) {
         return BY_TOKEN.get(token);
     }
 
-    /** All registered definitions, in registration order (matches {. */
+    /** All registered definitions, in registration order — which mirrors the {@link
+     *  MtssConfig.Stat} enum's grouping by category but isn't guaranteed identical to
+     *  the enum's exact declaration order stat-for-stat (e.g. VERTICAL_SPEED is
+     *  registered alongside the other player-vitals stats here, but declared later,
+     *  grouped with PLAYERS_ONLINE/CHUNK_POS/etc., in the enum itself). Order only
+     *  matters here insofar as {@link ReorderPanel}'s category grouping cares about
+     *  it; {@link #get}/{@link #byToken} are order-independent map lookups. */
     public static List<StatDefinition> all() {
         return List.copyOf(BY_KEY.values());
     }

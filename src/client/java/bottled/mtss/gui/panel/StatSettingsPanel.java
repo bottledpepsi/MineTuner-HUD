@@ -27,7 +27,8 @@ public final class StatSettingsPanel {
         return StatRegistry.get(stat).supportsGraph();
     }
 
-    /** Stats that have a user-configurable good/warn color threshold (step 4's. */
+    /** Stats that have a user-configurable good/warn color threshold (the row that,
+     *  when present, opens {@link ThresholdPanel} via ClickResult.OPEN_THRESHOLDS). */
     public static boolean supportsThresholds(MtssConfig.Stat stat) {
         return StatRegistry.get(stat).supportsThreshold();
     }
@@ -45,7 +46,9 @@ public final class StatSettingsPanel {
         return PANEL_PAD * 2 + ROW_H * panelRows(stat);
     }
 
-    /** Y-offsets (relative to the panel's top-left { (px, py)}) for every row in. */
+    /** Y-offsets (relative to the panel's top-left (px, py)) for every row in
+     *  the panel that a click can actually land on — i.e. every row from
+     *  {@link #panelRows} except the non-clickable header (row 0). */
     public static int[] rowOffsets(MtssConfig.Stat stat, int py) {
         List<Integer> offsets = new ArrayList<>();
         int row = 1; // row 0 is the header, which isn't clickable.

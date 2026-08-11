@@ -24,11 +24,11 @@ public final class ListPreviewRenderer {
         LineCache cache = LineCache.getCachedLines(lc);
         boolean empty = cache.rowKinds().isEmpty();
 
-        // For the empty placeholder, use the old single-line sizing (no.
-        // LineCache row to measure).
-        // entirely, so there's no scaled size to match here.
-        // LineCache.boxW/boxH scaled by textScale.
-        // MtssRenderer.render() uses, so the preview, hit-boxes, and.
+        // For the empty placeholder, use the old single-line sizing (no
+        // LineCache row to measure) — an empty list has no rows to render at all,
+        // so there's no scaled size to match here. For a non-empty list, use
+        // LineCache.boxW/boxH scaled by textScale, the exact same box size
+        // MtssRenderer.render() uses, so the preview, hit-boxes, and
         // drag/anchor math all agree with the live overlay.
         int lineH = font.lineHeight + 1;
         float scale = lc.textScale <= 0f ? 1f : lc.textScale;
@@ -66,8 +66,8 @@ public final class ListPreviewRenderer {
         } else if (scale == 1f) {
             MtssRenderer.drawRows(g, font, cache, wx + 2, wy + 2, shadow);
         } else {
-            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0).
-            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s.
+            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0) —
+            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s
             // scaled branch, so the preview matches the live overlay exactly.
             var matrices = g.pose();
             matrices.pushMatrix();

@@ -4,7 +4,8 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/** GPU core clock speed in MHz, by LibreHardwareMonitor's Remote Web Server. */
+/** GPU core clock speed in MHz, via LibreHardwareMonitor's Remote Web Server (opt-in;
+ *  see {@link bottled.mtss.sample.HardwareSensorPoller}). */
 public final class GpuClockStat implements StatDefinition {
 
     @Override

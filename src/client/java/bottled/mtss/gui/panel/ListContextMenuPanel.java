@@ -10,11 +10,10 @@ import static bottled.mtss.gui.render.PanelChrome.*;
 
 public final class ListContextMenuPanel {
 
-    // separator
-    // 4 grouped rows.
-    // the template line editor (template mode).
-    // for rename/background/shadow/color/template-mode.
-    // are single actions.
+    // 4 grouped rows: the first opens either the stat reorder panel or
+    // the template line editor (template mode), depending on lc.useTemplate; the
+    // second opens the Appearance sub-panel (rename/background/shadow/color/
+    // template-mode toggle); the last two (duplicate, delete) are single actions.
     public static final int LM_STATS = 0; // "Edit Stats" or "Edit Template Lines".
     public static final int LM_APPEARANCE = 1;
     public static final int LM_DUPLICATE = 2;

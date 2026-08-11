@@ -16,7 +16,7 @@ public class MtssRenderer {
     public static void drawRows(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
                                 LineCache cache, int baseX, int baseY, boolean shadow) {
         int lineH = font.lineHeight + 1;
-        // Graphs stretch to the box's actual content width.
+        // Graphs stretch to the box's actual content width, which can be wider
         // than a graph's configured width if a label needed extra room.
         int contentW = cache.boxW(font) - 4;
         int textIdx = 0, graphIdx = 0;
@@ -35,7 +35,9 @@ public class MtssRenderer {
         }
     }
 
-    /** Draws one text row as a sequence of colored runs left-to-right, each. */
+    /** Draws one text row as a sequence of colored runs left-to-right, each run's
+     *  color and text coming from the line's parsed {@link TemplateEngine.ColoredRun}
+     *  list (see {@link LineCache} for how each row's runs are built and cached). */
     private static void drawColoredRuns(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
                                         List<TemplateEngine.ColoredRun> runs, int x, int y, boolean shadow) {
         int cursorX = x;
@@ -56,13 +58,11 @@ public class MtssRenderer {
         // Advance the frame cache so getCachedLines() is fresh this frame.
         LineCache.tickCache();
 
-        // separator
-        // Each raw value is pulled in by its own StatSource (bottled.mtss.sample),.
-        // registered in SourceRegistry and run here at its declared cadence.
-        // the design doc for the full acquisition-side pipeline.
+        // Each raw value is pulled in by its own StatSource (bottled.mtss.sample),
+        // registered in SourceRegistry and run here at its declared cadence — see
+        // SourceRegistry's own class doc for the full acquisition-side pipeline.
         SamplingDriver.sampleAll();
 
-        // separator
         MtssConfig root = MtssConfig.getInstance();
         var font = mc.font;
 

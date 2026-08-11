@@ -8,12 +8,11 @@ public final class PanelChrome {
     private static final int PANEL_BG = 0xEE111111;
     private static final int PANEL_BORDER = 0xFFFFAA00;
     private static final int ROW_HOVER_COL = 0x44FFFFFF;
-    private static final int DIVIDER_COL = 0x33FFFFFF;
     /** ROW_H / PANEL_W / PANEL_PAD / WIDE_PANEL_W were originally `static final`. */
     public static int ROW_H = 13;
     public static int PANEL_W = 160;
     public static int PANEL_PAD = 4;
-    /** Wider panel width used by the stat toggle/reorder panel ( { ReorderPanel}). */
+    /** Wider panel width used by the stat toggle/reorder panel ({@link ReorderPanel}). */
     public static int WIDE_PANEL_W = 216;
     private PanelChrome() {
     }
@@ -50,11 +49,6 @@ public final class PanelChrome {
             drawRowHoverIfNeeded(g, mx, my, panelX, ry, panelW, ROW_H);
             g.text(font, labels[i], panelX + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
         }
-    }
-
-    /** Thin 1px horizontal divider, e.g. */
-    public static void drawDivider(GuiGraphicsExtractor g, int px, int ry, int rowW) {
-        g.fill(px + 2, ry, px + rowW - 2, ry + 1, DIVIDER_COL);
     }
 
     public static boolean isHoveringRow(int mx, int my, int px, int ry, int pw, int rh) {

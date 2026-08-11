@@ -9,7 +9,7 @@ import static bottled.mtss.gui.render.PanelChrome.*;
 /** Right-click menu shown on empty canvas space. */
 public final class EmptySpaceMenuPanel {
 
-    /** Row index returned by { #rowAt} for "no row hit". */
+    /** Row index returned by {@link #rowAt} for "no row hit". */
     public static final int ROW_NONE = -1;
     /** Row index for "create a new list here". */
     public static final int ROW_CREATE_LIST = 0;
@@ -41,7 +41,8 @@ public final class EmptySpaceMenuPanel {
         return PanelChrome.isInsidePanel(mx, my, px, py, PANEL_W, panelH);
     }
 
-    /** Returns which row was clicked ({ #ROW_CREATE_LIST}/{ #ROW_OPEN_CONFIG}), or. */
+    /** Returns which row was clicked ({@link #ROW_CREATE_LIST}/{@link #ROW_OPEN_CONFIG}),
+     *  or {@link #ROW_NONE} if the click missed every row. */
     public static int rowAt(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelHeight(), screenH);

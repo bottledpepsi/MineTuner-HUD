@@ -28,13 +28,14 @@ public final class MtssClothConfigScreen {
                 .setParentScreen(parent)
                 .setTitle(Component.translatable("gui.mtss.cloth.title"));
 
-        // Cloth Config already atomically persists a Java-object config by.
-        // its own I/O when built through AutoConfig.
-        // its own mtss.json read/write path (MtssConfig.load/save, with its.
-        // own corrupt-file backup handling.
-        // so every entry below writes straight into the live `cfg` instance's.
-        // fields by its save consumer, and this single runnable is what.
-        // actually persists all of them to disk together.
+        // Cloth Config already atomically persists a Java-object config by
+        // its own I/O when built through AutoConfig, but this screen is built
+        // by hand instead (MtssConfig has its own mtss.json read/write path —
+        // MtssConfig.load/save, with its own corrupt-file backup handling and
+        // atomic .tmp-then-move write — see MtssConfig for details), so every
+        // entry below writes straight into the live `cfg` instance's fields
+        // via its save consumer, and this single runnable is what actually
+        // persists all of them to disk together.
         builder.setSavingRunnable(() -> {
             cfg.save(); // also re-clamps + re-syncs PanelChrome/ReorderPanel.
             HardwareSensorPoller.reconcileWithConfig(); // picks up enabled/baseUrl/timeout changes live, no restart.
@@ -50,8 +51,6 @@ public final class MtssClothConfigScreen {
         return builder.build();
     }
 
-    // separator
-
     private static void buildGeneralCategory(ConfigBuilder builder, ConfigEntryBuilder eb, MtssConfig cfg) {
         ConfigCategory general = builder.getOrCreateCategory(Component.translatable("gui.mtss.cloth.category.general"));
 
@@ -61,8 +60,6 @@ public final class MtssClothConfigScreen {
                 .setSaveConsumer(v -> cfg.overlayEnabled = v)
                 .build());
     }
-
-    // separator
 
     private static void buildHardwareSensorCategory(ConfigBuilder builder, ConfigEntryBuilder eb, MtssConfig cfg) {
         ConfigCategory hw = builder.getOrCreateCategory(Component.translatable("gui.mtss.cloth.category.hardware_sensors"));
@@ -108,8 +105,6 @@ public final class MtssClothConfigScreen {
             return false;
         }
     }
-
-    // separator
 
     private static void buildGuiTuningCategory(ConfigBuilder builder, ConfigEntryBuilder eb, MtssConfig cfg) {
         ConfigCategory gui = builder.getOrCreateCategory(Component.translatable("gui.mtss.cloth.category.gui_tuning"));
@@ -167,8 +162,6 @@ public final class MtssClothConfigScreen {
                 .build());
     }
 
-    // separator
-
     private static void buildListsCategory(ConfigBuilder builder, ConfigEntryBuilder eb, MtssConfig cfg) {
         ConfigCategory lists = builder.getOrCreateCategory(Component.translatable("gui.mtss.cloth.category.lists"));
 
@@ -182,11 +175,11 @@ public final class MtssClothConfigScreen {
         }
     }
 
-    /** One collapsible sub-category per list, named after the list itself so a user. */
+    /** One collapsible sub-category per list, named after the list itself so a user
+     *  managing several lists can tell them apart at a glance in the category tree. */
     private static SubCategoryBuilder buildListCategory(ConfigEntryBuilder eb, MtssConfig cfg, MtssConfig.StatListConfig lc) {
         SubCategoryBuilder cat = eb.startSubCategory(Component.literal(lc.name != null ? lc.name : ("List " + lc.id)));
 
-        // separator
         cat.add(eb.startEnumSelector(Component.translatable("gui.mtss.cloth.anchor_corner"), MtssConfig.Corner.class, lc.anchorCorner)
                 .setDefaultValue(MtssConfig.Corner.TOP_LEFT)
                 .setEnumNameProvider(v -> Component.translatable("gui.mtss.corner." + v.name().toLowerCase()))
@@ -219,7 +212,6 @@ public final class MtssClothConfigScreen {
                 .setSaveConsumer(v -> lc.snapY = v)
                 .build());
 
-        // separator
         cat.add(eb.startBooleanToggle(Component.translatable("gui.mtss.cloth.show_background"), lc.showBackground)
                 .setDefaultValue(true)
                 .setSaveConsumer(v -> lc.showBackground = v)
@@ -249,7 +241,6 @@ public final class MtssClothConfigScreen {
                 .setSaveConsumer(v -> lc.textScale = v)
                 .build());
 
-        // separator
         cat.add(eb.startBooleanToggle(Component.translatable("gui.mtss.cloth.use_template"), lc.useTemplate)
                 .setDefaultValue(false)
                 .setTooltip(Component.translatable("gui.mtss.cloth.use_template.tooltip"))
@@ -265,7 +256,6 @@ public final class MtssClothConfigScreen {
                 })
                 .build());
 
-        // separator
         cat.add(buildStatsSubCategory(eb, lc).build());
 
         return cat;

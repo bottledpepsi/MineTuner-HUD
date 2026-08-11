@@ -10,7 +10,6 @@ import static bottled.mtss.gui.render.PanelChrome.*;
 
 public final class AppearancePanel {
 
-    // separator
     public static final int AP_RENAME = 0;
     public static final int AP_BG = 1;
     public static final int AP_SHADOW = 2;
@@ -28,19 +27,19 @@ public final class AppearancePanel {
     public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                               int mx, int my, int menuX, int menuY, int screenW, int screenH,
                               MtssConfig.StatListConfig lc) {
-        String onOff_bg = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
+        String onOffBg = lc.showBackground ? " §a" + I18n.get("gui.mtss.menu.on")
                 : " §c" + I18n.get("gui.mtss.menu.off");
-        String onOff_sh = lc.textShadow ? " §a" + I18n.get("gui.mtss.menu.on")
+        String onOffShadow = lc.textShadow ? " §a" + I18n.get("gui.mtss.menu.on")
                 : " §c" + I18n.get("gui.mtss.menu.off");
-        String onOff_tpl = lc.useTemplate ? " §a" + I18n.get("gui.mtss.menu.on")
+        String onOffTemplate = lc.useTemplate ? " §a" + I18n.get("gui.mtss.menu.on")
                 : " §c" + I18n.get("gui.mtss.menu.off");
 
         String[] labels = new String[AP_COUNT];
         labels[AP_RENAME] = "§e" + I18n.get("gui.mtss.menu.rename");
-        labels[AP_BG] = "§f" + I18n.get("gui.mtss.menu.background") + onOff_bg;
-        labels[AP_SHADOW] = "§f" + I18n.get("gui.mtss.menu.shadow") + onOff_sh;
+        labels[AP_BG] = "§f" + I18n.get("gui.mtss.menu.background") + onOffBg;
+        labels[AP_SHADOW] = "§f" + I18n.get("gui.mtss.menu.shadow") + onOffShadow;
         labels[AP_COLOR_SCALE] = "§f" + I18n.get("gui.mtss.menu.color_scale") + " »";
-        labels[AP_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOff_tpl;
+        labels[AP_TEMPLATE_MODE] = "§f" + I18n.get("gui.mtss.menu.template_mode") + onOffTemplate;
         labels[AP_BACK] = "§7" + I18n.get("gui.mtss.stat_settings.back");
 
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);

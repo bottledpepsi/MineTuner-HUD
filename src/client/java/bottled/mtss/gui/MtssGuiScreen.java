@@ -22,19 +22,14 @@ import java.util.List;
 
 public class MtssGuiScreen extends Screen {
 
-    /** Superseded by { MtssConfig.dragSnapThresholdPx}, read live in { #applySnap}. */
-    @Deprecated
-    private static final int SNAP_THRESHOLD = 6;
-    /** Category-expansion/scroll state for the redesigned { ReorderPanel}. */
+    /** Category-expansion/scroll state for the redesigned {@link ReorderPanel}. */
     private final ReorderPanel.UiState reorderUiState = new ReorderPanel.UiState();
-    // separator
     private boolean dragging = false;
     private int draggingListId = -1;
     private int dragOffsetX, dragOffsetY;
     private int dragLiveX, dragLiveY;
     private int dragBoxW, dragBoxH;
 
-    // separator
     private MtssConfig.SnapX dragSnapX = MtssConfig.SnapX.NONE;
     private MtssConfig.SnapY dragSnapY = MtssConfig.SnapY.NONE;
     private MenuKind menuKind = MenuKind.NONE;
@@ -45,18 +40,20 @@ public class MtssGuiScreen extends Screen {
     private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
 
-    // separator
-    /** Whether the template line list (one row per templateLines entry +. */
+    /** Whether the template line list (one row per templateLines entry, plus an
+     *  "add new line" row and a "back" row) is the currently open menu panel. */
     private boolean templateListOpen = false;
-    /** Index into templateLines being text-edited, or -1 when the line list itself. */
+    /** Index into templateLines being text-edited, or -1 when the line list itself
+     *  (not a specific line) is what's open, or when nothing template-related is open. */
     private int templateEditIndex = -1;
     private StringBuilder templateEditBuffer = new StringBuilder();
 
-    // separator
-    /** True when the Appearance sub-panel (rename, background, shadow, color/scale,. */
+    /** True when the Appearance sub-panel (rename, background, shadow, color/scale,
+     *  snap settings) is the currently open menu panel. */
     private boolean appearanceOpen = false;
     private boolean colorScaleOpen = false;
-    /** Whether the per-stat custom-threshold sub-panel is open (opened from the. */
+    /** Whether the per-stat custom-threshold sub-panel is open (opened from the
+     *  ⚙ cog on a stat's settings panel via StatSettingsPanel.ClickResult.OPEN_THRESHOLDS). */
     private boolean thresholdPanelOpen = false;
 
     public MtssGuiScreen() {
@@ -148,9 +145,7 @@ public class MtssGuiScreen extends Screen {
         super.extractRenderState(g, mx, my, partial);
     }
 
-    // separator
-    // Rendering.
-    // separator
+    // --- Rendering ---
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
@@ -273,9 +268,7 @@ public class MtssGuiScreen extends Screen {
         return super.mouseClicked(event, doubleClick);
     }
 
-    // separator
-    // Mouse events.
-    // separator
+    // --- Mouse events ---
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
@@ -383,14 +376,13 @@ public class MtssGuiScreen extends Screen {
         return super.keyPressed(event);
     }
 
-    // separator
-
     @Override
     public boolean charTyped(CharacterEvent event) {
         int codepoint = event.codepoint();
         if (menuKind == MenuKind.RENAME) {
-            // (char) truncates codepoints outside the BMP (e.g.
-            // Character.toChars() expands to a surrogate pair instead when needed.
+            // (char) truncates codepoints outside the BMP (e.g. most emoji) down to
+            // their low 16 bits, corrupting them, so this uses
+            // Character.toChars() which expands to a surrogate pair instead when needed.
             if (codepoint >= 32 && renameBuffer.length() < 32)
                 renameBuffer.append(Character.toChars(codepoint));
             return true;
@@ -445,9 +437,7 @@ public class MtssGuiScreen extends Screen {
         }
     }
 
-    // separator
-    // Menu click handlers.
-    // separator
+    // --- Menu click handlers ---
 
     private void handleEmptySpaceMenuClick(int mx, int my, MtssConfig root) {
         int row = EmptySpaceMenuPanel.rowAt(mx, my, menuX, menuY, width, height);
@@ -548,46 +538,46 @@ public class MtssGuiScreen extends Screen {
     }
 
     private int[] applySnap(int bx, int by, int bw, int bh) {
-        int cx = width / 2, cy = height / 2, T = MtssConfig.getInstance().dragSnapThresholdPx;
+        int cx = width / 2, cy = height / 2, snapThreshold = MtssConfig.getInstance().dragSnapThresholdPx;
 
         int snappedX = bx;
         dragSnapX = MtssConfig.SnapX.NONE;
-        int bestDx = T + 1;
+        int bestDx = snapThreshold + 1;
         int d = Math.abs(bx - cx);
-        if (d <= T && d < bestDx) {
+        if (d <= snapThreshold && d < bestDx) {
             bestDx = d;
             snappedX = cx;
             dragSnapX = MtssConfig.SnapX.LEFT_ON_CENTER;
         }
         d = Math.abs((bx + bw / 2) - cx);
-        if (d <= T && d < bestDx) {
+        if (d <= snapThreshold && d < bestDx) {
             bestDx = d;
             snappedX = cx - bw / 2;
             dragSnapX = MtssConfig.SnapX.CENTER_ON_CENTER;
         }
         d = Math.abs((bx + bw) - cx);
-        if (d <= T && d < bestDx) {
+        if (d <= snapThreshold && d < bestDx) {
             snappedX = cx - bw;
             dragSnapX = MtssConfig.SnapX.RIGHT_ON_CENTER;
         }
 
         int snappedY = by;
         dragSnapY = MtssConfig.SnapY.NONE;
-        int bestDy = T + 1;
+        int bestDy = snapThreshold + 1;
         d = Math.abs(by - cy);
-        if (d <= T && d < bestDy) {
+        if (d <= snapThreshold && d < bestDy) {
             bestDy = d;
             snappedY = cy;
             dragSnapY = MtssConfig.SnapY.TOP_ON_CENTER;
         }
         d = Math.abs((by + bh / 2) - cy);
-        if (d <= T && d < bestDy) {
+        if (d <= snapThreshold && d < bestDy) {
             bestDy = d;
             snappedY = cy - bh / 2;
             dragSnapY = MtssConfig.SnapY.CENTER_ON_CENTER;
         }
         d = Math.abs((by + bh) - cy);
-        if (d <= T && d < bestDy) {
+        if (d <= snapThreshold && d < bestDy) {
             snappedY = cy - bh;
             dragSnapY = MtssConfig.SnapY.BOTTOM_ON_CENTER;
         }
@@ -595,11 +585,11 @@ public class MtssGuiScreen extends Screen {
         return new int[]{snappedX, snappedY};
     }
 
-    // separator
-    // Snap helpers.
-    // separator
+    // --- Snap helpers ---
 
-    /** Picks the nearest corner for (bx, by) and stores the offset from it as a. */
+    /** Picks the nearest corner for (bx, by) and stores the offset from it as a
+     *  normalized fraction of screen size (anchorFracX/Y), the same representation
+     *  {@link MtssConfig.StatListConfig#anchorFracX} uses everywhere else. */
     private void snapToNearestCorner(MtssConfig.StatListConfig lc,
                                      int bx, int by, int boxW, int boxH) {
         boolean nearRight = (bx + boxW / 2) > width / 2;
@@ -647,9 +637,7 @@ public class MtssGuiScreen extends Screen {
         return new int[]{pos[0], pos[1], boxW, boxH};
     }
 
-    // separator
-    // Utility.
-    // separator
+    // --- Utility ---
 
     private MtssConfig.StatListConfig getListById(int id) {
         for (MtssConfig.StatListConfig lc : MtssConfig.getInstance().lists)

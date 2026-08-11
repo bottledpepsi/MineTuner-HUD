@@ -4,7 +4,8 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/** The chunk coordinates (block XZ &gt. */
+/** The chunk coordinates (block XZ &gt;&gt; 4) the player currently stands in —
+ *  Minecraft's standard block-to-chunk conversion, since chunks are 16x16 blocks. */
 public final class ChunkPosStat implements StatDefinition {
 
     @Override

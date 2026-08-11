@@ -10,7 +10,7 @@ import java.util.List;
 
 public final class MtssDataHolder {
 
-    // separator
+    // --- Graph history ring buffers ---
     private static final int HISTORY_SIZE = 2000;
     private static final RingBuffer tpsHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer msptHistory = new RingBuffer(HISTORY_SIZE);
@@ -26,23 +26,25 @@ public final class MtssDataHolder {
     private static final RingBuffer gpuClockHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer gpuUsageHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer vramUsedHistory = new RingBuffer(HISTORY_SIZE);
-    // separator
+
+    // --- JVM/OS metric sources ---
     private static final MemoryMXBean MEM_BEAN = ManagementFactory.getMemoryMXBean();
     private static final OperatingSystemMXBean OS_BEAN = ManagementFactory.getOperatingSystemMXBean();
     private static final List<GarbageCollectorMXBean> GC_BEANS =
             ManagementFactory.getGarbageCollectorMXBeans();
     private static final long SLOW_MS = 500;
-    // separator
+
+    // --- Performance ---
     public static float tickRate = 20.0f;
     /** -1 when not on a singleplayer/LAN server (MSPT unavailable). */
     public static float mspt = -1f;
-    // separator
     public static int fps = 0;
     public static int ping = -1;
     public static int entityCount = 0;
     public static int loadedChunks = 0;
     public static int renderedSections = 0;
-    // separator
+
+    // --- Player position/facing ---
     public static double playerX = 0;
     public static double playerY = 0;
     public static double playerZ = 0;
@@ -51,21 +53,21 @@ public final class MtssDataHolder {
     public static float playerPitch = 0; // [-90 (straight up), 90 (straight down)].
     public static float speedBps = 0;
     public static int lightLevel = 0;
-    // separator
+
+    // --- World state ---
     public static String biomeName = "";
     public static String dimensionName = "";
     public static boolean isRaining = false;
     public static boolean isThundering = false;
     public static String difficultyName = "";
     public static int skyLight = 0;
-
-    // separator
     public static int blockLight = 0;
     public static boolean canSeeSky = false;
     public static int chunkX = 0;
     public static int chunkZ = 0;
     public static double distanceFromSpawn = 0;
-    // separator
+
+    // --- Player vitals ---
     public static float health = 0f;
     public static float maxHealth = 20f;
     public static int hunger = 0;
@@ -79,31 +81,35 @@ public final class MtssDataHolder {
     public static int selectedSlot = 0;
     public static String heldItemName = "";
     public static float verticalSpeedBps = 0f;
-    // separator
+
+    // --- Misc world/player ---
     public static int playersOnline = 0;
     /** Empty when nothing is targeted (crosshair over air/sky at max reach). */
     public static String lookingAtName = "";
     /** "block", "entity", or "" (nothing targeted). */
     public static String lookingAtKind = "";
-    /** True while the player has non-negligible horizontal movement (. */
+    /** True while the player has non-negligible horizontal movement (above a
+     *  small epsilon, to avoid flickering true/false from floating-point noise
+     *  while genuinely standing still — see TargetingSource.MOVING_EPSILON). */
     public static boolean isMoving = false;
-    // separator
+
+    // --- JVM/CPU metrics ---
     public static long memUsedMb = 0;
     public static long memMaxMb = 0;
     public static double cpuPercent = -1.0;
     public static long gcTimeMs = 0;
-    // separator
-    // Unlike every other field in this class, these are written from.
-    // HardwareSensorPoller's dedicated background thread (bottled.mtss.sample),.
-    // not the render thread.
-    // that class's doc for why.
-    // guaranteed-fresh read without needing a lock for what's otherwise a.
-    // simple "poll thread writes, render thread reads" handoff.
-    // "not available right now" (LHM not running/reachable, remote web.
-    // server off, sensor missing from this system's tree, or hardware.
-    // sensors not enabled in config at all).
-    // convention as cpuPercent above.
-    // surfaced.
+
+    // --- Hardware sensors (GPU/VRAM), via LibreHardwareMonitor ---
+    // Unlike every other field in this class, these are written from
+    // HardwareSensorPoller's dedicated background thread (bottled.mtss.sample),
+    // not the render thread — see that class's doc for why. volatile gives the
+    // render thread a guaranteed-fresh read without needing a lock for what's
+    // otherwise a simple "poll thread writes, render thread reads" handoff.
+    // -1.0 means "not available right now" (LHM not running/reachable, remote web
+    // server off, sensor missing from this system's tree, or hardware
+    // sensors not enabled in config at all) — the same sentinel-value
+    // convention as cpuPercent above, so callers don't need a separate
+    // "is this stat available" flag before a genuine reading can be surfaced.
     public static volatile double gpuTempC = -1.0;
     public static volatile double gpuClockMhz = -1.0;
     public static volatile double gpuUsagePercent = -1.0;
@@ -121,9 +127,11 @@ public final class MtssDataHolder {
         memUsedMb = used / (1024 * 1024);
         memMaxMb = max / (1024 * 1024);
 
-        // Sample each graphable stat once per frame.
-        // available yet (CPU/Ping at -1, Memory before the first heap read).
-        // so the buffer doesn't fill with flat -1 lines.
+        // Sample each graphable stat once per frame. Guarded pushes (e.g. "if
+        // (mspt >= 0f)") skip the push entirely when a stat's underlying value isn't
+        // available yet (CPU/Ping at -1, Memory before the first heap read),
+        // so the buffer doesn't fill with flat -1 lines that would otherwise
+        // show up as a fake reading on the graph.
         tpsHistory.push(getTps());
         if (mspt >= 0f) msptHistory.push(mspt);
         fpsHistory.push(fps);
@@ -131,23 +139,23 @@ public final class MtssDataHolder {
         if (ping >= 0) pingHistory.push(ping);
         if (memMaxMb > 0) memHistory.push((float) (100.0 * memUsedMb / memMaxMb));
         speedHistory.push(speedBps);
-        // Health is stored as a percent of max, same convention as Memory's.
-        // used/max percentage.
-        // valid for historical samples even if max health changes mid-session.
+        // Health is stored as a percent of max, same convention as Memory's
+        // used/max percentage above, so the graph's 0-100 scale stays
+        // valid for historical samples even if max health changes mid-session
+        // (e.g. from an absorption/health-boost effect ending, or a
+        // max-health-modifying attribute change).
         if (maxHealth > 0) healthHistory.push(100f * health / maxHealth);
         hungerHistory.push(hunger);
         armorHistory.push(armor);
 
-        // Hardware sensors.
-        // above, so a flat run of -1 (LHM not running, or feature disabled).
+        // Hardware sensors follow the same guarded-push convention described
+        // above, so a flat run of -1 (LHM not running, or feature disabled)
         // never enters the buffer as if it were a real reading.
         if (gpuTempC >= 0) gpuTempHistory.push((float) gpuTempC);
         if (gpuClockMhz >= 0) gpuClockHistory.push((float) gpuClockMhz);
         if (gpuUsagePercent >= 0) gpuUsageHistory.push((float) gpuUsagePercent);
         if (vramUsedMb >= 0) vramUsedHistory.push((float) vramUsedMb);
     }
-
-    // separator
 
     public static void updateSlowMetrics() {
         long now = System.currentTimeMillis();
@@ -168,12 +176,10 @@ public final class MtssDataHolder {
         gcTimeMs = total;
     }
 
+    /** Returns a copy each time so callers can't mutate the backing buffer. */
     public static float[] getTpsHistory() {
         return tpsHistory.snapshot();
     }
-
-    // separator
-    // Returns a copy each time so callers can't mutate the backing buffer.
 
     public static float[] getMsptHistory() {
         return msptHistory.snapshot();
@@ -232,11 +238,11 @@ public final class MtssDataHolder {
         return tickRate;
     }
 
-    // separator
-    // Each getXColor() reads live state and calls the matching xColorFor(value),.
-    // so graph mode can color historical samples with the same thresholds as.
-    // classic text mode.
-    // ThresholdSettings override.
+    // Each getXColor() reads live state and calls the matching xColorFor(value),
+    // so graph mode can color historical samples with the same thresholds as
+    // classic text mode — getXColor() is just xColorFor(currentValue), and both
+    // accept an optional per-list custom ThresholdSettings override (null = use
+    // this stat's own built-in default thresholds instead).
     // for the default hardcoded bands.
 
     public static int getTpsColor() {
@@ -321,7 +327,10 @@ public final class MtssDataHolder {
         return memColorForPercent(100.0 * memUsedMb / memMaxMb, custom);
     }
 
-    /** For graph mode, where history is already stored as a used/max percentage (. */
+    /** For graph mode, where history is already stored as a used/max percentage
+     *  (see MtssDataHolder.updateFastMetrics's memHistory.push call) rather than
+     *  raw used/max megabyte values — same "already a percent, no memMaxMb needed"
+     *  shortcut healthColorFor/HealthStat.colorFor use for the health graph. */
     public static int memColorForPercent(double pct100) {
         return memColorForPercent(pct100, null);
     }
@@ -388,7 +397,13 @@ public final class MtssDataHolder {
         return healthColorFor(healthValue, null);
     }
 
-    /** Health is higher-is-better, measured as a percent of max so it works with. */
+    /** Health is higher-is-better, measured as a percent of max so it works with
+     *  goodMin/warnMin thresholds on the same fixed 0-100 scale regardless of the
+     *  player's actual max health. Converts the raw current-health value to a percent
+     *  internally using the *current* maxHealth — contrast with HealthStat.colorFor,
+     *  which receives an already-percent value from the history buffer instead,
+     *  each historical sample having been converted against maxHealth as it stood
+     *  at that sample's own moment (which may differ from the current maxHealth). */
     public static int healthColorFor(float healthValue, ThresholdSettings custom) {
         float pct = maxHealth > 0 ? (100f * healthValue / maxHealth) : 0f;
         if (custom != null && custom.enabled) {
@@ -492,8 +507,6 @@ public final class MtssDataHolder {
     private static String t(String key, Object... args) {
         return net.minecraft.client.resources.language.I18n.get(key, args);
     }
-
-    // separator
 
     private static String fmt(double value, int decimals) {
         return String.format("%." + Math.max(0, Math.min(6, decimals)) + "f", value);
@@ -657,8 +670,6 @@ public final class MtssDataHolder {
         return t("mtss.stat.health", fmt(health, 0), fmt(maxHealth, 0));
     }
 
-    // separator
-
     /** Bare "current/max" with no label, for Template Mode. */
     public static String getRawHealth() {
         return fmt(health, 0) + "/" + fmt(maxHealth, 0);
@@ -742,8 +753,6 @@ public final class MtssDataHolder {
         return t("mtss.stat.weather", state);
     }
 
-    // separator
-
     public static String getFormattedDifficulty() {
         String raw = difficultyName;
         String display = raw.isEmpty() ? "?" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
@@ -766,8 +775,6 @@ public final class MtssDataHolder {
         return t("mtss.stat.players_online", playersOnline);
     }
 
-    // separator
-
     public static String getFormattedChunkPos() {
         return t("mtss.stat.chunk_pos", chunkX, chunkZ);
     }
@@ -784,12 +791,11 @@ public final class MtssDataHolder {
         return fmt(distanceFromSpawn, decimals);
     }
 
-    /** Empty string when nothing is targeted, same "skip this line" convention as. */
+    /** Empty string when nothing is targeted, same "skip this line" convention as
+     *  getFormattedMspt()/getFormattedGpuTemp() use for their own unavailable cases. */
     public static String getFormattedLookingAt() {
         return lookingAtName.isEmpty() ? "" : t("mtss.stat.looking_at", lookingAtName);
     }
-
-    // separator
 
     /** Bare targeted-thing name, or a translated placeholder for Template Mode. */
     public static String getRawLookingAt() {
@@ -804,19 +810,19 @@ public final class MtssDataHolder {
         return getFormattedGpuTemp(0);
     }
 
-    // separator
-    // -1 means "unavailable" ( the field doc above).
-    // getFormattedMspt()'s "" convention rather than getFormattedCpu()'s.
-    // "show a literal N/A line" one.
-    // *structurally* absent for most users (remote server.
-    // opted into) rather than a single always-enabled stat that occasionally.
-    // can't resolve a value, so skipping the line entirely (LineBuilder's.
-    // existing "" == omit-this-row signal) avoids a permanent "N/A" row on.
-    // every HUD that hasn't set this up.
-    // it's off by default.
-    // where the user's own template text supplies the label) still return a.
-    // literal "N/A" like getRawCpu()/getRawPing() do, since a template line.
-    // mixing several tokens going silently blank for just one would read as.
+    // -1 means "unavailable" (see the field doc above), and getFormattedGpuTemp()
+    // follows getFormattedMspt()'s "" (skip this line) convention rather than
+    // getFormattedCpu()'s "show a literal N/A line" one. GPU/VRAM stats are
+    // *structurally* absent for most users (an opt-in remote-sensor feature,
+    // off by default, that most people never set up) rather than a single
+    // always-enabled stat that occasionally can't resolve a value, so
+    // skipping the line entirely (LineBuilder's existing "" == omit-this-row
+    // signal) avoids a permanent "N/A" row on every HUD that hasn't set this up
+    // — matching MSPT's own "hidden unless you're on singleplayer/LAN" behavior.
+    // getRawGpuTemp/getRawGpuClock/etc. (used by Template Mode, where the
+    // user's own template text supplies the label) still return a
+    // literal "N/A" like getRawCpu()/getRawPing() do, since a template line
+    // mixing several tokens going silently blank for just one would read as
     // a rendering glitch rather than "unavailable".
 
     public static String getFormattedGpuTemp(int decimals) {
@@ -855,8 +861,8 @@ public final class MtssDataHolder {
     }
 
     public static String getFormattedVramUsed() {
-        // Only render once both used and max are known.
-        // (e.g.
+        // Only render once both used and max are known — a used-but-not-max reading
+        // (e.g. mid-poll, or a sensor tree that only partially resolved this cycle)
         // would otherwise show a misleading "1024/0MB".
         return (vramUsedMb >= 0 && vramMaxMb > 0)
                 ? t("mtss.stat.vram_used", Math.round(vramUsedMb), Math.round(vramMaxMb))

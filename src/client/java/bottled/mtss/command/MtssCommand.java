@@ -18,12 +18,12 @@ public class MtssCommand {
                             Minecraft.getInstance().gui.setScreen(new MtssGuiScreen()));
                     return 1;
                 }))
-                // Opens the Cloth Config screen.
-                // alternative covering every mtss.json field at once, including.
-                // ones with no control anywhere in the custom GUI (hardware.
-                // sensor settings, GUI panel sizing/tuning).
-                // ModMenu's mod list if the player has it installed.
-                // bottled.mtss.config.cloth.MtssModMenuIntegration.
+                // Opens the Cloth Config screen — a text-field-based
+                // alternative covering every mtss.json field at once, including
+                // ones with no control anywhere in the custom GUI (hardware
+                // sensor settings, GUI panel sizing/tuning). Also reachable from
+                // ModMenu's mod list if the player has it installed (see
+                // bottled.mtss.config.cloth.MtssModMenuIntegration), but this
                 // command works whether or not ModMenu is present.
                 .then(literal("config").executes(ctx -> {
                     Minecraft.getInstance().schedule(() -> {

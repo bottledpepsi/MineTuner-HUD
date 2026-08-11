@@ -10,13 +10,8 @@ import static bottled.mtss.gui.render.PanelChrome.*;
 
 public final class ColorScalePanel {
 
-    // separator
-    public static final int CS_USE_CUSTOM = 0;
-    public static final int CS_CYCLE = 1;
-    public static final int CS_SCALE_DOWN = 2;
-    public static final int CS_SCALE_UP = 2; // same row as SCALE_DOWN, split by x position.
-    public static final int CS_BACK = 3;
-    public static final int CS_COUNT = 4;
+    /** Row count: use-custom-color, cycle-color, scale (+/- share one row), back. */
+    private static final int CS_COUNT = 4;
     /** Small curated swatch palette to cycle through for the custom list color. */
     public static final int[] COLOR_SWATCHES = {
             0xFFFFFFFF, // white.

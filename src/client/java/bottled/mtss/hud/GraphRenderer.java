@@ -17,8 +17,7 @@ final class GraphRenderer {
         float[] display = entry.displayHistory();
         int n = display.length;
 
-        // separator
-        // Separate from the list's own showBackground, so the graph still.
+        // Separate from the list's own showBackground, so the graph still
         // reads as its own widget even when the list background is off.
         if (style.showPanelBackground) {
             graphics.fill(x, y, x + w, y + h, 0x30FFFFFF);
@@ -34,7 +33,6 @@ final class GraphRenderer {
         int plotY = y + 1;
         if (plotW <= 0 || plotH <= 0 || n == 0) return;
 
-        // separator
         if (style.showGridlines && plotH >= 12) {
             for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
                 int gy = plotY + Math.round(plotH * (1f - frac));
@@ -44,10 +42,8 @@ final class GraphRenderer {
             }
         }
 
-        // separator
         drawPlotLine(graphics, entry, style, display, n, plotX, plotY, plotW, plotH);
 
-        // separator
         if (style.showPeakMarkers && n >= 2 && plotW >= 10) {
             float peakMaxTopY = lerpTopY(entry, n, plotH, entry.peakMaxIdx());
             float peakMinTopY = lerpTopY(entry, n, plotH, entry.peakMinIdx());
@@ -55,7 +51,6 @@ final class GraphRenderer {
             drawPeakMarker(graphics, entry.peakMinIdx(), n, plotX, plotY, plotW, peakMinTopY, 0xFFAAAAAA);
         }
 
-        // separator
         String label = entry.label();
         if (style.valueDisplay != MtssConfig.GraphValueDisplay.NONE && !label.isEmpty()) {
             int labelW = font.width(label);
@@ -92,7 +87,7 @@ final class GraphRenderer {
             int i1 = Math.min(n - 1, i0 + 1);
             float frac = t - i0;
             float v = display[i0] + (display[i1] - display[i0]) * frac;
-            float norm = Math.max(0f, Math.min(1f, (v - scaleMin) / range)); // 0.1, clamped.
+            float norm = Math.max(0f, Math.min(1f, (v - scaleMin) / range)); // 0-1, clamped.
             int barH = Math.max(1, Math.round(norm * (plotH - 1)));
             colTopY[col] = plotY + plotH - barH;
             colSampleIdx[col] = Math.round(t);
@@ -107,11 +102,12 @@ final class GraphRenderer {
             colColor[col] = colorForColumn(entry, style, colSampleIdx[col]);
         }
 
-        // separator
-        // Adjacent columns sharing the same (topY, color).
-        // norm rounds to integer pixel heights and color only changes at.
-        // threshold boundaries.
-        // many single-pixel ones.
+        // Adjacent columns sharing the same (topY, color) are drawn as a single
+        // wide fill() run instead of one fill() per column. This isn't just a
+        // micro-optimization: it's common for many adjacent columns to collapse
+        // into the same run, since norm rounds to integer pixel heights and color
+        // only changes at threshold boundaries, so one wide fill() replaces
+        // many single-pixel ones — worth doing since this runs every frame, and
         // with several graphs on screen, per-column fills add up fast.
         int runStart = 0;
         while (runStart < plotW) {
@@ -133,8 +129,9 @@ final class GraphRenderer {
             runStart = runEnd;
         }
 
-        // separator
-        // Second pass so it draws on top of neighboring fills.
+        // Second pass so the stroke line draws on top of neighboring fills, using the
+        // same run-merging approach as the fill pass above but keyed on
+        // (topY, strokeColor) instead of (topY, fillColor).
         int[] strokeColor = new int[plotW];
         for (int col = 0; col < plotW; col++) {
             strokeColor[col] = ColorMath.withAlpha(ColorMath.brighten(colColor[col]), 0xFF);

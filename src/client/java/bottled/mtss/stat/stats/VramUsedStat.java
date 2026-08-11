@@ -4,7 +4,8 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/** VRAM used, formatted as "used/maxMB" (same used/max shape { MemoryStat} uses. */
+/** VRAM used, formatted as "used/maxMB" (same used/max shape {@link MemoryStat} uses
+ *  for JVM heap, just against the GPU's reported total VRAM instead). */
 public final class VramUsedStat implements StatDefinition {
 
     @Override

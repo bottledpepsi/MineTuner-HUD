@@ -19,8 +19,8 @@ public final class ReorderPanel {
             MtssConfig.StatCategory.POSITION,
     };
 
-    // separator
-    /** Title row + the always-present search row, both above the scrollable. */
+    /** Title row + the always-present search row, both above the scrollable
+     *  category/stat list, always counted in row-count math regardless of scroll. */
     private static final int HEADER_ROWS = 2;
     /** Wider than the standard panel. */
     public static int PANEL_W = WIDE_PANEL_W;
@@ -30,18 +30,18 @@ public final class ReorderPanel {
     private ReorderPanel() {
     }
 
-    /** Re-reads { #PANEL_W} and { #MAX_VISIBLE_ROWS} from the given config. */
+    /** Re-reads {@link #PANEL_W} and {@link #MAX_VISIBLE_ROWS} from the given config. */
     public static void syncFromConfig(MtssConfig cfg) {
         PANEL_W = cfg.widePanelWidth;
         MAX_VISIBLE_ROWS = cfg.reorderPanelMaxVisibleRows;
     }
 
-    // separator
-    // A "visible row" is either a category header or one stat beneath an.
-    // expanded category.
+    // A "visible row" is either a category header or one stat beneath an
+    // expanded category. Which categories are expanded is tracked in the UI
     // state's expanded set.
 
-    /** Stats in { lc.statOrder} order, grouped by category, preserving each. */
+    /** Stats in {@code lc.statOrder} order, grouped by category, preserving each
+     *  category's stats in their original relative order from statOrder. */
     private static Map<MtssConfig.StatCategory, List<MtssConfig.Stat>> groupByCategory(MtssConfig.StatListConfig lc) {
         Map<MtssConfig.StatCategory, List<MtssConfig.Stat>> byCat = new EnumMap<>(MtssConfig.StatCategory.class);
         for (MtssConfig.StatCategory cat : CATEGORY_ORDER) byCat.put(cat, new ArrayList<>());
@@ -69,9 +69,10 @@ public final class ReorderPanel {
             for (MtssConfig.Stat s : stats) if (lc.isEnabled(s)) enabledCount++;
 
             if (filtering) {
-                // Filtered view.
-                // search text, and only categories that have at least one.
-                // an empty category header with nothing to expand into would.
+                // Filtered view: every category is shown expanded (regardless of the
+                // UI state's expanded set) but only stats matching the search text are
+                // listed, and only categories that have at least one match get a header —
+                // an empty category header with nothing to expand into would
                 // just be a dead end for the user typing a query.
                 List<MtssConfig.Stat> matches = new ArrayList<>();
                 for (MtssConfig.Stat s : stats) {
@@ -80,11 +81,13 @@ public final class ReorderPanel {
                 if (matches.isEmpty()) continue;
                 rows.add(new HeaderRow(cat, enabledCount, stats.size()));
                 for (int i = 0; i < matches.size(); i++) {
-                    // indexInCategory/categorySize stay relative to the *unfiltered*.
-                    // category so ▲/▼ reordering (which operates on the full.
-                    // statOrder) still makes sense.
-                    // just means ▲/▼ silently reorders past it, same as it.
-                    // already does past any other same-category stat.
+                    // indexInCategory/categorySize stay relative to the *unfiltered*
+                    // category so ▲/▼ reordering (which operates on the full
+                    // statOrder) still makes sense even while the filter hides some
+                    // of that category's other stats from view. A filtered-out
+                    // neighbor being skipped in the visible list just means ▲/▼
+                    // silently reorders past it, same as it already does past any
+                    // other same-category stat.
                     int fullIdx = stats.indexOf(matches.get(i));
                     rows.add(new StatRow(matches.get(i), fullIdx, stats.size()));
                 }
@@ -165,8 +168,6 @@ public final class ReorderPanel {
         }
     }
 
-    // separator
-
     /** The search row. */
     private static void renderSearchRow(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                                         int mx, int my, int px, int ry, UiState ui) {
@@ -212,9 +213,10 @@ public final class ReorderPanel {
 
         String statName = I18n.get("stat.mtss." + stat.name().toLowerCase());
         String label = (enabled ? "§a✔ " : "§c✘ ") + statName;
-        // Indented under its category header, and narrower than the full.
-        // width to leave room for the ⚙/▲/▼ cluster on the right without.
-        // needing per-stat-name truncation logic.
+        // Indented under its category header, and narrower than the full
+        // width to leave room for the ⚙/▲/▼ cluster on the right without
+        // needing per-stat-name truncation logic beyond the generic truncate()
+        // helper below.
         g.text(font, truncate(font, label, PANEL_W - 16 - 36), px + PANEL_PAD + 8, ry + 2, 0xFFFFFFFF, false);
 
         boolean cogHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 34, ry, 12, ROW_H);
@@ -225,9 +227,9 @@ public final class ReorderPanel {
             g.text(font, "§7▼", px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
     }
 
-    // separator
-
-    /** Truncates with an ellipsis so a long stat name never collides with the ⚙/▲/▼. */
+    /** Truncates with an ellipsis so a long stat name never collides with the ⚙/▲/▼
+     *  cluster; picks the longest prefix (via binary search on rendered width) that
+     *  still fits maxWidth once the ellipsis is appended. */
     private static String truncate(net.minecraft.client.gui.Font font, String s, int maxWidth) {
         if (font.width(s) <= maxWidth) return s;
         String ellipsis = "..";
@@ -257,8 +259,9 @@ public final class ReorderPanel {
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelH, screenH);
 
-        // Title-row paging.
-        // no dedicated arrow glyphs needed since the title row already shows the.
+        // Title-row paging: clicking the left half of the title row pages back,
+        // the right half pages forward — no dedicated arrow glyphs needed since
+        // the title row already shows the "(X-Y/N)" range as a paging hint.
         boolean paged = totalRows > MAX_VISIBLE_ROWS;
         if (paged && PanelChrome.isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
             int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
@@ -276,10 +279,12 @@ public final class ReorderPanel {
             }
             return null;
         } else if (ui.isSearchFocused()) {
-            // Clicked elsewhere in the panel while the field had focus.
-            // "clicking away" convention RENAME/TEMPLATE_EDIT use elsewhere in.
-            // this GUI, except here it only drops focus rather than closing.
-            // the whole panel, since the filter itself might still be wanted.
+            // Clicked elsewhere in the panel while the field had focus. Same
+            // "clicking away cancels focus/editing" convention RENAME/TEMPLATE_EDIT use
+            // elsewhere in this GUI, except here it only drops keyboard focus rather
+            // than closing the whole panel, since the filter itself might still be
+            // wanted — the user may just want to click a result while the field is
+            // no longer focused.
             ui.toggleSearchFocus();
         }
 
@@ -309,21 +314,21 @@ public final class ReorderPanel {
     private static MtssConfig.Stat handleStatRowClick(int mx, int px, MtssConfig.StatListConfig lc, StatRow statRow) {
         MtssConfig.Stat stat = statRow.stat();
 
-        // ⚙ cog.
+        // ⚙ cog: opens this stat's settings panel.
         if (mx >= px + PANEL_W - 34 && mx < px + PANEL_W - 22) {
             return stat;
         }
-        // ▲.
-        // earlier statOrder entry that shares its category, so reordering.
-        // never crosses a category boundary).
+        // ▲: move up. moveWithinCategory() only ever swaps with the nearest
+        // earlier statOrder entry that shares its category, so reordering
+        // never crosses a category boundary.
         if (mx >= px + PANEL_W - 22 && mx < px + PANEL_W - 12 && statRow.indexInCategory() > 0) {
             moveWithinCategory(lc, stat, -1);
             MtssConfig.getInstance().save();
-            // ▼.
+            // ▼: move down, same category-boundary rule as ▲ above.
         } else if (mx >= px + PANEL_W - 12 && statRow.indexInCategory() < statRow.categorySize() - 1) {
             moveWithinCategory(lc, stat, +1);
             MtssConfig.getInstance().save();
-            // toggle enable.
+            // Clicked the row itself (not ⚙/▲/▼): toggle enabled state.
         } else {
             lc.setEnabled(stat, !lc.isEnabled(stat));
             MtssConfig.getInstance().save();
@@ -331,7 +336,10 @@ public final class ReorderPanel {
         return null;
     }
 
-    /** Swaps { stat} in-place with the nearest other stat in the same category, {. */
+    /** Swaps {@code stat} in-place with the nearest other stat in the same category,
+     *  {@code direction} steps away in statOrder (-1 = toward the front/up, +1 = toward
+     *  the back/down). Stats from other categories in between are skipped over rather
+     *  than swapped with, so a move can never cross a category boundary. */
     private static void moveWithinCategory(MtssConfig.StatListConfig lc, MtssConfig.Stat stat, int direction) {
         MtssConfig.StatCategory cat = MtssConfig.categoryOf(stat);
         int from = lc.statOrder.indexOf(stat.name());
@@ -354,12 +362,8 @@ public final class ReorderPanel {
         }
     }
 
-    // separator
-
     private sealed interface Row permits HeaderRow, StatRow {
     }
-
-    // separator
 
     /** Per-list UI state for this panel. */
     public static final class UiState {

@@ -4,7 +4,8 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/** GPU utilization %, by LibreHardwareMonitor's Remote Web Server (opt-in. */
+/** GPU utilization %, via LibreHardwareMonitor's Remote Web Server (opt-in;
+ *  see {@link bottled.mtss.sample.HardwareSensorPoller}). */
 public final class GpuUsageStat implements StatDefinition {
 
     @Override

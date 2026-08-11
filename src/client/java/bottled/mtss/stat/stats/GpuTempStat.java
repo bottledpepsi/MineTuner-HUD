@@ -4,7 +4,8 @@ import bottled.mtss.MtssDataHolder;
 import bottled.mtss.config.MtssConfig;
 import bottled.mtss.stat.StatDefinition;
 
-/** GPU core temperature in °C, by LibreHardwareMonitor's Remote Web Server (opt-in. */
+/** GPU core temperature in °C, via LibreHardwareMonitor's Remote Web Server (opt-in;
+ *  see {@link bottled.mtss.sample.HardwareSensorPoller}). */
 public final class GpuTempStat implements StatDefinition {
 
     @Override
@@ -57,9 +58,9 @@ public final class GpuTempStat implements StatDefinition {
         return 1.0f;
     }
 
-    // Conservative headroom under typical thermal-throttle points for.
-    // consumer NVIDIA/AMD GPUs (commonly ~83-95°C depending on the card).
-    // a general "getting warm" / "hot" signal, not a vendor-specific limit,.
+    // Conservative headroom under typical thermal-throttle points for
+    // consumer NVIDIA/AMD GPUs (commonly ~83-95°C depending on the card). This is
+    // a general "getting warm" / "hot" signal, not a vendor-specific limit,
     // since LHM's tree doesn't expose the per-card throttle point itself.
     @Override
     public float defaultGoodMin() {

@@ -1,5 +1,6 @@
 package bottled.mtss.config;
 
+import bottled.mtss.MtssMod;
 import bottled.mtss.hud.TemplateEngine;
 import bottled.mtss.stat.StatDefinition;
 import bottled.mtss.stat.StatRegistry;
@@ -22,29 +23,26 @@ public class MtssConfig {
             .filter(StatDefinition::supportsGraph)
             .map(StatDefinition::key)
             .collect(Collectors.toUnmodifiableSet());
-    /** Same idea as { #GRAPHABLE_STATS}, driven by { supportsThreshold()}. */
+    /** Same idea as {@link #GRAPHABLE_STATS}, driven by {@code supportsThreshold()}. */
     public static final Set<Stat> THRESHOLD_STATS = StatRegistry.all().stream()
             .filter(StatDefinition::supportsThreshold)
             .map(StatDefinition::key)
             .collect(Collectors.toUnmodifiableSet());
-    // separator
+
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH =
             FabricLoader.getInstance().getConfigDir().resolve("mtss.json");
     private static MtssConfig INSTANCE;
-    // separator
+
     public int nextId = 1;
     public List<StatListConfig> lists = new ArrayList<>();
     /** Global show/hide switch for the entire overlay. */
     public boolean overlayEnabled = true;
- 
+
     public boolean hardwareSensorsEnabled = false;
-
     public String hardwareSensorBaseUrl = "http://localhost:8085";
-
     public int hardwareSensorPollIntervalMs = 1500;
-
     public int hardwareSensorRequestTimeoutMs = 300;
 
     public int reorderPanelMaxVisibleRows = 16;
@@ -53,25 +51,27 @@ public class MtssConfig {
     /** Width, in pixels, of the standard (narrow) editor panels. */
     public int panelWidth = 160;
 
-    // separator
-    // Previously hardcoded constants scattered across the editor's panel.
-    // classes (ReorderPanel, PanelChrome, MtssGuiScreen).
-    // they're both a single source of truth for the panels and editable from.
-    // the Cloth Config screen ( bottled.mtss.config.cloth).
-    // exactly match the old hardcoded values, so existing configs behave.
+    // Previously hardcoded constants scattered across the editor's panel
+    // classes (ReorderPanel, PanelChrome, MtssGuiScreen). Centralized here so
+    // they're both a single source of truth for the panels and editable from
+    // the Cloth Config screen (bottled.mtss.config.cloth). Defaults below
+    // exactly match the old hardcoded values, so existing configs behave
     // identically until a user opts into changing them.
     /** Width, in pixels, of the wider "Edit Stats" reorder panel. */
     public int widePanelWidth = 216;
     /** Inner padding, in pixels, applied on all sides of every editor panel. */
     public int panelPadding = 4;
-    /** Distance, in pixels, within which a dragged list snaps to the screen's. */
+    /** Distance, in pixels, within which a dragged list snaps to the screen's
+     *  edges/center lines (see {@link SnapX}/{@link SnapY}). */
     public int dragSnapThresholdPx = 6;
-    /** Lower bound offered by the Text Scale slider/stepper, and the floor a list's. */
+    /** Lower bound offered by the Text Scale slider/stepper, and the floor a list's
+     *  own textScale is clamped to when adjusted via the "-" button or Cloth Config. */
     public float textScaleMin = 0.5f;
-    /** Upper bound offered by the Text Scale slider/stepper, and the ceiling a. */
+    /** Upper bound offered by the Text Scale slider/stepper, and the ceiling a
+     *  list's own textScale is clamped to when adjusted via the "+" button or Cloth Config. */
     public float textScaleMax = 2.0f;
 
-    /** Which { StatCategory} a stat belongs to in the toggle panel. */
+    /** Which {@link StatCategory} a stat belongs to in the toggle panel. */
     public static StatCategory categoryOf(Stat stat) {
         return switch (stat) {
             case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE,
@@ -104,24 +104,24 @@ public class MtssConfig {
             try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
                 MtssConfig cfg = GSON.fromJson(r, MtssConfig.class);
                 if (cfg != null) {
-                    // overlayEnabled needs no backfill.
-                    // constructor, so the `= true` field initializer already.
-                    // ran before the JSON was applied, and an old config file.
+                    // overlayEnabled needs no backfill: MtssConfig has no custom
+                    // constructor, so the `= true` field initializer already
+                    // ran before the JSON was applied, and an old config file
                     // with no "overlayEnabled" key just leaves it in place.
-                    // Same is true of every newly-added primitive field below.
-                    // (hardwareSensorPollIntervalMs, panelRowHeight, etc.).
-                    // Gson only overwrites a field when its key is present in.
-                    // the JSON, so an old mtss.json missing these keys just.
-                    // keeps the `= <default>` values from the field.
-                    // initializers.
-                    // against out-of-range *values* a user (or a future.
+                    // Same is true of every newly-added primitive field below
+                    // (hardwareSensorPollIntervalMs, panelRowHeight, etc.):
+                    // Gson only overwrites a field when its key is present in
+                    // the JSON, so an old mtss.json missing these keys just
+                    // keeps the `= <default>` values from the field
+                    // initializers. clampGuiTuning() below only guards
+                    // against out-of-range *values* a user (or a future
                     // Cloth Config edit) actually wrote, not missing ones.
                     cfg.clampGuiTuning();
                     if (cfg.lists == null) cfg.lists = new ArrayList<>();
                     for (StatListConfig list : cfg.lists) {
                         if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
                         if (list.statOrder == null) list.statOrder = new ArrayList<>();
-                        // Null for configs written before this field existed.
+                        // Null for configs written before this field existed;
                         // backFill() below fills in the defaults.
                         if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
                         if (list.templateLines == null) list.templateLines = new ArrayList<>();
@@ -133,13 +133,13 @@ public class MtssConfig {
                     return cfg;
                 }
             } catch (IOException | com.google.gson.JsonSyntaxException | com.google.gson.JsonIOException e) {
-                // Corrupt/truncated JSON (e.g.
-                // fix, or manual editing gone wrong) used to silently fall through.
+                // Corrupt/truncated JSON (e.g. a crash mid-write before the atomic-save
+                // fix, or manual editing gone wrong) used to silently fall through
                 // to fresh defaults, discarding the user's lists with no trace.
-                // Preserve the broken file next to a timestamped ".bak" instead,.
-                // so a config that fails to parse is recoverable rather than.
+                // Preserve the broken file next to a timestamped ".bak" instead,
+                // so a config that fails to parse is recoverable rather than
                 // just gone, then continue on to fresh defaults below.
-                System.err.println("[MTSS] Failed to load config (" + e.getMessage() + "); backing up and starting fresh.");
+                MtssMod.LOGGER.error("Failed to load config ({}); backing up and starting fresh.", e.getMessage());
                 backupCorruptConfig();
             }
         }
@@ -156,13 +156,16 @@ public class MtssConfig {
             Path backup = CONFIG_PATH.resolveSibling(
                     CONFIG_PATH.getFileName() + ".bak-" + System.currentTimeMillis());
             Files.copy(CONFIG_PATH, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            System.err.println("[MTSS] Backed up unreadable config to " + backup);
+            MtssMod.LOGGER.error("Backed up unreadable config to {}", backup);
         } catch (IOException copyFailed) {
-            System.err.println("[MTSS] Could not back up unreadable config: " + copyFailed.getMessage());
+            MtssMod.LOGGER.error("Could not back up unreadable config: {}", copyFailed.getMessage());
         }
     }
 
-    /** Clamps every GUI/hardware-sensor tuning field to a sane floor (and, where it. */
+    /** Clamps every GUI/hardware-sensor tuning field to a sane floor (and, where it
+     *  makes sense — e.g. widePanelWidth vs. panelWidth, textScaleMax vs. textScaleMin —
+     *  to be no smaller than a related field), so a hand-edited or corrupted config
+     *  value can't produce a broken layout or a runaway polling loop. */
     public void clampGuiTuning() {
         reorderPanelMaxVisibleRows = Math.max(3, reorderPanelMaxVisibleRows);
         panelRowHeight = Math.max(6, panelRowHeight);
@@ -181,8 +184,8 @@ public class MtssConfig {
 
     public StatListConfig createList() {
         StatListConfig cfg = new StatListConfig(nextId++);
-        // Stagger new lists diagonally so they don't stack on top of each.
-        // other, same idea as before but expressed as a screen fraction so.
+        // Stagger new lists diagonally so they don't stack on top of each
+        // other — same idea as before but expressed as a screen fraction so
         // the stagger looks the same regardless of GUI scale.
         cfg.anchorFracX = 0.01 + lists.size() * 0.05;
         cfg.anchorFracY = 0.01 + lists.size() * 0.05;
@@ -223,8 +226,8 @@ public class MtssConfig {
                 Files.move(tmp, CONFIG_PATH, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
-            System.err.println("[MTSS] Failed to save config: " + e.getMessage());
-            // Best-effort cleanup so a failed save doesn't leave a stray .tmp.
+            MtssMod.LOGGER.error("Failed to save config: {}", e.getMessage());
+            // Best-effort cleanup so a failed save doesn't leave a stray .tmp
             // file behind to confuse the next save attempt.
             try {
                 Files.deleteIfExists(tmp);
@@ -232,8 +235,6 @@ public class MtssConfig {
             }
         }
     }
-
-    // separator
 
     /** Which screen corner a list is anchored to. */
     public enum Corner {
@@ -257,25 +258,27 @@ public class MtssConfig {
     }
 
     public enum Stat {
+        // --- Performance ---
         TPS, MSPT, FPS, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
         COORDS, X, Y, Z, FACING, YAW, PITCH, SPEED, GC_TIME,
         BIOME, LIGHT_LEVEL, DIMENSION,
-        // separator
+        // --- Player vitals ---
         HEALTH, HUNGER, SATURATION, ARMOR, AIR,
         XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM,
-        // separator
+        // --- World state ---
         WEATHER, DIFFICULTY,
         SKY_LIGHT, BLOCK_LIGHT, CAN_SEE_SKY,
-        // separator
+        // --- Misc world/player ---
         PLAYERS_ONLINE, DISTANCE_FROM_SPAWN, CHUNK_POS, VERTICAL_SPEED,
-        // separator
+        // --- Targeting ---
         LOOKING_AT, MOVING,
-        // separator
+        // --- Hardware sensors ---
         GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED
     }
 
-    /** Groups { Stat} constants for the redesigned toggle/reorder panel ( {. */
+    /** Groups {@link Stat} constants for the redesigned toggle/reorder panel — see
+     *  {@link #categoryOf(Stat)} for the stat-to-category mapping. */
     public enum StatCategory {
         PERFORMANCE, PLAYER, WORLD, POSITION
     }
@@ -296,9 +299,8 @@ public class MtssConfig {
         GRADIENT
     }
 
-    // separator
     public static class StatSettings {
-        /** Show the label prefix (e.g. */
+        /** Show the label prefix (e.g. "TPS: " before "20.0") in classic text mode. */
         public boolean showPrefix = true;
         /** Decimal places for stats that support it (TPS, MSPT, CPU, Speed). */
         public int decimals = 1;
@@ -358,9 +360,13 @@ public class MtssConfig {
     public static class ThresholdSettings {
         /** false = ignore goodMin/warnMin and use the built-in default. */
         public boolean enabled = false;
-        /** Higher-is-better. */
+        /** Cutoff for the "good" (green) color band. Whether higher or lower values
+         *  count as better depends on the stat (e.g. TPS/FPS are higher-is-better,
+         *  while ping/CPU%/GPU temp are lower-is-better) — see each StatDefinition's
+         *  color() method for the exact comparison it uses. */
         public float goodMin;
-        /** Higher-is-better. */
+        /** Cutoff for the "warning" (yellow) color band; below/above this (per the
+         *  same higher-or-lower-is-better direction as goodMin) is "bad" (red). */
         public float warnMin;
 
         public ThresholdSettings() {
@@ -377,7 +383,6 @@ public class MtssConfig {
         }
     }
 
-    // separator
     public static class StatListConfig {
         /** Unique id, starts from 0. */
         public int id;
@@ -393,9 +398,11 @@ public class MtssConfig {
 
         // Position.
         public Corner anchorCorner = Corner.TOP_LEFT;
-        /** Offset from the anchor corner's horizontal edge, normalized as a fraction of. */
+        /** Offset from the anchor corner's horizontal edge, normalized as a fraction of
+         *  the screen's width so the list stays in the same relative spot at any GUI scale. */
         public double anchorFracX = 0.01;
-        /** Offset from the anchor corner's vertical edge, normalized as a fraction of. */
+        /** Offset from the anchor corner's vertical edge, normalized as a fraction of
+         *  the screen's height so the list stays in the same relative spot at any GUI scale. */
         public double anchorFracY = 0.01;
 
         /** Legacy raw-pixel offsets from before positions were normalized. */
@@ -416,10 +423,9 @@ public class MtssConfig {
         public SnapX snapX = SnapX.NONE;
         public SnapY snapY = SnapY.NONE;
 
-        // separator
         /** false (default) = classic per-stat-line mode. */
         public boolean useTemplate = false;
-        /** One markup string per rendered line, used only when { #useTemplate} is true. */
+        /** One markup string per rendered line, used only when {@link #useTemplate} is true. */
         public List<String> templateLines = new ArrayList<>();
 
         public StatListConfig() {
@@ -430,10 +436,12 @@ public class MtssConfig {
             this.name = "List " + id;
         }
 
+        /** TPS/MSPT/FPS start enabled so a brand-new list shows something useful out of the
+         *  box; every other stat starts disabled until the user opts in via the editor. */
         private static Map<String, Boolean> defaultEnabledMap() {
             Map<String, Boolean> m = new LinkedHashMap<>();
             for (Stat s : Stat.values()) {
-// m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS).
+                m.put(s.name(), s == Stat.TPS || s == Stat.MSPT || s == Stat.FPS);
             }
             return m;
         }
@@ -472,7 +480,8 @@ public class MtssConfig {
             return ss;
         }
 
-        /** The custom threshold for a stat, or null if the stat isn't. */
+        /** The custom threshold for a stat, or null if the stat isn't threshold-capable
+         *  (i.e. not in {@link MtssConfig#THRESHOLD_STATS}). */
         public ThresholdSettings getThreshold(Stat stat) {
             if (!THRESHOLD_STATS.contains(stat)) return null;
             return statThresholds.get(stat.name());
@@ -483,18 +492,18 @@ public class MtssConfig {
             if (name == null) name = "List " + id;
             if (statSettings == null) statSettings = new LinkedHashMap<>();
             if (statThresholds == null) statThresholds = new LinkedHashMap<>();
-            // Gson leaves this null (not the field initializer) if it's missing.
+            // Gson leaves this null (not the field initializer) if it's missing
             // from an old config's JSON.
             if (templateLines == null) templateLines = new ArrayList<>();
 
-            // Migrate old raw-pixel anchorDx/anchorDy (pre-normalized-position.
-            // configs) into normalized anchorFracX/Y.
-            // 1x-GUI-scale-ish screen size at save time, which we don't know.
-            // anymore.
-            // existing lists close to where they were, and from then on their.
-            // position is scale-stable.
-            // nulled out after migrating so this doesn't re-run on later loads.
-            // and doesn't clobber a position the user has since re-dragged.
+            // Migrate old raw-pixel anchorDx/anchorDy (pre-normalized-position
+            // configs) into normalized anchorFracX/Y, dividing by a reference
+            // 1x-GUI-scale-ish screen size at save time, which we don't know
+            // anymore but approximate with REFERENCE_W/H below. This keeps
+            // existing lists close to where they were, and from then on their
+            // position is scale-stable. anchorDx/Dy are nulled out after
+            // migrating so this doesn't re-run on later loads and doesn't
+            // clobber a position the user has since re-dragged.
             if (anchorDx != null || anchorDy != null) {
                 final double REFERENCE_W = 320.0; // matches Minecraft's default GUI-scaled width at scale 1 on a common 1080p.
                 final double REFERENCE_H = 240.0;
@@ -510,8 +519,8 @@ public class MtssConfig {
                 StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
                 if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
             }
-            // Built once, not per-stat.
-            // map every call, so calling it inside the loop below would.
+            // Built once, not per-stat: defaultThresholds() allocates a whole new
+            // map every call, so calling it inside the loop below would
             // rebuild the whole thing for every missing entry.
             Map<String, ThresholdSettings> defaults = defaultThresholds();
             for (Stat s : THRESHOLD_STATS) {
@@ -524,7 +533,8 @@ public class MtssConfig {
             return (name == null || name.isBlank()) ? "List " + id : name;
         }
 
-        /** Deep-copies this list's settings into a brand-new list with the given id,. */
+        /** Deep-copies this list's settings into a brand-new list with the given id,
+         *  nested mutable maps included, so editing the copy can never affect the original. */
         public StatListConfig duplicate(int newId) {
             StatListConfig copy = new StatListConfig(newId);
             copy.name = displayName() + " (copy)";
@@ -538,9 +548,9 @@ public class MtssConfig {
             statThresholds.forEach((key, src) -> copy.statThresholds.put(key, src.copy()));
 
             copy.anchorCorner = anchorCorner;
-            // Nudge the copy so it doesn't sit exactly on top of the original.
-            // 0.02 of screen size lands close to the old 12px-at-reference-size.
-            // nudge without hardcoding a pixel amount that would drift when.
+            // Nudge the copy so it doesn't sit exactly on top of the original;
+            // 0.02 of screen size lands close to the old 12px-at-reference-size
+            // nudge without hardcoding a pixel amount that would drift when
             // rendered at a different GUI scale than duplication happened at.
             copy.anchorFracX = anchorFracX + 0.02;
             copy.anchorFracY = anchorFracY + 0.02;

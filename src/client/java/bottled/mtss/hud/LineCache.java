@@ -11,15 +11,15 @@ import java.util.Map;
 public record LineCache(List<String> lines, List<Integer> colors, List<List<TemplateEngine.ColoredRun>> runs,
                         List<LineCache.GraphEntry> graphEntries, List<LineCache.RowKind> rowKinds) {
 
-    // `lines`/`colors` stay the flat single-color view every existing reader.
-    // (width measurement, drag-preview rendering, getListBounds sizing) was.
-    // built against.
-    // row) and only carries information beyond "one flat color" when a.
-    // template line actually used an inline color=# modifier.
-    // uses `runs` to draw, everything else keeps reading `lines`/`colors`.
-    // unchanged.
-    // `runs.get(i)` joined together, so anything measuring wrapped text.
-    // width doesn't need to change just because coloring got richer.
+    // `lines`/`colors` stay the flat single-color view every existing reader
+    // (width measurement, drag-preview rendering, getListBounds sizing) was
+    // built against — one entry per row, one color per line/graph-label
+    // row) and only carries information beyond "one flat color" when a
+    // template line actually used an inline color=# modifier. Only MtssRenderer
+    // uses `runs` to draw, everything else keeps reading `lines`/`colors`
+    // unchanged. `lines` still holds the same text as `runs.get(i)` joined
+    // together, so anything measuring wrapped text width doesn't need to
+    // change just because coloring got richer.
 
     /** Fallback size for the empty-list placeholder. */
     public static final int GRAPH_W = 80;
@@ -51,8 +51,6 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
                 .max().orElse(GRAPH_W);
         return Math.max(textW, graphW) + 4;
     }
-
-    // separator
 
     public int boxH(net.minecraft.client.gui.Font font) {
         int lineH = font.lineHeight + 1;

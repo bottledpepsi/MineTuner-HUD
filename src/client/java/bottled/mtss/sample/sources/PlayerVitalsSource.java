@@ -9,7 +9,8 @@ import net.minecraft.world.level.GameType;
 
 /** Player vital stats. */
 public final class PlayerVitalsSource implements StatSource {
-    /** Lowercase name for a { GameType}, matching vanilla's own lowercase game-mode. */
+    /** Lowercase name for a {@link GameType}, matching vanilla's own lowercase
+     *  naming convention for game modes (as used by e.g. the /gamemode command). */
     private static String gameTypeName(GameType type) {
         return type.name().toLowerCase(java.util.Locale.ROOT);
     }
@@ -52,8 +53,9 @@ public final class PlayerVitalsSource implements StatSource {
         ItemStack held = player.getMainHandItem();
         MtssDataHolder.heldItemName = held.isEmpty() ? "" : held.getHoverName().getString();
 
-        // Vertical speed.
-        // horizontal-only speed.
+        // Vertical speed lives here (not in PlayerPositionSource, which computes
+        // horizontal-only speed from dx/dz) since it's grouped with the other
+        // per-frame player-vitals reads rather than the position/facing block.
         MtssDataHolder.verticalSpeedBps = (float) (player.getDeltaMovement().y * 20.0);
     }
 }

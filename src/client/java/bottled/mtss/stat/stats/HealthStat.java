@@ -62,7 +62,14 @@ public final class HealthStat implements StatDefinition {
         return MtssDataHolder.getHealthColor(custom);
     }
 
-    /** History is stored as a percent of max health (. */
+    /** History is stored as a percent of max health (see MtssDataHolder.updateFastMetrics's
+     *  healthHistory.push call), so this compares percentValue directly against
+     *  goodMin/warnMin on that same 0-100 scale — unlike MtssDataHolder.healthColorFor
+     *  (used by color(custom) above), which takes a raw current-health value and
+     *  converts it to a percent internally using today's maxHealth. The two can
+     *  disagree slightly if maxHealth has changed since a given historical sample
+     *  was recorded, which is expected: the graph reflects each sample's percent
+     *  of max *at the time it was taken*, not renormalized against today's max. */
     @Override
     public int colorFor(float percentValue, MtssConfig.ThresholdSettings custom) {
         if (custom != null && custom.enabled) {
