@@ -28,7 +28,6 @@ public final class EmptySpaceMenuPanel {
                               int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         String[] labels = {
                 "§a" + I18n.get("gui.mtss.menu.create"),
-                "§b" + I18n.get("gui.mtss.menu.open_config"),
         };
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelHeight(), screenH);

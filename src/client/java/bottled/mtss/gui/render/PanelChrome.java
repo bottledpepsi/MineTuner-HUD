@@ -12,7 +12,7 @@ public final class PanelChrome {
     public static int ROW_H = 13;
     public static int PANEL_W = 160;
     public static int PANEL_PAD = 4;
-    /** Wider panel width used by the stat toggle/reorder panel ({@link ReorderPanel}). */
+    /** Wider panel width used by the stat toggle/reorder panel. */
     public static int WIDE_PANEL_W = 216;
     private PanelChrome() {
     }

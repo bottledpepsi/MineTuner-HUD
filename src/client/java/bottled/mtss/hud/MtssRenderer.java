@@ -6,96 +6,91 @@ import bottled.mtss.hud.LineCache.RowKind;
 import bottled.mtss.sample.SamplingDriver;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-
+/** Renders the live stat overlay using the same panel geometry as the editor preview. */
 public class MtssRenderer {
 
-    public static void drawRows(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
+    public static void drawRows(GuiGraphicsExtractor graphics, Font font,
                                 LineCache cache, int baseX, int baseY, boolean shadow) {
-        int lineH = font.lineHeight + 1;
-        // Graphs stretch to the box's actual content width, which can be wider
-        // than a graph's configured width if a label needed extra room.
-        int contentW = cache.boxW(font) - 4;
-        int textIdx = 0, graphIdx = 0;
-        int cursorY = baseY;
+        drawRows(graphics, font, cache, baseX, baseY, shadow, -1, false);
+    }
+
+    /**
+     * Draws relative to a panel's top-left corner. Keeping padding local means
+     * scaled panels have exactly the same composition as their 1x counterpart.
+     */
+    public static void drawRows(GuiGraphicsExtractor graphics, Font font, LineCache cache,
+                                int baseX, int baseY, boolean shadow, int listId, boolean animate) {
+        int lineH = font.lineHeight + HudPanelChrome.ROW_GAP;
+        int contentX = baseX + HudPanelChrome.PADDING_X;
+        int contentW = HudPanelChrome.contentWidth(cache.boxW(font));
+        int textIdx = 0;
+        int graphIdx = 0;
+        int cursorY = baseY + HudPanelChrome.PADDING_Y;
+        long now = animate ? System.nanoTime() : 0L;
+
         for (RowKind kind : cache.rowKinds()) {
             if (kind == RowKind.TEXT) {
-                drawColoredRuns(graphics, font, cache.runs().get(textIdx), baseX, cursorY, shadow);
+                List<TemplateEngine.ColoredRun> runs = cache.runs().get(textIdx);
+                float pulse = animate ? HudMotion.pulseFor(listId, textIdx, runs, now) : 0f;
+                int settleY = cursorY - Math.round(pulse);
+                drawColoredRuns(graphics, font, runs, contentX, settleY, shadow, pulse);
                 textIdx++;
                 cursorY += lineH;
             } else {
-                GraphEntry entry = cache.graphEntries().get(graphIdx);
-                GraphRenderer.drawGraph(graphics, font, entry, baseX, cursorY, contentW, entry.style().height);
-                graphIdx++;
+                GraphEntry entry = cache.graphEntries().get(graphIdx++);
+                GraphRenderer.drawGraph(graphics, font, entry, contentX, cursorY, contentW, entry.style().height);
                 cursorY += entry.style().height + 1;
             }
         }
     }
 
-    /** Draws one text row as a sequence of colored runs left-to-right, each run's
-     *  color and text coming from the line's parsed {@link TemplateEngine.ColoredRun}
-     *  list (see {@link LineCache} for how each row's runs are built and cached). */
-    private static void drawColoredRuns(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font,
-                                        List<TemplateEngine.ColoredRun> runs, int x, int y, boolean shadow) {
+    private static void drawColoredRuns(GuiGraphicsExtractor graphics, Font font,
+                                        List<TemplateEngine.ColoredRun> runs, int x, int y,
+                                        boolean shadow, float pulse) {
         int cursorX = x;
         for (TemplateEngine.ColoredRun run : runs) {
-            graphics.text(font, run.text(), cursorX, y, run.color(), shadow);
+            int color = ColorMath.blend(run.color(), 0xFFFFFFFF, pulse * 0.18f);
+            graphics.text(font, run.text(), cursorX, y, color, shadow);
             cursorX += font.width(run.text());
         }
     }
 
     public void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         Minecraft mc = Minecraft.getInstance();
+        if (!MtssConfig.getInstance().overlayEnabled || mc.getDebugOverlay().showDebugScreen()
+                || mc.getConnection() == null || mc.gui.screen() instanceof bottled.mtss.gui.MtssGuiScreen) return;
 
-        if (!MtssConfig.getInstance().overlayEnabled) return;
-        if (mc.getDebugOverlay().showDebugScreen()) return;
-        if (mc.getConnection() == null) return;
-        if (mc.gui.screen() instanceof bottled.mtss.gui.MtssGuiScreen) return;
-
-        // Advance the frame cache so getCachedLines() is fresh this frame.
         LineCache.tickCache();
-
-        // Each raw value is pulled in by its own StatSource (bottled.mtss.sample),
-        // registered in SourceRegistry and run here at its declared cadence — see
-        // SourceRegistry's own class doc for the full acquisition-side pipeline.
         SamplingDriver.sampleAll();
 
         MtssConfig root = MtssConfig.getInstance();
-        var font = mc.font;
-
+        Font font = mc.font;
         for (MtssConfig.StatListConfig listCfg : root.lists) {
             LineCache cache = LineCache.getCachedLines(listCfg);
             if (cache.rowKinds().isEmpty()) continue;
 
             float scale = listCfg.textScale <= 0f ? 1f : listCfg.textScale;
-            int unscaledW = cache.boxW(font);
-            int unscaledH = cache.boxH(font);
-
-            // Position math is in screen-pixel space, so use the scaled box size.
-            // otherwise a scaled-up list could overlap the screen edge or other lists.
-            int boxW = Math.round(unscaledW * scale);
-            int boxH = Math.round(unscaledH * scale);
-
+            int boxW = Math.round(cache.boxW(font) * scale);
+            int boxH = Math.round(cache.boxH(font) * scale);
             int[] pos = ListPositioner.getPosition(listCfg, graphics.guiWidth(), graphics.guiHeight(), boxW, boxH);
-            int x = pos[0], y = pos[1];
+            int x = pos[0];
+            int y = pos[1];
 
-            if (listCfg.showBackground) {
-                graphics.fill(x - 1, y - 1, x + boxW + 1, y + boxH + 1, 0x90000000);
-            }
-            boolean shadow = listCfg.textShadow;
+            if (listCfg.showBackground) HudPanelChrome.drawPanel(graphics, x, y, boxW, boxH);
 
             if (scale == 1f) {
-                drawRows(graphics, font, cache, x + 2, y + 2, shadow);
+                drawRows(graphics, font, cache, x, y, listCfg.textShadow, listCfg.id, true);
             } else {
-                // Translate to (x, y), scale, then draw at unscaled local offsets.
                 var matrices = graphics.pose();
                 matrices.pushMatrix();
                 matrices.translate(x, y);
                 matrices.scale(scale, scale);
-                drawRows(graphics, font, cache, 0, 0, shadow);
+                drawRows(graphics, font, cache, 0, 0, listCfg.textShadow, listCfg.id, true);
                 matrices.popMatrix();
             }
         }

@@ -49,12 +49,12 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
         int graphW = graphEntries.isEmpty() ? 0 : graphEntries.stream()
                 .mapToInt(e -> Math.max(e.style().width, font.width(e.label()) + 4))
                 .max().orElse(GRAPH_W);
-        return Math.max(textW, graphW) + 4;
+        return Math.max(textW, graphW) + HudPanelChrome.PADDING_X * 2;
     }
 
     public int boxH(net.minecraft.client.gui.Font font) {
-        int lineH = font.lineHeight + 1;
-        int h = 3;
+        int lineH = font.lineHeight + HudPanelChrome.ROW_GAP;
+        int h = HudPanelChrome.PADDING_Y * 2;
         for (int i = 0, g = 0; i < rowKinds.size(); i++) {
             if (rowKinds.get(i) == RowKind.GRAPH) {
                 h += graphEntries.get(g).style().height + 1;

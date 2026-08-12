@@ -86,7 +86,19 @@ final class LineBuilder {
             if (cfg.useCustomColor) color = cfg.overrideColor;
             lines.add(text);
             colors.add(color);
-            runs.add(List.of(new TemplateEngine.ColoredRun(text, color))); // classic mode has no inline-color concept.
+            // Keep labels quiet and reserve the saturated color for the value.
+            // It improves scanability while retaining the exact plain-text line
+            // used for measurement and template/editor compatibility.
+            int separator = text.indexOf(": ");
+            if (separator >= 0 && cfg.getStatSettings(stat).showPrefix) {
+                String label = text.substring(0, separator + 2);
+                String value = text.substring(separator + 2);
+                runs.add(List.of(
+                        new TemplateEngine.ColoredRun(label, ColorMath.withAlpha(color, 0xB8)),
+                        new TemplateEngine.ColoredRun(value, color)));
+            } else {
+                runs.add(List.of(new TemplateEngine.ColoredRun(text, color)));
+            }
             rowKinds.add(RowKind.TEXT);
         }
     }

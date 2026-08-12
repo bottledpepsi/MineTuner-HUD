@@ -5,6 +5,7 @@ import bottled.mtss.config.cloth.MtssClothConfigScreen;
 import bottled.mtss.gui.panel.*;
 import bottled.mtss.gui.render.ListPreviewRenderer;
 import bottled.mtss.gui.render.PanelChrome;
+import bottled.mtss.gui.render.PanelTransition;
 import bottled.mtss.hud.LineCache;
 import bottled.mtss.hud.ListPositioner;
 import bottled.mtss.hud.TemplateEngine;
@@ -22,7 +23,9 @@ import java.util.List;
 
 public class MtssGuiScreen extends Screen {
 
-    /** Category-expansion/scroll state for the redesigned {@link ReorderPanel}. */
+    /**
+     * Category-expansion/scroll state for the redesigned {@link ReorderPanel}.
+     */
     private final ReorderPanel.UiState reorderUiState = new ReorderPanel.UiState();
     private boolean dragging = false;
     private int draggingListId = -1;
@@ -36,25 +39,43 @@ public class MtssGuiScreen extends Screen {
     private int menuListId = -1;
     private int menuX, menuY;
     private boolean reorderOpen = false;
-    /** Which stat's settings panel is open (null = reorder panel showing). */
+    /**
+     * Which stat's settings panel is open (null = reorder panel showing).
+     */
     private MtssConfig.Stat statSettingsStat = null;
     private StringBuilder renameBuffer = new StringBuilder();
 
-    /** Whether the template line list (one row per templateLines entry, plus an
-     *  "add new line" row and a "back" row) is the currently open menu panel. */
+    /**
+     * Whether the template line list (one row per templateLines entry, plus an
+     * "add new line" row and a "back" row) is the currently open menu panel.
+     */
     private boolean templateListOpen = false;
-    /** Index into templateLines being text-edited, or -1 when the line list itself
-     *  (not a specific line) is what's open, or when nothing template-related is open. */
+    /**
+     * Index into templateLines being text-edited, or -1 when the line list itself
+     * (not a specific line) is what's open, or when nothing template-related is open.
+     */
     private int templateEditIndex = -1;
     private StringBuilder templateEditBuffer = new StringBuilder();
 
-    /** True when the Appearance sub-panel (rename, background, shadow, color/scale,
-     *  snap settings) is the currently open menu panel. */
+    /**
+     * True when the Appearance sub-panel (rename, background, shadow, color/scale,
+     * snap settings) is the currently open menu panel.
+     */
     private boolean appearanceOpen = false;
     private boolean colorScaleOpen = false;
-    /** Whether the per-stat custom-threshold sub-panel is open (opened from the
-     *  ⚙ cog on a stat's settings panel via StatSettingsPanel.ClickResult.OPEN_THRESHOLDS). */
+    /**
+     * Whether the per-stat custom-threshold sub-panel is open (opened from the
+     * ⚙ cog on a stat's settings panel via StatSettingsPanel.ClickResult.OPEN_THRESHOLDS).
+     */
     private boolean thresholdPanelOpen = false;
+    /**
+     * Confirm deletion panel
+     */
+    private boolean deletePanelOpen = false;
+    /**
+     * Render-only transition state for popup and nested-panel navigation.
+     */
+    private final PanelTransition panelTransition = new PanelTransition();
 
     public MtssGuiScreen() {
         super(Component.translatable("gui.mtss.title"));
@@ -65,7 +86,9 @@ public class MtssGuiScreen extends Screen {
         return false;
     }
 
-    /** Force-save on close as a safety net, even though every mutation already. */
+    /**
+     * Force-save on close as a safety net, even though every mutation already.
+     */
     @Override
     public void onClose() {
         MtssConfig.getInstance().save();
@@ -100,10 +123,15 @@ public class MtssGuiScreen extends Screen {
         g.centeredText(font, "§7" + I18n.get("gui.mtss.hint"),
                 width / 2, height - 14, 0xFFAAAAAA);
 
+        PanelRoute route = activePanelRoute();
+        panelTransition.updateRoute(route.signature(statSettingsStat));
+        if (route != PanelRoute.NONE) panelTransition.push(g, menuX, menuY);
+
         if (menuKind == MenuKind.LIST_CONTEXT) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) menuKind = MenuKind.NONE;
-            else ListContextMenuPanel.render(g, font, mx, my, menuX, menuY, width, height, lc);
+            else ListContextMenuPanel.render(g, font, mx, my, menuX, menuY, width, height, lc,
+                    panelTransition.progress());
         } else if (menuKind == MenuKind.EMPTY_SPACE) {
             EmptySpaceMenuPanel.render(g, font, mx, my, menuX, menuY, width, height);
         } else if (menuKind == MenuKind.RENAME) {
@@ -111,6 +139,14 @@ public class MtssGuiScreen extends Screen {
         } else if (menuKind == MenuKind.TEMPLATE_EDIT) {
             TemplateListPanel.renderEditBox(g, font, menuX, menuY, width, height,
                     templateEditIndex, templateEditBuffer.toString());
+        } else if (deletePanelOpen) {
+            MtssConfig.StatListConfig lc = getListById(menuListId);
+            if (lc == null) {
+                deletePanelOpen = false;
+                menuKind = MenuKind.NONE;
+            } else {
+                DeletePanel.render(g, font, mx, my, menuX, menuY, width, height, lc);
+            }
         } else if (colorScaleOpen) {
             MtssConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) colorScaleOpen = false;
@@ -141,6 +177,8 @@ public class MtssGuiScreen extends Screen {
             if (lc == null) templateListOpen = false;
             else TemplateListPanel.render(g, font, mx, my, menuX, menuY, width, height, lc);
         }
+
+        if (route != PanelRoute.NONE) panelTransition.pop(g);
 
         super.extractRenderState(g, mx, my, partial);
     }
@@ -177,6 +215,13 @@ public class MtssGuiScreen extends Screen {
             if (EmptySpaceMenuPanel.isInside(mx, my, menuX, menuY, width, height))
                 handleEmptySpaceMenuClick(mx, my, root);
             else menuKind = MenuKind.NONE;
+            return true;
+        }
+        if (deletePanelOpen) {
+            MtssConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && DeletePanel.isInside(mx, my, menuX, menuY, width, height))
+                handleDeletePanelClick(mx, my, lc);
+            else deletePanelOpen = false;
             return true;
         }
         if (templateListOpen) {
@@ -283,6 +328,18 @@ public class MtssGuiScreen extends Screen {
             return true;
         }
         return super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (reorderOpen && statSettingsStat == null) {
+            MtssConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && ReorderPanel.scrollBy(mouseX, mouseY, verticalAmount,
+                    menuX, menuY, width, height, lc, reorderUiState)) {
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
@@ -424,9 +481,8 @@ public class MtssGuiScreen extends Screen {
                 root.duplicateList(lc.id);
                 root.save();
             }
-            case ListContextMenuPanel.LM_DELETE -> {
-                root.removeList(lc.id);
-                root.save();
+            case ListContextMenuPanel.LM_DELETEPANEL -> {
+                deletePanelOpen = true;
                 reorderOpen = false;
                 statSettingsStat = null;
                 thresholdPanelOpen = false;
@@ -436,8 +492,6 @@ public class MtssGuiScreen extends Screen {
             }
         }
     }
-
-    // --- Menu click handlers ---
 
     private void handleEmptySpaceMenuClick(int mx, int my, MtssConfig root) {
         int row = EmptySpaceMenuPanel.rowAt(mx, my, menuX, menuY, width, height);
@@ -493,6 +547,7 @@ public class MtssGuiScreen extends Screen {
                     reorderOpen = false;
                     statSettingsStat = null;
                     thresholdPanelOpen = false;
+                    menuKind = MenuKind.LIST_CONTEXT;
                 });
         if (clickedCog != null) {
             statSettingsStat = clickedCog;
@@ -506,7 +561,7 @@ public class MtssGuiScreen extends Screen {
         switch (result) {
             case OPEN_THRESHOLDS -> thresholdPanelOpen = true;
             case BACK -> statSettingsStat = null; // back to reorder panel.
-            case HANDLED, NONE -> { /** no state transition. */ }
+            case HANDLED, NONE -> { /** no state transition. */}
         }
     }
 
@@ -533,10 +588,37 @@ public class MtssGuiScreen extends Screen {
                 templateEditBuffer = new StringBuilder(lc.templateLines.get(result.editIndex()));
                 menuKind = MenuKind.TEMPLATE_EDIT;
             }
-            case NONE -> { /** add/remove already applied inside handleClick. */ }
+            case NONE -> { /** add/remove already applied inside handleClick. */}
         }
     }
 
+    private void handleDeletePanelClick(int mx, int my, MtssConfig.StatListConfig lc) {
+        int idx = DeletePanel.rowAt(mx, my, menuX, menuY, width, height);
+        if (idx < 0) return;
+
+        MtssConfig root = MtssConfig.getInstance();
+
+        switch (idx) {
+            case DeletePanel.LM_CANCELBUTTON -> {
+                deletePanelOpen = false;
+                menuKind = MenuKind.LIST_CONTEXT;
+            }
+
+            case DeletePanel.LM_DELETEBUTTON -> {
+                root.removeList(lc.id);
+                root.save();
+
+                reorderOpen = false;
+                statSettingsStat = null;
+                thresholdPanelOpen = false;
+                templateListOpen = false;
+                appearanceOpen = false;
+                colorScaleOpen = false;
+                deletePanelOpen = false;
+                menuKind = MenuKind.NONE;
+            }
+        }
+    }
     private int[] applySnap(int bx, int by, int bw, int bh) {
         int cx = width / 2, cy = height / 2, snapThreshold = MtssConfig.getInstance().dragSnapThresholdPx;
 
@@ -587,9 +669,11 @@ public class MtssGuiScreen extends Screen {
 
     // --- Snap helpers ---
 
-    /** Picks the nearest corner for (bx, by) and stores the offset from it as a
-     *  normalized fraction of screen size (anchorFracX/Y), the same representation
-     *  {@link MtssConfig.StatListConfig#anchorFracX} uses everywhere else. */
+    /**
+     * Picks the nearest corner for (bx, by) and stores the offset from it as a
+     * normalized fraction of screen size (anchorFracX/Y), the same representation
+     * {@link MtssConfig.StatListConfig#anchorFracX} uses everywhere else.
+     */
     private void snapToNearestCorner(MtssConfig.StatListConfig lc,
                                      int bx, int by, int boxW, int boxH) {
         boolean nearRight = (bx + boxW / 2) > width / 2;
@@ -645,6 +729,35 @@ public class MtssGuiScreen extends Screen {
         return null;
     }
 
-    /** Which top-level popup (if any) is open. */
+    /**
+     * The single panel currently visible in the editor's mutually-exclusive popup stack.
+     */
+    private PanelRoute activePanelRoute() {
+        if (menuKind == MenuKind.LIST_CONTEXT) return PanelRoute.LIST_CONTEXT;
+        if (menuKind == MenuKind.EMPTY_SPACE) return PanelRoute.EMPTY_SPACE;
+        if (menuKind == MenuKind.RENAME) return PanelRoute.RENAME;
+        if (menuKind == MenuKind.TEMPLATE_EDIT) return PanelRoute.TEMPLATE_EDIT;
+        if (deletePanelOpen) return PanelRoute.DELETE;
+        if (colorScaleOpen) return PanelRoute.COLOR_SCALE;
+        if (appearanceOpen) return PanelRoute.APPEARANCE;
+        if (reorderOpen && statSettingsStat != null && thresholdPanelOpen) return PanelRoute.THRESHOLDS;
+        if (reorderOpen && statSettingsStat != null) return PanelRoute.STAT_SETTINGS;
+        if (reorderOpen) return PanelRoute.REORDER;
+        if (templateListOpen) return PanelRoute.TEMPLATE_LIST;
+        return PanelRoute.NONE;
+    }
+
+    /**
+     * Which top-level popup (if any) is open.
+     */
     private enum MenuKind {NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT}
+
+    private enum PanelRoute {
+        NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT, COLOR_SCALE,
+        APPEARANCE, THRESHOLDS, STAT_SETTINGS, REORDER, TEMPLATE_LIST, DELETE;
+
+        int signature(MtssConfig.Stat stat) {
+            return ordinal() * 97 + (stat == null ? 0 : stat.ordinal() + 1);
+        }
+    }
 }

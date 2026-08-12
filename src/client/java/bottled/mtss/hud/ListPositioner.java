@@ -2,37 +2,27 @@ package bottled.mtss.hud;
 
 import bottled.mtss.config.MtssConfig;
 
-
+/** Resolves normalized, corner-relative positions into safe GUI-space coordinates. */
 public final class ListPositioner {
+
+    private static final int SCREEN_INSET = 3;
 
     private ListPositioner() {
     }
 
     public static int[] getPosition(MtssConfig.StatListConfig cfg,
                                     int screenW, int screenH, int boxW, int boxH) {
-        int dx = (int) Math.round(cfg.anchorFracX * screenW);
-        int dy = (int) Math.round(cfg.anchorFracY * screenH);
-
-        int x, y;
+        int dx = (int) Math.round(sanitizeFraction(cfg.anchorFracX) * screenW);
+        int dy = (int) Math.round(sanitizeFraction(cfg.anchorFracY) * screenH);
+        int x;
+        int y;
         switch (cfg.anchorCorner) {
-            case TOP_RIGHT -> {
-                x = screenW - boxW - dx;
-                y = dy;
-            }
-            case BOTTOM_LEFT -> {
-                x = dx;
-                y = screenH - boxH - dy;
-            }
-            case BOTTOM_RIGHT -> {
-                x = screenW - boxW - dx;
-                y = screenH - boxH - dy;
-            }
-            default -> {
-                x = dx;
-                y = dy;
-            } // TOP_LEFT.
+            case TOP_RIGHT -> { x = screenW - boxW - dx; y = dy; }
+            case BOTTOM_LEFT -> { x = dx; y = screenH - boxH - dy; }
+            case BOTTOM_RIGHT -> { x = screenW - boxW - dx; y = screenH - boxH - dy; }
+            default -> { x = dx; y = dy; }
         }
-        // Snap overrides beat the corner anchor on the snapped axis.
+
         int cx = screenW / 2;
         int cy = screenH / 2;
         x = switch (cfg.snapX) {
@@ -47,8 +37,15 @@ public final class ListPositioner {
             case BOTTOM_ON_CENTER -> cy - boxH;
             default -> y;
         };
-        x = Math.max(0, Math.min(screenW - boxW, x));
-        y = Math.max(0, Math.min(screenH - boxH, y));
-        return new int[]{x, y};
+
+        int minX = boxW + SCREEN_INSET <= screenW ? SCREEN_INSET : 0;
+        int minY = boxH + SCREEN_INSET <= screenH ? SCREEN_INSET : 0;
+        int maxX = Math.max(minX, screenW - boxW - SCREEN_INSET);
+        int maxY = Math.max(minY, screenH - boxH - SCREEN_INSET);
+        return new int[]{Math.max(minX, Math.min(maxX, x)), Math.max(minY, Math.min(maxY, y))};
+    }
+
+    private static double sanitizeFraction(double fraction) {
+        return Double.isFinite(fraction) ? Math.max(0d, Math.min(1d, fraction)) : 0d;
     }
 }

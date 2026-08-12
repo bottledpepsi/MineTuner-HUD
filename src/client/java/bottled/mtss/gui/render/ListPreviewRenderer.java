@@ -1,6 +1,7 @@
 package bottled.mtss.gui.render;
 
 import bottled.mtss.config.MtssConfig;
+import bottled.mtss.hud.HudPanelChrome;
 import bottled.mtss.hud.LineCache;
 import bottled.mtss.hud.ListPositioner;
 import bottled.mtss.hud.MtssRenderer;
@@ -35,8 +36,8 @@ public final class ListPreviewRenderer {
         int boxW, boxH;
         if (empty) {
             String placeholder = I18n.get("gui.mtss.no_stats");
-            boxW = font.width(placeholder) + 4;
-            boxH = lineH + 3;
+            boxW = font.width(placeholder) + HudPanelChrome.PADDING_X * 2;
+            boxH = lineH + HudPanelChrome.PADDING_Y * 2;
         } else {
             boxW = Math.round(cache.boxW(font) * scale);
             boxH = Math.round(cache.boxH(font) * scale);
@@ -53,22 +54,25 @@ public final class ListPreviewRenderer {
         }
 
         if (lc.showBackground || empty) {
-            g.fill(wx - 1, wy - 1, wx + boxW + 1, wy + boxH + 1,
-                    empty ? 0xAA222222 : 0xCC000000);
+            if (empty) {
+                g.fill(wx, wy, wx + boxW, wy + boxH, 0xB8141820);
+                g.outline(wx, wy, boxW, boxH, 0x5E9BA9BE);
+            } else {
+                HudPanelChrome.drawPanel(g, wx, wy, boxW, boxH);
+            }
         }
         if (PanelChrome.isHoveringBox(mx, my, wx, wy, boxW, boxH) || isBeingDragged) {
-            g.outline(wx - 1, wy - 1, boxW + 2, boxH + 2, 0xFFFFAA00);
+            g.outline(wx, wy, boxW, boxH, 0xFFFFAA00);
         }
 
         boolean shadow = lc.textShadow;
         if (empty) {
-            g.text(font, "§7" + I18n.get("gui.mtss.no_stats"), wx + 2, wy + 2, 0xFFAAAAAA, shadow);
+            g.text(font, "§7" + I18n.get("gui.mtss.no_stats"), wx + HudPanelChrome.PADDING_X,
+                    wy + HudPanelChrome.PADDING_Y, 0xFFAAAAAA, shadow);
         } else if (scale == 1f) {
-            MtssRenderer.drawRows(g, font, cache, wx + 2, wy + 2, shadow);
+            MtssRenderer.drawRows(g, font, cache, wx, wy, shadow);
         } else {
-            // Translate to (wx, wy), scale, then draw at unscaled local offset (0, 0) —
-            // same pattern (and same lack of a +2 inset) as MtssRenderer.render()'s
-            // scaled branch, so the preview matches the live overlay exactly.
+            // Same local panel coordinate system as the live overlay.
             var matrices = g.pose();
             matrices.pushMatrix();
             matrices.translate(wx, wy);

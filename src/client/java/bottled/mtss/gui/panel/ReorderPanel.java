@@ -89,15 +89,17 @@ public final class ReorderPanel {
                     // silently reorders past it, same as it already does past any
                     // other same-category stat.
                     int fullIdx = stats.indexOf(matches.get(i));
-                    rows.add(new StatRow(matches.get(i), fullIdx, stats.size()));
+                    rows.add(new StatRow(matches.get(i), cat, fullIdx, stats.size()));
                 }
                 continue;
             }
 
             rows.add(new HeaderRow(cat, enabledCount, stats.size()));
-            if (ui.isExpanded(cat)) {
+            // On collapse, retain child rows until their reverse rollout has
+            // finished instead of removing them in the first animation frame.
+            if (ui.isExpanded(cat) || ui.isAnimating(cat)) {
                 for (int i = 0; i < stats.size(); i++) {
-                    rows.add(new StatRow(stats.get(i), i, stats.size()));
+                    rows.add(new StatRow(stats.get(i), cat, i, stats.size()));
                 }
             }
         }
@@ -125,15 +127,24 @@ public final class ReorderPanel {
                               MtssConfig.StatListConfig lc, UiState ui) {
         List<Row> rows = buildRows(lc, ui);
         int totalRows = rows.size() + 1; // + Close.
-        int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
+        int fullVisibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
+        int visibleRows = animatedVisibleRows(rows, ui, fullVisibleRows);
         boolean paged = totalRows > MAX_VISIBLE_ROWS;
+        // With no paging, render the whole logical list while the panel grows:
+        // category headers below the unfolding section then move smoothly too.
+        int rowsToRender = paged ? visibleRows : totalRows;
 
         int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
-        ui.scrollOffset = Math.max(0, Math.min(ui.scrollOffset, maxOffset));
+        ui.clampAndAnimateScroll(maxOffset);
+        int renderOffset = ui.renderOffset();
+        float scrollPixels = ui.scrollFraction() * ROW_H;
 
+        int fullPanelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * fullVisibleRows;
         int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
-        int py = PanelChrome.clampY(menuY, panelH, screenH);
+        // Clamp against the final height so a menu opened near the lower edge
+        // grows down from one stable anchor instead of sliding while unfolding.
+        int py = PanelChrome.clampY(menuY, fullPanelH, screenH);
 
         PanelChrome.drawBackground(g, px, py, PANEL_W, panelH);
 
@@ -148,14 +159,16 @@ public final class ReorderPanel {
 
         int rowTop = searchY + ROW_H;
 
-        for (int visIdx = 0; visIdx < visibleRows; visIdx++) {
-            int logicalIdx = ui.scrollOffset + visIdx;
-            int ry = rowTop + visIdx * ROW_H;
+        int renderCount = paged ? Math.min(rowsToRender + 1, totalRows - renderOffset) : rowsToRender;
+        for (int visIdx = 0; visIdx < renderCount; visIdx++) {
+            int logicalIdx = renderOffset + visIdx;
+            int staticY = rowTop + visIdx * ROW_H - Math.round(scrollPixels);
+            int ry = staticY - Math.round(compressedPixelsBefore(rows, logicalIdx, ui, null));
 
             if (logicalIdx == rows.size()) {
                 // Close row.
                 PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
-                g.text(font, "§7" + I18n.get("gui.mtss.reorder.close"), px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+                g.text(font, "§7" + I18n.get("gui.mtss.stat_settings.back"), px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
                 continue;
             }
 
@@ -163,9 +176,49 @@ public final class ReorderPanel {
             if (row instanceof HeaderRow header) {
                 renderHeaderRow(g, font, mx, my, px, ry, ui, header);
             } else if (row instanceof StatRow statRow) {
-                renderStatRow(g, font, mx, my, px, ry, lc, statRow);
+                float reveal = ui.rolloutProgress(statRow.category());
+                if (reveal <= 0.01f) continue;
+
+                // Scale every child around the same category baseline. This
+                // compresses the entire group as one rolling surface, so rows
+                // never pile into a single visible line at animation start.
+                int categoryShift = Math.round(compressedPixelsBefore(rows, logicalIdx, ui, statRow.category()));
+                int unrolledY = staticY - categoryShift;
+                int headerBottom = unrolledY - (statRow.indexInCategory() + 1) * ROW_H + ROW_H;
+                var pose = g.pose();
+                pose.pushMatrix();
+                pose.translate(0, headerBottom);
+                pose.scale(1f, reveal);
+                pose.translate(0, -headerBottom);
+                renderStatRow(g, font, mx, my, px, unrolledY, lc, statRow, reveal >= 0.98f);
+                pose.popMatrix();
             }
         }
+        // Do this only after every layout calculation above has observed the
+        // same state. Retiring a collapse mid-render was the source of the
+        // expansion flicker: later rows treated it as fully open again.
+        ui.finishCompletedRollouts();
+    }
+
+    /** Space hidden by earlier, partially opened category children. */
+    private static float compressedPixelsBefore(List<Row> rows, int exclusiveRow, UiState ui,
+                                                MtssConfig.StatCategory excludedCategory) {
+        float pixels = 0f;
+        for (int i = 0; i < exclusiveRow; i++) {
+            if (rows.get(i) instanceof StatRow statRow && statRow.category() != excludedCategory) {
+                pixels += ROW_H * (1f - ui.rolloutProgress(statRow.category()));
+            }
+        }
+        return pixels;
+    }
+
+    /** Expands the panel surface with its child rows rather than snapping to final height. */
+    private static int animatedVisibleRows(List<Row> rows, UiState ui, int maximum) {
+        float rowUnits = 1f; // Back footer.
+        for (Row row : rows) {
+            rowUnits += row instanceof StatRow statRow ? ui.rolloutProgress(statRow.category()) : 1f;
+        }
+        return Math.max(1, Math.min(maximum, (int) Math.ceil(rowUnits)));
     }
 
     /** The search row. */
@@ -205,11 +258,11 @@ public final class ReorderPanel {
 
     private static void renderStatRow(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                                       int mx, int my, int px, int ry,
-                                      MtssConfig.StatListConfig lc, StatRow statRow) {
+                                      MtssConfig.StatListConfig lc, StatRow statRow, boolean allowHover) {
         MtssConfig.Stat stat = statRow.stat();
         boolean enabled = lc.isEnabled(stat);
 
-        PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
+        if (allowHover) PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
 
         String statName = I18n.get("stat.mtss." + stat.name().toLowerCase());
         String label = (enabled ? "§a✔ " : "§c✘ ") + statName;
@@ -265,8 +318,8 @@ public final class ReorderPanel {
         boolean paged = totalRows > MAX_VISIBLE_ROWS;
         if (paged && PanelChrome.isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
             int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
-            if (mx < px + PANEL_W / 2) ui.scrollOffset = Math.max(0, ui.scrollOffset - MAX_VISIBLE_ROWS);
-            else ui.scrollOffset = Math.min(maxOffset, ui.scrollOffset + MAX_VISIBLE_ROWS);
+            if (mx < px + PANEL_W / 2) ui.setScrollOffset(ui.scrollOffset - MAX_VISIBLE_ROWS);
+            else ui.setScrollOffset(ui.scrollOffset + MAX_VISIBLE_ROWS);
             return null;
         }
 
@@ -309,6 +362,17 @@ public final class ReorderPanel {
             }
         }
         return null;
+    }
+
+    /** Smooth mouse-wheel scrolling for the stat/category list. */
+    public static boolean scrollBy(double mx, double my, double verticalAmount,
+                                   int menuX, int menuY, int screenW, int screenH,
+                                   MtssConfig.StatListConfig lc, UiState ui) {
+        if (verticalAmount == 0d || !isInside((int) mx, (int) my, menuX, menuY, screenW, screenH, lc, ui)) return false;
+        int maxOffset = Math.max(0, totalRowCount(lc, ui) - MAX_VISIBLE_ROWS);
+        ui.setScrollOffset(ui.scrollOffset - (int) Math.signum(verticalAmount) * 3);
+        ui.clampAndAnimateScroll(maxOffset);
+        return true;
     }
 
     private static MtssConfig.Stat handleStatRowClick(int mx, int px, MtssConfig.StatListConfig lc, StatRow statRow) {
@@ -368,16 +432,22 @@ public final class ReorderPanel {
     /** Per-list UI state for this panel. */
     public static final class UiState {
         private final Set<MtssConfig.StatCategory> expanded = EnumSet.noneOf(MtssConfig.StatCategory.class);
+        private final Map<MtssConfig.StatCategory, Long> rolloutStartedAt =
+                new EnumMap<>(MtssConfig.StatCategory.class);
+        private static final long ROLLOUT_NANOS = 210_000_000L;
         /** Live filter text, entered by the search field toggled from the title row. */
         private final StringBuilder search = new StringBuilder();
         private int scrollOffset = 0;
+        private float renderedScrollOffset = 0f;
+        private long lastScrollUpdateNanos;
         /** Whether the search text field currently has keyboard focus. */
         private boolean searchFocused = false;
 
         /** Collapses every category, scrolls to the top, and clears any search. */
         public void reset() {
             expanded.clear();
-            scrollOffset = 0;
+            rolloutStartedAt.clear();
+            resetScroll();
             search.setLength(0);
             searchFocused = false;
         }
@@ -387,8 +457,37 @@ public final class ReorderPanel {
         }
 
         void toggle(MtssConfig.StatCategory cat) {
-            if (!expanded.remove(cat)) expanded.add(cat);
-            scrollOffset = 0; // expanding/collapsing shifts everything below it.
+            boolean expanding = !expanded.remove(cat);
+            if (expanding) expanded.add(cat);
+            // Store the direction in the sign: positive is rolling open,
+            // negative is rolling closed. This makes reversal symmetric.
+            rolloutStartedAt.put(cat, expanding ? System.nanoTime() : -System.nanoTime());
+            resetScroll(); // expanding/collapsing shifts everything below it.
+        }
+
+        boolean isAnimating(MtssConfig.StatCategory category) {
+            return rolloutStartedAt.containsKey(category);
+        }
+
+        /** Eased reveal progress for one category, shared by all of its rows. */
+        float rolloutProgress(MtssConfig.StatCategory category) {
+            Long encodedStart = rolloutStartedAt.get(category);
+            if (encodedStart == null) return 1f;
+            boolean opening = encodedStart > 0L;
+            float elapsed = Math.max(0f, Math.min(1f, (System.nanoTime() - Math.abs(encodedStart)) / (float) ROLLOUT_NANOS));
+            if (elapsed >= 1f) {
+                return opening ? 1f : 0f;
+            }
+            float inverse = 1f - elapsed;
+            float eased = 1f - inverse * inverse * inverse;
+            return opening ? eased : 1f - eased;
+        }
+
+        /** Removes completed transitions after a complete render pass. */
+        void finishCompletedRollouts() {
+            long now = System.nanoTime();
+            rolloutStartedAt.entrySet().removeIf(entry ->
+                    now - Math.abs(entry.getValue()) >= ROLLOUT_NANOS);
         }
 
         public boolean isSearchFocused() {
@@ -406,32 +505,67 @@ public final class ReorderPanel {
         /** Toggles the search field's focus. */
         public void toggleSearchFocus() {
             searchFocused = !searchFocused;
-            scrollOffset = 0;
+            resetScroll();
         }
 
         public void appendSearch(char c) {
             if (search.length() < 32) {
                 search.append(c);
-                scrollOffset = 0;
+                resetScroll();
             }
         }
 
         public void backspaceSearch() {
             if (!search.isEmpty()) {
                 search.deleteCharAt(search.length() - 1);
-                scrollOffset = 0;
+                resetScroll();
             }
         }
 
         public void clearSearch() {
             search.setLength(0);
+            resetScroll();
+        }
+
+        private void resetScroll() {
             scrollOffset = 0;
+            renderedScrollOffset = 0f;
+            lastScrollUpdateNanos = 0L;
+        }
+
+        void setScrollOffset(int target) {
+            scrollOffset = target;
+        }
+
+        void clampAndAnimateScroll(int maxOffset) {
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxOffset));
+            if (lastScrollUpdateNanos == 0L) {
+                renderedScrollOffset = scrollOffset;
+                lastScrollUpdateNanos = System.nanoTime();
+                return;
+            }
+            long now = System.nanoTime();
+            float seconds = Math.min(0.1f, (now - lastScrollUpdateNanos) / 1_000_000_000f);
+            lastScrollUpdateNanos = now;
+            float smoothing = 1f - (float) Math.exp(-16f * seconds);
+            renderedScrollOffset += (scrollOffset - renderedScrollOffset) * smoothing;
+            if (Math.abs(scrollOffset - renderedScrollOffset) < 0.01f) renderedScrollOffset = scrollOffset;
+            renderedScrollOffset = Math.max(0f, Math.min(renderedScrollOffset, maxOffset));
+        }
+
+        int renderOffset() {
+            return (int) Math.floor(renderedScrollOffset);
+        }
+
+        float scrollFraction() {
+            return renderedScrollOffset - (float) Math.floor(renderedScrollOffset);
         }
     }
 
     private record HeaderRow(MtssConfig.StatCategory category, int enabledCount, int totalCount) implements Row {
     }
 
-    private record StatRow(MtssConfig.Stat stat, int indexInCategory, int categorySize) implements Row {
+    private record StatRow(MtssConfig.Stat stat, MtssConfig.StatCategory category,
+                           int indexInCategory, int categorySize) implements Row {
     }
 }
