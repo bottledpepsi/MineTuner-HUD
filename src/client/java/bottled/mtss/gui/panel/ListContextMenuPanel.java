@@ -17,7 +17,7 @@ public final class ListContextMenuPanel {
     public static final int LM_STATS = 0; // "Edit Stats" or "Edit Template Lines".
     public static final int LM_APPEARANCE = 1;
     public static final int LM_DUPLICATE = 2;
-    public static final int LM_DELETEPANEL = 3;
+    public static final int LM_DELETE = 3;
     public static final int LM_COUNT = 4;
 
     private ListContextMenuPanel() {
@@ -43,7 +43,7 @@ public final class ListContextMenuPanel {
                 : I18n.get("gui.mtss.menu.reorder"));
         labels[LM_APPEARANCE] = "§f▤ " + I18n.get("gui.mtss.menu.appearance") + " »";
         labels[LM_DUPLICATE] = "§b⧉ " + I18n.get("gui.mtss.menu.duplicate");
-        labels[LM_DELETEPANEL] = "§c✕ " + I18n.get("gui.mtss.menu.deletepanel");
+        labels[LM_DELETE] = "§c✕ " + I18n.get("gui.mtss.menu.delete");
 
         int fullHeight = panelHeight();
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);

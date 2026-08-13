@@ -481,7 +481,7 @@ public class MtssGuiScreen extends Screen {
                 root.duplicateList(lc.id);
                 root.save();
             }
-            case ListContextMenuPanel.LM_DELETEPANEL -> {
+            case ListContextMenuPanel.LM_DELETE -> {
                 deletePanelOpen = true;
                 reorderOpen = false;
                 statSettingsStat = null;

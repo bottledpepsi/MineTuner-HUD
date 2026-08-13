@@ -14,7 +14,6 @@
   "gui.mtss.menu.shadow": "Text Shadow",
   "gui.mtss.menu.color_scale": "Color / Scale",
   "gui.mtss.menu.duplicate": "Duplicate",
-  "gui.mtss.menu.deletepanel": "Delete",
   "gui.mtss.menu.create": "+ Create new list",
   "gui.mtss.menu.open_config": "Open Full Config",
   "gui.mtss.menu.on": "[ON]",
@@ -252,6 +251,7 @@
   "gui.mtss.graph_color_mode.per_segment_threshold": "Per-Segment Threshold Color",
   "gui.mtss.graph_color_mode.fixed_accent": "Fixed Accent Color",
   "gui.mtss.graph_color_mode.gradient": "Gradient",
+  "gui.mtss.menu.delete": "Delete",
   "gui.mtss.delete.title": "Delete List?",
   "gui.mtss.delete.cancel": "Cancel",
   "gui.mtss.delete.delete": "Delete"

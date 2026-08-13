@@ -13,9 +13,7 @@ public final class EmptySpaceMenuPanel {
     public static final int ROW_NONE = -1;
     /** Row index for "create a new list here". */
     public static final int ROW_CREATE_LIST = 0;
-    /** Row index for "open the Cloth Config screen". */
-    public static final int ROW_OPEN_CONFIG = 1;
-    private static final int ROW_COUNT = 2;
+    private static final int ROW_COUNT = 1;
 
     private EmptySpaceMenuPanel() {
     }
