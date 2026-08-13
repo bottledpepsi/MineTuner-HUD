@@ -184,7 +184,7 @@ Settings are saved automatically and atomically to `.minecraft/config/mtss.json`
 3. Register an instance in `StatRegistry`'s static block.
 4. Add its lang keys (`stat.mtss.<name>` and `mtss.stat.<name>`) to `en_us.json`.
 5. If it reads live game/JVM state, source it from a `StatSource` in `bottled.mtss.sample.sources` (or `MtssDataHolder`), keeping the `StatDefinition` itself a thin delegate rather than doing its own polling.
-6. Add its row to this README's [Stat Reference](#stat-reference) table.
+6. Add its row to the docs [Stat Reference](https://bottledpepsi.github.io/MineTuner-Statistics-Server/architecture.html#adding-a-stat) table.
 
 No `switch (stat)` blocks need updating anywhere else, the registry pattern is the entire extension point.
 
