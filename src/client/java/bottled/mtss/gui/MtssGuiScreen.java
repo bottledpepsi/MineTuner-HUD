@@ -619,6 +619,7 @@ public class MtssGuiScreen extends Screen {
             }
         }
     }
+    
     private int[] applySnap(int bx, int by, int bw, int bh) {
         int cx = width / 2, cy = height / 2, snapThreshold = MtssConfig.getInstance().dragSnapThresholdPx;
 
