@@ -499,9 +499,6 @@ public class MtssGuiScreen extends Screen {
             MtssConfig.StatListConfig nl = root.createList();
             snapToNearestCorner(nl, mx, my, 0, 0);
             root.save();
-        } else if (row == EmptySpaceMenuPanel.ROW_OPEN_CONFIG) {
-            Minecraft.getInstance().gui.setScreen(MtssClothConfigScreen.build(this));
-            return; // don't also reset menuKind below.
         }
         menuKind = MenuKind.NONE;
     }
@@ -619,7 +616,7 @@ public class MtssGuiScreen extends Screen {
             }
         }
     }
-    
+
     private int[] applySnap(int bx, int by, int bw, int bh) {
         int cx = width / 2, cy = height / 2, snapThreshold = MtssConfig.getInstance().dragSnapThresholdPx;
 
