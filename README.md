@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="src/main/resources/assets/mtss/icon.png" width="96" height="96" alt="MineTuner Statistics Server icon">
+<img src="src/main/resources/assets/minetuner/icon.png" width="96" height="96" alt="MineTuner HUD icon">
 
-# MineTuner Statistics Server
+# MineTuner HUD
 
 **Customisable performance and stats HUD for Fabric.**
 
@@ -15,11 +15,11 @@
 
 ---
 
-## What is MineTuner Statistics Server?
+## What is MineTuner HUD?
 
-MineTuner Statistics Server (**MTSS**) replaces the vanilla debug screen with an in-game HUD that shows only the stats you care about.
+MineTuner HUD replaces the vanilla debug screen with an in-game HUD that shows only the stats you care about.
 
-MTSS is a **client-side-only** Fabric mod. It works on any server and installing it doesn't require anything on the server side.
+MineTuner is a **client-side-only** Fabric mod. It works on any server and installing it doesn't require anything on the server side.
 
 ---
 
@@ -31,7 +31,7 @@ MTSS is a **client-side-only** Fabric mod. It works on any server and installing
 - **46 tracked stats** across four categories — performance, player, world, and position — including four optional hardware-sensor stats. See the [full stat table](#stat-reference) below.
 - **Rolling history graphs** — Certain stats can render as a graph.
 - **Template Mode** — an alternative to the fixed stat-list layout: write your own lines of text and interpolate stat tokens like `{tps}` and `{fps}` anywhere, mixing multiple stats and literal text freely.
-- **Cloth Config screen** (`/mtss config`, or via ModMenu if installed) — a searchable, single-scroll settings screen covering every field in `mtss.json`, including tuning options with no control in the custom editor.
+- **Cloth Config screen** (`/minetuner config`, or via ModMenu if installed) — a searchable, single-scroll settings screen covering every field in `minetuner.json`, including tuning options with no control in the custom editor.
 - **Optional LibreHardwareMonitor integration** — opt-in GPU temperature, GPU clock, GPU usage, and VRAM stats, polled from [LibreHardwareMonitor](https://github.com/LibreHardwaRemonitor/LibreHardwareMonitor)'s Remote Web Server on a background thread.
 
 ---
@@ -47,7 +47,7 @@ MTSS is a **client-side-only** Fabric mod. It works on any server and installing
 | [Cloth Config API](https://www.curseforge.com/minecraft/mc-mods/cloth-config) | ≥ 26.2.155 (hard dependency) |
 | [ModMenu](https://modrinth.com/mod/modmenu) | optional |
 
-> MTSS is **client-side only**. Nothing needs to be installed on the server.
+> MineTuner is **client-side only**. Nothing needs to be installed on the server.
 
 ---
 
@@ -55,8 +55,8 @@ MTSS is a **client-side-only** Fabric mod. It works on any server and installing
 
 1. Install [**Fabric Loader**](https://fabricmc.net/use/installer/).
 2. Install [**Fabric API**](https://modrinth.com/mod/fabric-api) and [**Cloth Config API**](https://modrinth.com/mod/cloth-config) into your `mods` folder.
-3. (Optional) Install [**ModMenu**](https://modrinth.com/mod/modmenu) for a GUI entry point into MTSS's settings.
-4. Drop the MTSS `.jar` into your `mods` folder.
+3. (Optional) Install [**ModMenu**](https://modrinth.com/mod/modmenu) for a GUI entry point into MineTuner's settings.
+4. Drop the MineTuner `.jar` into your `mods` folder.
 5. Launch the game.
 
 ---
@@ -65,7 +65,7 @@ MTSS is a **client-side-only** Fabric mod. It works on any server and installing
 
 ### Opening the editor
 
-Run `/mtss gui`, or press the **Open Editor** keybind (default: **H**).
+Run `/minetuner gui`, or press the **Open Editor** keybind (default: **H**).
 
 ### Editor controls
 
@@ -87,11 +87,11 @@ Right-clicking a list opens four actions:
 
 ### Toggling the overlay
 
-Press the **Toggle Overlay** keybind (unbound by default) to instantly show or hide the HUD without opening the editor. This doesn't affect the editor: `/mtss gui` still opens and previews your lists normally even while the overlay is hidden.
+Press the **Toggle Overlay** keybind (unbound by default) to instantly show or hide the HUD without opening the editor. This doesn't affect the editor: `/minetuner gui` still opens and previews your lists normally even while the overlay is hidden.
 
 ### Full settings screen
 
-Run `/mtss config`, open MTSS from ModMenu's mod list (if installed), or right-click empty space in the editor and choose **Open Full Config**. This opens a Cloth Config screen covering every field in `mtss.json` in one place — general settings, hardware-sensor settings, editor GUI tuning, and every list's full configuration (including graph styling, which has no dedicated control in the custom editor).
+Run `/minetuner config`, open MineTuner from ModMenu's mod list (if installed), or right-click empty space in the editor and choose **Open Full Config**. This opens a Cloth Config screen covering every field in `minetuner.json` in one place — general settings, hardware-sensor settings, editor GUI tuning, and every list's full configuration (including graph styling, which has no dedicated control in the custom editor).
 
 ---
 
@@ -139,17 +139,17 @@ See the [Stat Reference](#stat-reference) table below — the **Token** column i
 
 ## Hardware Sensors (opt-in via LibreHardwareMonitor)
 
-Every other stat MTSS shows comes straight from the JVM or Minecraft's own state. GPU temperature, clock, usage, and VRAM usage don't. no JVM API exposes them. So these four are an **optional** integration with [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor).
+Every other stat MineTuner shows comes straight from the JVM or Minecraft's own state. GPU temperature, clock, usage, and VRAM usage don't. no JVM API exposes them. So these four are an **optional** integration with [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor).
 
 ### How it works
 
-MTSS polls LHM's built-in **Remote Web Server**, roughly every 1.5 seconds by default. It never touches a GPU driver, SDK, or shared memory directly, and never touches the render thread: if LHM is unreachable, slow, or not running, the affected stats simply don't render, the same way MSPT is hidden on a remote server. There's no bundled native code or vendor SDK involved.
+MineTuner polls LHM's built-in **Remote Web Server**, roughly every 1.5 seconds by default. It never touches a GPU driver, SDK, or shared memory directly, and never touches the render thread: if LHM is unreachable, slow, or not running, the affected stats simply don't render, the same way MSPT is hidden on a remote server. There's no bundled native code or vendor SDK involved.
 
 ### Setup
 
 1. Install and run [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases).
 2. In LHM, go to **Options → Remote Web Server → Run**. By default this serves `http://localhost:8085/data.json`.
-3. Enable it in MTSS via the Cloth Config screen (`/mtss config` → **Hardware Sensors**) and set the base URL there.
+3. Enable it in MineTuner via the Cloth Config screen (`/minetuner config` → **Hardware Sensors**) and set the base URL there.
 
 ### If a stat doesn't show up
 
@@ -164,7 +164,7 @@ This feature degrades silently by design, so check, in order:
 
 ## Configuration file
 
-Settings are saved automatically and atomically to `.minecraft/config/mtss.json`. You can inspect or back up this file, but there's no need to edit it manually for anything the in-game editor or the Cloth Config screen already exposes. If a config file fails to parse, MTSS backs it up as `mtss.json.bak-<timestamp>` and starts fresh, rather than discarding it silently.
+Settings are saved automatically and atomically to `.minecraft/config/minetuner.json`. You can inspect or back up this file, but there's no need to edit it manually for anything the in-game editor or the Cloth Config screen already exposes. If a config file fails to parse, MineTuner backs it up as `minetuner.json.bak-<timestamp>` and starts fresh, rather than discarding it silently.
 
 ---
 
@@ -173,18 +173,18 @@ Settings are saved automatically and atomically to `.minecraft/config/mtss.json`
 - **Client-side only** — works against any server (vanilla, Paper, Fabric, etc.).
 - **MSPT** is only available on singleplayer and LAN worlds — it's silently hidden on remote servers where the data isn't exposed.
 - **GPU/VRAM sensor stats** are opt-in and require LibreHardwareMonitor running separately with its Remote Web Server enabled; they're silently hidden otherwise.
-- MTSS registers its overlay through Fabric API's `HudElementRegistry`, attached just before the chat layer, so it doesn't conflict with other HUD mods.
+- MineTuner registers its overlay through Fabric API's `HudElementRegistry`, attached just before the chat layer, so it doesn't conflict with other HUD mods.
 
 ---
 
 ### Adding a new stat
 
-1. Add a constant to `MtssConfig.Stat`.
-2. Implement `StatDefinition` in `bottled.mtss.stat.stats`. Copy the smallest existing example (`EntitiesStat`) for a plain text stat, or a stat like `PingStat` if it needs graph/threshold support.
+1. Add a constant to `MineTunerConfig.Stat`.
+2. Implement `StatDefinition` in `bottled.minetuner.stat.stats`. Copy the smallest existing example (`EntitiesStat`) for a plain text stat, or a stat like `PingStat` if it needs graph/threshold support.
 3. Register an instance in `StatRegistry`'s static block.
-4. Add its lang keys (`stat.mtss.<name>` and `mtss.stat.<name>`) to `en_us.json`.
-5. If it reads live game/JVM state, source it from a `StatSource` in `bottled.mtss.sample.sources` (or `MtssDataHolder`), keeping the `StatDefinition` itself a thin delegate rather than doing its own polling.
-6. Add its row to the docs [Stat Reference](https://bottledpepsi.github.io/MineTuner-Statistics-Server/architecture.html#adding-a-stat) table.
+4. Add its lang keys (`stat.minetuner.<name>` and `minetuner.stat.<name>`) to `en_us.json`.
+5. If it reads live game/JVM state, source it from a `StatSource` in `bottled.minetuner.sample.sources` (or `MineTunerDataHolder`), keeping the `StatDefinition` itself a thin delegate rather than doing its own polling.
+6. Add its row to the docs [Stat Reference](https://bottledpepsi.github.io/MineTuner-HUD/architecture.html#adding-a-stat) table.
 
 No `switch (stat)` blocks need updating anywhere else, the registry pattern is the entire extension point.
 
@@ -192,11 +192,11 @@ No `switch (stat)` blocks need updating anywhere else, the registry pattern is t
 
 ## Building from source
 
-MTSS is built with [Fabric Loom](https://github.com/FabricMC/fabric-loom) and Gradle.
+MineTuner is built with [Fabric Loom](https://github.com/FabricMC/fabric-loom) and Gradle.
 
 ```bash
-git clone https://github.com/bottledpepsi/MineTuner-Statistics-Server.git
-cd MineTuner-Statistics-Server
+git clone https://github.com/bottledpepsi/MineTuner-HUD.git
+cd MineTuner-HUD
 ./gradlew build
 ```
 
@@ -212,4 +212,4 @@ Issues and pull requests are welcome. If you're adding a new stat, follow the [A
 
 ## License
 
-MineTuner Statistics Server is licensed under the [GNU General Public License v3.0](LICENSE).
+MineTuner HUD is licensed under the [GNU General Public License v3.0](LICENSE).

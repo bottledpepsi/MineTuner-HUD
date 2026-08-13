@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mtss docs — stat reference</title>
+<title>minetuner docs — stat reference</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
   <a href="hardware-sensors.html">hardware-sensors</a>
   <a href="building.html">build+ci</a>
   <span class="sep">|</span>
-  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+  <a href="https://github.com/bottledpepsi/MineTuner-HUD">repo↗</a>
   <a href="https://bottledpepsi.github.io">homepage↗</a>
 </div>
 
@@ -33,7 +33,7 @@ sampling pipeline</a>. GPU/VRAM rows are opt-in, see <a href="hardware-sensors.h
 <h2 id="performance">performance</h2>
 <table>
 <tr><th>stat</th><th>token</th><th>enum</th><th>dec</th><th>graph</th><th>thr</th><th>cadence / source</th><th>notes</th></tr>
-<tr><td>TPS</td><td><code>{tps}</code></td><td><code>TPS</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · fast_metrics / EVENT_PUSHED · tick packet</td><td>SP/LAN: derived from live MSPT. Multiplayer: <code>MtssDataHolder.tickRate</code>, set by the mixin.</td></tr>
+<tr><td>TPS</td><td><code>{tps}</code></td><td><code>TPS</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · fast_metrics / EVENT_PUSHED · tick packet</td><td>SP/LAN: derived from live MSPT. Multiplayer: <code>MineTunerDataHolder.tickRate</code>, set by the mixin.</td></tr>
 <tr><td>MSPT</td><td><code>{mspt}</code></td><td><code>MSPT</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>PER_FRAME · singleplayer_mspt</td><td>SP/LAN only, hidden on remote servers. Colored using TPS's scale, not its own.</td></tr>
 <tr><td>FPS</td><td><code>{fps}</code></td><td><code>FPS</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · client_perf</td><td>—</td></tr>
 <tr><td>Frametime</td><td><code>{frametime}</code></td><td><code>FRAMETIME</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>every rendered frame · <code>LevelRenderEvents.START_MAIN</code>, not SamplingDriver</td><td>ms between rendered frames. Sampled outside the usual StatSource pipeline so it isn't gated by the overlay/F3/GUI — see architecture doc. 0 until the 2nd frame of the session.</td></tr>
@@ -100,7 +100,7 @@ sampling pipeline</a>. GPU/VRAM rows are opt-in, see <a href="hardware-sensors.h
 <div class="note">
 Cadence/source values above are read off each <code>StatSource</code>'s <code>id()</code>/
 <code>cadence()</code> in <code>sample/sources/</code>, cross-referenced against which fields
-each source writes to <code>MtssDataHolder</code>. If you add or rename a source, this table
+each source writes to <code>MineTunerDataHolder</code>. If you add or rename a source, this table
 does not update itself — see <a href="architecture.html#adding-a-stat">architecture.html</a>.
 </div>
 

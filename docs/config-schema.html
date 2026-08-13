@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mtss docs — config schema</title>
+<title>minetuner docs — config schema</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,24 +16,24 @@
   <a href="hardware-sensors.html">hardware-sensors</a>
   <a href="building.html">build+ci</a>
   <span class="sep">|</span>
-  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+  <a href="https://github.com/bottledpepsi/MineTuner-HUD">repo↗</a>
   <a href="https://bottledpepsi.github.io">homepage↗</a>
 </div>
 
 <main>
-<h1>config schema — mtss.json</h1>
+<h1>config schema — minetuner.json</h1>
 <p>
-Location: <code>&lt;fabric config dir&gt;/mtss.json</code>. Gson, pretty-printed, atomic write
+Location: <code>&lt;fabric config dir&gt;/minetuner.json</code>. Gson, pretty-printed, atomic write
 (<code>.tmp</code> + <code>ATOMIC_MOVE</code>). See <a href="architecture.html#config-lifecycle">
 architecture.html#config-lifecycle</a> for load/save/corruption-recovery behavior — this page is
-just the field list. Source: <code>config/MtssConfig.java</code>.
+just the field list. Source: <code>config/MineTunerConfig.java</code>.
 </p>
 <div class="warn">
 There is no versioned migration system. Backward compat is handled ad hoc per-field in
 <code>load()</code>/<code>backFill()</code> (null-guards, one explicit rename:
 <code>anchorDx</code>/<code>anchorDy</code> → <code>anchorFracX</code>/<code>anchorFracY</code>).
 If you hand-edit this file, know that an unparseable result gets backed up as
-<code>mtss.json.bak-&lt;epoch-ms&gt;</code> and replaced with fresh defaults — it does not merge or repair.
+<code>minetuner.json.bak-&lt;epoch-ms&gt;</code> and replaced with fresh defaults — it does not merge or repair.
 </div>
 
 <h2 id="root">root object</h2>

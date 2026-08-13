@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mtss docs — hardware sensors</title>
+<title>minetuner docs — hardware sensors</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
   <a href="hardware-sensors.html">hardware-sensors</a>
   <a href="building.html">build+ci</a>
   <span class="sep">|</span>
-  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+  <a href="https://github.com/bottledpepsi/MineTuner-HUD">repo↗</a>
   <a href="https://bottledpepsi.github.io">homepage↗</a>
 </div>
 
@@ -34,13 +34,13 @@ LHM's own JSON endpoint.
 <h2>lifecycle</h2>
 <table>
 <tr><th>call</th><th>when</th><th>effect</th></tr>
-<tr><td><code>startIfEnabled()</code></td><td><code>MtssClient.onInitializeClient()</code></td><td>no-op if <code>hardwareSensorsEnabled</code> is false or a poller is already running. Otherwise builds an <code>HttpClient</code>, spawns a daemon thread named <code>mtss-hardware-sensor-poller</code>.</td></tr>
+<tr><td><code>startIfEnabled()</code></td><td><code>MineTunerClient.onInitializeClient()</code></td><td>no-op if <code>hardwareSensorsEnabled</code> is false or a poller is already running. Otherwise builds an <code>HttpClient</code>, spawns a daemon thread named <code>minetuner-hardware-sensor-poller</code>.</td></tr>
 <tr><td><code>stop()</code></td><td>disabled via config</td><td>sets <code>stopRequested</code>, interrupts the thread. Thread exits at its next <code>Thread.sleep</code> wakeup.</td></tr>
 <tr><td><code>reconcileWithConfig()</code></td><td>after any Cloth Config save touching sensor settings</td><td>stops+restarts if base URL or request-timeout changed (timeout is baked into the <code>HttpClient</code> at construction, can't be swapped live); starts fresh if newly enabled; stops + resets published values if newly disabled.</td></tr>
 </table>
 <p>
 Poll interval, unlike the request timeout, <b>is</b> read live every cycle
-(<code>MtssConfig.getInstance().hardwareSensorPollIntervalMs</code> inside the sleep call) — a
+(<code>MineTunerConfig.getInstance().hardwareSensorPollIntervalMs</code> inside the sleep call) — a
 config change to it takes effect on the very next sleep with no restart needed. This asymmetry
 is deliberate, not an oversight; see the inline comment in <code>runLoop()</code> if you're
 touching this.
@@ -55,7 +55,7 @@ alive on its own, no explicit shutdown-on-exit logic exists or is needed.</div>
 <li>Any network exception (connection refused, timeout, unknown host, anything <code>java.net.http</code> throws) → logged once per outage as "could not reach", sensors marked unavailable, return.</li>
 <li>Non-200 response → logged once as "unexpected HTTP &lt;code&gt;", sensors marked unavailable, return.</li>
 <li>Unparseable JSON (e.g. LHM returned an HTML error page, or a future LHM version changed its shape) → logged once as "could not parse data.json", sensors marked unavailable, return.</li>
-<li>Success → extract readings (below), write all five <code>MtssDataHolder</code> fields, flip <code>hardwareSensorsReachable = true</code>, clear the outage-warned flag so the <i>next</i> failure logs again.</li>
+<li>Success → extract readings (below), write all five <code>MineTunerDataHolder</code> fields, flip <code>hardwareSensorsReachable = true</code>, clear the outage-warned flag so the <i>next</i> failure logs again.</li>
 </ol>
 <p>
 The whole loop body (not just <code>pollOnce()</code>'s own internals) is additionally wrapped
@@ -123,7 +123,7 @@ error string.
 <ol>
 <li>Install and run <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases">LibreHardwareMonitor</a>.</li>
 <li>In LHM: <b>Options → Remote Web Server → Run</b>. Default port serves <code>http://localhost:8085/data.json</code>.</li>
-<li>Enable in mtss via <code>/mtss config</code> → <b>Hardware Sensors</b>, set base URL to match.</li>
+<li>Enable in minetuner via <code>/minetuner config</code> → <b>Hardware Sensors</b>, set base URL to match.</li>
 </ol>
 <p>Debug checklist if a stat doesn't show up (mirrors what <code>markUnavailable()</code>/outage
 logging would tell you if you're watching the client log):</p>

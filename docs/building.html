@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mtss docs — build + ci</title>
+<title>minetuner docs — build + ci</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
   <a href="hardware-sensors.html">hardware-sensors</a>
   <a href="building.html">build+ci</a>
   <span class="sep">|</span>
-  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+  <a href="https://github.com/bottledpepsi/MineTuner-HUD">repo↗</a>
   <a href="https://bottledpepsi.github.io">homepage↗</a>
 </div>
 
@@ -24,8 +24,8 @@
 <h1>build + ci</h1>
 
 <h2>local build</h2>
-<pre><code>git clone https://github.com/bottledpepsi/MineTuner-Statistics-Server.git
-cd MineTuner-Statistics-Server
+<pre><code>git clone https://github.com/bottledpepsi/MineTuner-HUD.git
+cd MineTuner-HUD
 ./gradlew build</code></pre>
 <p>
 Output jar lands in <code>build/libs/</code>. Fabric Loom + Gradle,
@@ -55,7 +55,7 @@ install 25 first, but the first build with a new toolchain will download one.
 <tr><td><code>mod_version</code></td><td><code>1.1.1</code></td><td>injected into <code>fabric.mod.json</code>'s <code>${version}</code> placeholder by <code>processResources</code>.</td></tr>
 <tr><td><code>fabric_api_version</code></td><td><code>0.156.0+26.2</code></td><td>—</td></tr>
 <tr><td><code>cloth_config_version</code></td><td><code>26.2.155</code></td><td>hard dependency, client-only (<code>clientImplementation</code>). Pinned to match <code>minecraft_version</code> — check <a href="https://linkie.shedaniel.me/dependencies">linkie</a> when bumping MC version.</td></tr>
-<tr><td><code>modmenu_version</code></td><td><code>20.0.1</code></td><td><code>clientCompileOnly</code> — <b>not bundled, not a runtime dependency</b>. Only used to compile <code>MtssModMenuIntegration</code> against ModMenu's API; the built jar has no hard dependency on it (see <code>fabric.mod.json</code>'s <code>suggests</code>, not <code>depends</code>).</td></tr>
+<tr><td><code>modmenu_version</code></td><td><code>20.0.1</code></td><td><code>clientCompileOnly</code> — <b>not bundled, not a runtime dependency</b>. Only used to compile <code>MineTunerModMenuIntegration</code> against ModMenu's API; the built jar has no hard dependency on it (see <code>fabric.mod.json</code>'s <code>suggests</code>, not <code>depends</code>).</td></tr>
 </table>
 <p>
 Repositories declared beyond Loom's automatic Minecraft/library maven setup:
@@ -66,8 +66,8 @@ Repositories declared beyond Loom's automatic Minecraft/library maven setup:
 <h2>fabric.mod.json highlights</h2>
 <ul>
 <li><code>"environment": "client"</code> — the whole mod is client-only, not just the client sourceset.</li>
-<li>Three entrypoints: <code>main</code> → <code>MtssMod</code>, <code>client</code> → <code>MtssClient</code>, <code>modmenu</code> → <code>MtssModMenuIntegration</code> (soft — only loaded if ModMenu is present).</li>
-<li>Two mixin configs: <code>mtss.mixins.json</code> (common, currently empty — no server-side mixins exist) and <code>mtss.client.mixins.json</code> (client env only, holds <code>ClientPacketListenerMixin</code>).</li>
+<li>Three entrypoints: <code>main</code> → <code>MineTunerMod</code>, <code>client</code> → <code>MineTunerClient</code>, <code>modmenu</code> → <code>MineTunerModMenuIntegration</code> (soft — only loaded if ModMenu is present).</li>
+<li>Two mixin configs: <code>minetuner.mixins.json</code> (common, currently empty — no server-side mixins exist) and <code>minetuner.client.mixins.json</code> (client env only, holds <code>ClientPacketListenerMixin</code>).</li>
 <li><code>depends</code>: <code>fabricloader &gt;=0.19.3</code>, <code>minecraft &gt;=26.2</code>, <code>java &gt;=25</code>, <code>fabric-api *</code>, <code>cloth-config &gt;=26.2.155</code>.</li>
 </ul>
 

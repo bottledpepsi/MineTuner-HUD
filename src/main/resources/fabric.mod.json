@@ -1,34 +1,34 @@
 {
 	"schemaVersion": 1,
-	"id": "mtss",
+	"id": "minetuner",
 	"version": "${version}",
-	"name": "MineTuner Statistics Server",
+	"name": "MineTuner HUD",
 	"description": "Customisable performance HUD for Minecraft.",
 	"authors": [
 		"bottledpepsi"
 	],
 	"contact": {
 		"homepage": "https://bottledpepsi.github.io",
-		"sources": "https://github.com/bottledpepsi/MineTuner-Statistics-Server"
+		"sources": "https://github.com/bottledpepsi/MineTuner-HUD"
 	},
 	"license": "GPL-3.0",
-	"icon": "assets/mtss/icon.png",
+	"icon": "assets/minetuner/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"main": [
-			"bottled.mtss.MtssMod"
+			"bottled.minetuner.MineTunerMod"
 		],
 		"client": [
-			"bottled.mtss.MtssClient"
+			"bottled.minetuner.MineTunerClient"
 		],
 		"modmenu": [
-			"bottled.mtss.config.cloth.MtssModMenuIntegration"
+			"bottled.minetuner.config.cloth.MineTunerModMenuIntegration"
 		]
 	},
 	"mixins": [
-		"mtss.mixins.json",
+		"minetuner.mixins.json",
 		{
-			"config": "mtss.client.mixins.json",
+			"config": "minetuner.client.mixins.json",
 			"environment": "client"
 		}
 	],
