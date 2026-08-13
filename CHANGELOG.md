@@ -5,6 +5,14 @@ All notable changes to MineTuner Statistics Server are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Frametime stat** (`FRAMETIME` / `{frametime}`) — raw ms between the last two
+  rendered frames, plus a history graph and the usual good/warn color threshold
+  (defaults ~16.7ms/~33.3ms, the frametime equivalents of FPS's 60/30). Sampled
+  directly off `LevelRenderEvents.START_MAIN` rather than through the normal
+  `StatSource`/`SamplingDriver` pipeline, since that pipeline only runs while
+  MTSS's own overlay is being drawn and a frame-to-frame timing measurement
+  can't tolerate the gaps that would introduce — see the architecture doc's
+  "sampling pipeline" section for the full rationale.
 - **Cloth Config screen** — a searchable, single-scroll alternative to the
   custom in-game editor, covering every field in `mtss.json` at once,
   including several that previously had no in-game control anywhere:

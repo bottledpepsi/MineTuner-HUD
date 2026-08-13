@@ -6,6 +6,8 @@ import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 public final class MtssDataHolder {
@@ -15,6 +17,7 @@ public final class MtssDataHolder {
     private static final RingBuffer tpsHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer msptHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer fpsHistory = new RingBuffer(HISTORY_SIZE);
+    private static final RingBuffer frametimeHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer cpuHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer pingHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer memHistory = new RingBuffer(HISTORY_SIZE);
@@ -34,11 +37,26 @@ public final class MtssDataHolder {
             ManagementFactory.getGarbageCollectorMXBeans();
     private static final long SLOW_MS = 500;
 
+    // --- Frametime sampling state ---
+    // Fed directly by LevelRenderEvents.START_MAIN (see MtssClient), NOT by SamplingDriver
+    private static long lastFrameNanos = 0L;
+
+    private static final long SMOOTH_WINDOW_NANOS = 500_000_000L;
+
+    private record FrametimeSample(long timestampNanos, float deltaMs) {}
+
+    private static final Deque<FrametimeSample> smoothWindow = new ArrayDeque<>();
+    private static float smoothWindowSum = 0f;
+
     // --- Performance ---
     public static float tickRate = 20.0f;
     /** -1 when not on a singleplayer/LAN server (MSPT unavailable). */
     public static float mspt = -1f;
     public static int fps = 0;
+
+    public static float frametimeMs = 0f;
+
+    public static float smoothedFps = 0f;
     public static int ping = -1;
     public static int entityCount = 0;
     public static int loadedChunks = 0;
@@ -121,6 +139,44 @@ public final class MtssDataHolder {
     private MtssDataHolder() {
     }
 
+    public static void recordFrametime(long nowNanos) {
+        if (lastFrameNanos != 0L) {
+            float deltaMs = (nowNanos - lastFrameNanos) / 1_000_000f;
+
+            if (deltaMs > 0f && deltaMs < 10_000f) {
+                frametimeHistory.push(frametimeMs);
+
+                pushSmoothWindow(nowNanos, deltaMs);
+
+                int sampleCount = smoothWindow.size();
+
+                frametimeMs = sampleCount > 0
+                        ? smoothWindowSum / sampleCount
+                        : deltaMs;
+
+                smoothedFps = sampleCount > 0
+                        ? 1000f * sampleCount / smoothWindowSum
+                        : 0f;
+            }
+        }
+
+        lastFrameNanos = nowNanos;
+    }
+
+    private static void pushSmoothWindow(long nowNanos, float deltaMs) {
+        smoothWindow.addLast(new FrametimeSample(nowNanos, deltaMs));
+        smoothWindowSum += deltaMs;
+
+        long cutoffNanos = nowNanos - SMOOTH_WINDOW_NANOS;
+
+        while (!smoothWindow.isEmpty()
+                && smoothWindow.peekFirst().timestampNanos() < cutoffNanos) {
+
+            FrametimeSample old = smoothWindow.removeFirst();
+            smoothWindowSum -= old.deltaMs();
+        }
+    }
+
     public static void updateFastMetrics() {
         long used = MEM_BEAN.getHeapMemoryUsage().getUsed();
         long max = MEM_BEAN.getHeapMemoryUsage().getMax();
@@ -187,6 +243,10 @@ public final class MtssDataHolder {
 
     public static float[] getFpsHistory() {
         return fpsHistory.snapshot();
+    }
+
+    public static float[] getFrametimeHistory() {
+        return frametimeHistory.snapshot();
     }
 
     public static float[] getCpuHistory() {
@@ -290,6 +350,35 @@ public final class MtssDataHolder {
         }
         if (fpsValue >= 60) return 0xFF55FF55;
         if (fpsValue >= 30) return 0xFFFFFF55;
+        return 0xFFFF5555;
+    }
+
+    public static int getFrametimeColor() {
+        return getFrametimeColor(null);
+    }
+
+    public static int getFrametimeColor(ThresholdSettings custom) {
+        return frametimeColorFor(frametimeMs, custom);
+    }
+
+    public static int frametimeColorFor(float frametimeValue) {
+        return frametimeColorFor(frametimeValue, null);
+    }
+
+    /** Frametime is lower-is-better (opposite direction from FPS): fewer
+     *  milliseconds per frame is better, same convention as CPU/ping/GPU temp.
+     *  Default cutoffs (~16.7ms, ~33.3ms) are the frame-time equivalents of
+     *  FpsStat's 60/30 defaultGoodMin()/defaultWarnMin(), so the two stats
+     *  describe the same real-world performance bands despite being inversely
+     *  related. */
+    public static int frametimeColorFor(float frametimeValue, ThresholdSettings custom) {
+        if (custom != null && custom.enabled) {
+            if (frametimeValue <= custom.goodMin) return 0xFF55FF55;
+            if (frametimeValue <= custom.warnMin) return 0xFFFFFF55;
+            return 0xFFFF5555;
+        }
+        if (frametimeValue <= 16.7f) return 0xFF55FF55;
+        if (frametimeValue <= 33.3f) return 0xFFFFFF55;
         return 0xFFFF5555;
     }
 
@@ -531,6 +620,22 @@ public final class MtssDataHolder {
 
     public static String getFormattedFps() {
         return t("mtss.stat.fps", fps);
+    }
+
+    public static String getFormattedFrametime() {
+        return getFormattedFrametime(1);
+    }
+
+    public static String getFormattedFrametime(int decimals) {
+        return t("mtss.stat.frametime", fmt(frametimeMs, decimals));
+    }
+
+    /** Bare frametime value with no "ms" suffix, for Template Mode. Frametime has
+     *  no server-availability caveat the way MSPT/ping do (it's a purely local,
+     *  client-side render timing), so unlike getRawCpu()/getRawPing() there's no
+     *  "N/A" branch — it's simply 0 until the second frame of the session lands. */
+    public static String getRawFrametime(int decimals) {
+        return fmt(frametimeMs, decimals);
     }
 
     public static String getFormattedPing() {

@@ -104,6 +104,21 @@ practice: individual <code>double</code>/<code>boolean</code> field writes/reads
 fields rely on, there's no lock).
 </p>
 
+<p>
+<b>Frametime is the one deliberate exception to this whole pipeline.</b>
+<code>SamplingDriver.sampleAll()</code>'s only call site is inside <code>MtssRenderer.render()</code>,
+which early-returns — skipping sampling entirely — whenever the overlay is disabled, F3 is open,
+or the MTSS editor GUI is open. That's harmless for a "current value" stat (it just goes stale
+until the next real sample), but frame-to-frame timing can't tolerate a gap like that: the next
+sample after any such gap would read as one enormous fake spike, since real elapsed time would
+have gone uncounted. So <code>FRAMETIME</code> is <i>not</i> a <code>StatSource</code> at all —
+<code>MtssClient</code> registers <code>LevelRenderEvents.START_MAIN</code> directly, which fires once
+per actually rendered frame regardless of HUD/overlay/GUI/F3 state, calling
+<code>MtssDataHolder.recordFrametime(long)</code> straight from there. Everything downstream
+(<code>FrametimeStat</code>, its history ring buffer, its color thresholds) is completely ordinary
+and looks just like <code>CpuStat</code> to the rest of the codebase; only the sampling trigger differs.
+</p>
+
 <h2 id="registry">stat registry pattern</h2>
 <p>
 <code>StatDefinition</code> is the single source of truth per stat — formatting, decimals,

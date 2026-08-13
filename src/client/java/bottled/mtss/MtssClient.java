@@ -12,6 +12,7 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
@@ -59,6 +60,9 @@ public class MtssClient implements ClientModInitializer {
                 Identifier.fromNamespaceAndPath("mtss", "overlay"),
                 RENDERER::render
         );
+
+        // Frametime is sampled here
+        LevelRenderEvents.START_MAIN.register(context -> MtssDataHolder.recordFrametime(System.nanoTime()));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 MtssCommand.register(dispatcher));

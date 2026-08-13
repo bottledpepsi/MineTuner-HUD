@@ -74,7 +74,7 @@ public class MtssConfig {
     /** Which {@link StatCategory} a stat belongs to in the toggle panel. */
     public static StatCategory categoryOf(Stat stat) {
         return switch (stat) {
-            case TPS, MSPT, FPS, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE,
+            case TPS, MSPT, FPS, FRAMETIME, PING, MEMORY, CPU, GC_TIME, RENDERED_SECTIONS, PLAYERS_ONLINE,
                  GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED -> StatCategory.PERFORMANCE;
             case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM,
                  SPEED, VERTICAL_SPEED, MOVING -> StatCategory.PLAYER;
@@ -259,7 +259,7 @@ public class MtssConfig {
 
     public enum Stat {
         // --- Performance ---
-        TPS, MSPT, FPS, PING, MEMORY, CPU,
+        TPS, MSPT, FPS, FRAMETIME, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
         COORDS, X, Y, Z, FACING, YAW, PITCH, SPEED, GC_TIME,
         BIOME, LIGHT_LEVEL, DIMENSION,
