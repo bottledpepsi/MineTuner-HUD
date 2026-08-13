@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — template mode</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>template mode / TemplateEngine</h1>
+<p>
+<code>hud/TemplateEngine.java</code>. Parses free-text lines with interpolated
+<code>{stat}</code> tokens into a <code>List&lt;Token&gt;</code>, cached per-list, re-rendered
+every frame. This page documents the actual parser behavior, not a spec someone wrote
+separately from it — read it next to the source if you're modifying the grammar.
+</p>
+
+<h2>token grammar</h2>
+<pre><code>line     := (literal | token)*
+token    := "{" body "}"
+body     := name (":" modifiers)?
+modifiers:= modifier ("," modifier)*
+modifier := decimals | "graph=" bool | "color=" hexcolor
+decimals := [0-9]+          ; 0–6 inclusive
+hexcolor := "#" (hex{3} | hex{6})
+bool     := "true" | "false"</code></pre>
+
+<p><code>name</code> is matched case-insensitively against <code>StatRegistry.byToken()</code>
+after lowercasing (<code>String.toLowerCase(Locale.ROOT)</code>). Whitespace around a modifier
+is trimmed before matching.</p>
+
+<h2>escaping</h2>
+<table>
+<tr><th>input</th><th>output</th></tr>
+<tr><td><code>{{</code></td><td>literal <code>{</code></td></tr>
+<tr><td><code>}}</code></td><td>literal <code>}</code></td></tr>
+<tr><td>lone <code>}</code> (no preceding matched <code>{</code>)</td><td>literal <code>}</code>, passed through as-is</td></tr>
+<tr><td><code>{</code> with no closing <code>}</code> anywhere in the line</td><td>rest of the line from that point is literal text</td></tr>
+</table>
+
+<h2>modifiers</h2>
+<table>
+<tr><th>modifier</th><th>effect</th><th>example</th></tr>
+<tr><td><code>:N</code></td><td>decimal places (bare integer, no key). Only valid on stats where <code>supportsDecimals()</code> is true.</td><td><code>{tps:2}</code></td></tr>
+<tr><td><code>graph=true</code></td><td>render as rolling graph instead of text. Only valid where <code>supportsGraph()</code> is true. Must be the line's only content in practice, though the parser itself doesn't enforce that — layout does.</td><td><code>{fps:graph=true}</code></td></tr>
+<tr><td><code>color=#RRGGBB</code></td><td>colors just this token, independent of the line's base color. 3-digit shorthand accepted and expanded (<code>#5F5</code> → <code>#55FF55</code>).</td><td><code>{tps:color=#55FF55}</code></td></tr>
+</table>
+<p>
+Modifiers combine via commas: <code>{cpu:0,color=#FF5555}</code>. <code>color=</code> and
+<code>graph=true</code> on the same token is not a parse error, but functionally a graph draws
+its own coloring regardless — the two don't compose visually even though nothing stops you
+from writing it.
+</p>
+
+<h2>failure modes — every one returns <code>null</code> from <code>tryParseTokenBody</code></h2>
+<p>
+A malformed token is <b>never silently dropped</b>. On parse failure the whole
+<code>{body}</code> — braces included — is appended back into the surrounding literal text
+verbatim, and a one-time-per-list warning is logged
+(<code>WARNED_BAD_TOKENS</code>, a <code>Map&lt;listId, Set&lt;badBody&gt;&gt;</code>, so the same
+typo doesn't spam the log every frame it's rendered).
+</p>
+<table>
+<tr><th>input</th><th>why it fails</th></tr>
+<tr><td><code>{}</code></td><td>empty body</td></tr>
+<tr><td><code>{tpss}</code></td><td>unknown token name — no match in <code>StatRegistry.byToken()</code></td></tr>
+<tr><td><code>{tps:}</code></td><td>colon present, nothing after it (<code>modifiers.isBlank()</code>)</td></tr>
+<tr><td><code>{tps:1,,graph=true}</code></td><td>empty modifier between two commas</td></tr>
+<tr><td><code>{tps:abc}</code></td><td>bare modifier isn't a parseable integer</td></tr>
+<tr><td><code>{tps:99}</code></td><td>decimals outside 0–6</td></tr>
+<tr><td><code>{entities:2}</code></td><td>decimals given, but <code>ENTITIES.supportsDecimals() == false</code></td></tr>
+<tr><td><code>{biome:graph=true}</code></td><td>graph requested, but <code>BIOME.supportsGraph() == false</code></td></tr>
+<tr><td><code>{tps:graph=maybe}</code></td><td><code>graph=</code> value isn't literally <code>true</code>/<code>false</code></td></tr>
+<tr><td><code>{tps:color=notahex}</code></td><td>fails the hex regex <code>[0-9a-fA-F]{3}|[0-9a-fA-F]{6}</code></td></tr>
+<tr><td><code>{tps:unknownkey=1}</code></td><td>modifier key isn't <code>graph</code> or <code>color</code></td></tr>
+</table>
+
+<h2>rendering</h2>
+<p>
+<code>render(tokens)</code> — plain string concatenation, used where color doesn't matter.
+</p>
+<p>
+<code>renderRuns(tokens, baseColor)</code> — the one the HUD actually uses. Walks the token
+list and coalesces adjacent same-colored output into <code>ColoredRun</code> records, so a line
+with no <code>color=</code> modifiers anywhere renders as exactly one run, not one run per token.
+Literal text always takes the line's base color; a stat token takes its own <code>color()</code>
+if set, else falls back to base.
+</p>
+<p>
+<code>renderStat(token)</code> calls <code>StatDefinition.rawValue(decimals)</code> — never
+<code>format()</code> — since template lines are label-free by design (you type your own label
+as literal text if you want one). As a safety net against a stat forgetting to override
+<code>rawValue()</code>, it strips a leading <code>"Label: "</code> prefix if one slipped
+through (same logic <code>MtssRenderer</code> uses for classic mode's <code>showPrefix=false</code>).
+</p>
+
+<h2>caching</h2>
+<p>
+<code>getParsedLines(cfg)</code> joins <code>cfg.templateLines</code> with a NUL separator
+(<code>\u0000</code> — chosen because it can't appear in a normal template string) and compares
+against the cached join for that list id. Cache hit → return the cached
+<code>List&lt;List&lt;Token&gt;&gt;</code> unchanged. Miss → reparse every line, replace the cache
+entry. Keyed by <code>cfg.id</code>, so parsing happens once per edit, not once per frame.
+<code>invalidate(listId)</code> — called on list delete — drops both the parse cache and the
+per-list warned-tokens set for that id.
+</p>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>

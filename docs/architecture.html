@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — architecture</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>architecture</h1>
+
+<div class="toc">
+<b>on this page:</b>
+<ul>
+<li><a href="#sourcesets">source sets / env split</a></li>
+<li><a href="#sampling">sampling pipeline</a></li>
+<li><a href="#registry">stat registry pattern</a></li>
+<li><a href="#render">render pipeline</a></li>
+<li><a href="#config-lifecycle">config lifecycle</a></li>
+<li><a href="#mixin">the one mixin</a></li>
+<li><a href="#adding-a-stat">adding a stat, mechanically</a></li>
+</ul>
+</div>
+
+<h2 id="sourcesets">source sets / env split</h2>
+<p>
+Loom's <code>splitEnvironmentSourceSets()</code> is on, so <code>src/main</code> and
+<code>src/client</code> are genuinely separate compile units, not a convention. Almost
+everything lives in <code>src/client</code> — <code>MtssMod</code> (the common entrypoint)
+is the only class in <code>src/main</code>, and it does nothing but hold a logger. This
+mod has no server component full stop; <code>fabric.mod.json</code> declares
+<code>"environment": "client"</code>. Don't go looking for a server-side data source, there
+isn't one — MSPT and TPS on multiplayer are read from the client's own
+<code>ClientboundTickingStatePacket</code>, not queried from the server.
+</p>
+
+<h2 id="sampling">sampling pipeline</h2>
+<p>
+Three-layer indirection, entirely intentional, don't try to collapse it:
+</p>
+<pre><code>StatSource.sample(ctx)  →  MtssDataHolder (static fields)  →  StatDefinition.format()/rawValue()</code></pre>
+
+<p>
+<b><code>StatSource</code></b> — one interface, 11 implementations in <code>sample/sources/</code>.
+Each source pulls one raw value or a small related cluster (<code>WorldStateSource</code> covers
+weather/difficulty/chunk-pos/distance-from-spawn together, since they're all cheap reads off the
+same <code>ClientLevel</code>/<code>LocalPlayer</code>) and writes straight into
+<code>MtssDataHolder</code>'s public static fields. No source reads another source's output.
+</p>
+
+<p>
+<b>Cadence</b> — every source declares one of four:
+</p>
+<table>
+<tr><th>cadence</th><th>runs</th><th>who uses it</th></tr>
+<tr><td><code>PER_FRAME</code></td><td>every render frame, unconditionally</td><td>FPS, anything cheap enough not to matter</td></tr>
+<tr><td><code>PER_TICK</code></td><td>at most once per 50ms</td><td>most gameplay state — player vitals, position, world counts</td></tr>
+<tr><td><code>THROTTLED</code></td><td>at most once per 500ms</td><td><code>CpuStat</code>'s <code>OperatingSystemMXBean</code> poll — deliberately not polled every tick</td></tr>
+<tr><td><code>EVENT_PUSHED</code></td><td>never polled by the driver at all</td><td>tick rate — pushed by <code>ClientPacketListenerMixin</code> on packet receipt, see <a href="#mixin">below</a></td></tr>
+</table>
+
+<p>
+<b><code>SamplingDriver.sampleAll()</code></b> runs once per frame from <code>MtssRenderer.render()</code>.
+It timestamps against two module-level <code>lastTickMs</code>/<code>lastThrottledMs</code> longs
+(<code>System.currentTimeMillis()</code>, not a tick counter — this fires off wall-clock time, so it's
+not coupled to actual game-tick cadence) and iterates <code>SourceRegistry.all()</code>, checking
+<code>isAvailable(ctx)</code> before calling <code>sample()</code>. Every call is wrapped:
+</p>
+<pre><code>try {
+    src.sample(ctx);
+} catch (Exception e) {
+    if (WARNED_SOURCE_IDS.add(src.id())) {
+        MtssMod.LOGGER.error("StatSource \"{}\" threw during sample() — ...", src.id(), e);
+    }
+}</code></pre>
+<p>
+One throwing source degrades to stale values for its own stat(s) only — it does not take down
+the frame, and does not stop being retried next frame (only the <i>log line</i> is deduped, via
+a static <code>Set&lt;String&gt;</code> of source ids already warned about; sampling itself keeps
+retrying every single frame indefinitely).
+</p>
+
+<p>
+<b><code>MtssDataHolder</code></b> is a plain static field bag, no synchronization beyond what's
+inherent to primitives — this is safe specifically because everything writing to it runs on the
+render thread <i>except</i> <code>HardwareSensorPoller</code>'s five GPU/VRAM doubles, which are
+written from its own daemon thread. Those five fields are the only ones a background thread
+touches; if you add a new cross-thread field, you're on your own for the visibility story (in
+practice: individual <code>double</code>/<code>boolean</code> field writes/reads are what LHM's
+fields rely on, there's no lock).
+</p>
+
+<h2 id="registry">stat registry pattern</h2>
+<p>
+<code>StatDefinition</code> is the single source of truth per stat — formatting, decimals,
+graph/threshold support, and coloring all live in one implementation class, one file per stat
+in <code>stat/stats/</code>. <code>StatRegistry</code>'s static initializer block registers all
+46 by hand (no classpath scanning, no annotations) into two <code>LinkedHashMap</code>s: one
+keyed by <code>MtssConfig.Stat</code> enum constant, one keyed by lowercase token string for
+Template Mode lookups.
+</p>
+<p>
+The point of this pattern: nothing else in the codebase — GUI, HUD renderer, Template
+Engine, Cloth Config screen — contains a <code>switch (stat) { ... }</code> that enumerates
+individual stats for formatting/coloring/graph logic. They all read through
+<code>StatRegistry.get(stat)</code> or <code>.byToken(name)</code> and call interface methods.
+Adding a 47th stat means adding a file and a registration line, not touching five other files
+that happen to have hardcoded stat lists. See <a href="#adding-a-stat">adding a stat</a> below
+for the literal steps.
+</p>
+<div class="note">
+<code>StatDefinition</code> methods are almost entirely <code>default</code>-implemented to false/
+zero/identity — a stat that's plain text with no graph/threshold support (e.g. <code>EntitiesStat</code>)
+overrides maybe two methods total. Copy the smallest existing stat as a template, not a "full"
+one.
+</div>
+
+<h2 id="render">render pipeline</h2>
+<p>
+Per frame, per list, roughly:
+</p>
+<pre><code>LineCache.getCachedLines(listCfg)
+  → (classic mode) LineBuilder builds ColoredRun rows from enabled stats in statOrder
+  → (template mode) TemplateEngine.getParsedLines() + .renderRuns() per line
+  → MtssRenderer.drawRows() walks RowKind.TEXT / RowKind.GRAPH rows, draws via Font/GuiGraphicsExtractor
+  → GraphRenderer.drawGraph() for any row that's a graph</code></pre>
+<p>
+<code>MtssRenderer</code> is registered via Fabric API's <code>HudElementRegistry.attachElementBefore
+(VanillaHudElements.CHAT, ...)</code> in <code>MtssClient.onInitializeClient()</code> — this is what
+guarantees mtss doesn't stomp other HUD-attaching mods; it's an ordered slot in the vanilla HUD
+element chain, not a raw render-event hook drawing over everything.
+</p>
+<p>
+Per-list scale isn't baked into cached geometry — <code>MtssRenderer.render()</code> checks
+<code>listCfg.textScale</code> and, if not exactly <code>1f</code>, pushes/pops a pose matrix and
+calls <code>drawRows</code> at local origin <code>(0,0)</code> inside the scaled space, rather than
+scaling every draw call's coordinates by hand.
+</p>
+<p>
+Guard clause worth knowing if the overlay "disappears" during debugging: <code>render()</code> bails
+immediately if <code>!overlayEnabled</code>, if the vanilla F3 debug screen is open
+(<code>showDebugScreen()</code>), if there's no active connection, or if the mtss editor screen
+itself is open (<code>MtssGuiScreen</code> renders its own preview, the live overlay doesn't
+double-draw underneath it).
+</p>
+<p>
+<code>HudMotion.pulseFor(...)</code> drives the small per-line settle animation you see when a
+value changes — purely cosmetic, keyed by <code>(listId, lineIndex)</code>, computed against
+<code>System.nanoTime()</code>, blended into the run color via <code>ColorMath.blend</code>. Not
+gameplay-relevant, ignore it if you're just trying to trace a stat's value.
+</p>
+
+<h2 id="config-lifecycle">config lifecycle</h2>
+<p>
+<code>MtssConfig</code> is a singleton (<code>getInstance()</code>, lazy-inited) backed by
+<code>&lt;config-dir&gt;/mtss.json</code>, read/written with Gson, pretty-printed.
+</p>
+<h4>load()</h4>
+<ul>
+<li>File missing → build fresh defaults (one <code>StatListConfig(0)</code>), save, return.</li>
+<li>File present, parses → run <code>clampGuiTuning()</code>, null-guard every list-level
+collection, migrate <code>anchorDx</code>/<code>anchorDy</code> legacy pixel offsets into
+normalized <code>anchorFracX</code>/<code>Y</code> (see <code>StatListConfig.backFill()</code>),
+backfill any stat/threshold map keys added since the file was written.</li>
+<li>File present, <b>fails</b> to parse (<code>IOException</code>, <code>JsonSyntaxException</code>,
+<code>JsonIOException</code>) → copy the broken file aside as
+<code>mtss.json.bak-&lt;currentTimeMillis&gt;</code>, log an error, fall through to fresh defaults.
+This used to silently discard the file; it doesn't anymore — check for a <code>.bak-*</code>
+sibling before assuming lists were actually lost.</li>
+</ul>
+<p>
+Gson's default behavior is what makes backfill mostly automatic: it only overwrites a field
+when its key exists in the JSON, so an old <code>mtss.json</code> missing a newer primitive
+field (e.g. <code>hardwareSensorPollIntervalMs</code>) just keeps that field's
+<code>= &lt;default&gt;</code> initializer value. <code>backFill()</code> exists for the cases
+Gson's default behavior <i>doesn't</i> cover cleanly — null collections, enum-keyed maps that
+need every current key present, and one explicit field rename.
+</p>
+<h4>save()</h4>
+<p>
+Atomic write: serialize to <code>mtss.json.tmp</code>, then
+<code>Files.move(tmp, target, REPLACE_EXISTING, ATOMIC_MOVE)</code>, falling back to a
+non-atomic move if the filesystem doesn't support atomic moves
+(<code>AtomicMoveNotSupportedException</code>). <code>clampGuiTuning()</code> runs before every
+save too, not just on load — so a value pushed out of range via Cloth Config gets clamped before
+it ever hits disk. On write failure, the leftover <code>.tmp</code> file is best-effort deleted so
+it doesn't confuse the next save attempt.
+</p>
+
+<h2 id="mixin">the one mixin</h2>
+<p>
+<code>ClientPacketListenerMixin</code> is the entire mixin surface of this mod — one
+<code>@Inject</code>, <code>TAIL</code> of <code>ClientPacketListener#handleTickingState</code>:
+</p>
+<pre><code>@Inject(method = "handleTickingState", at = @At("TAIL"))
+private void mtss$onTickingState(ClientboundTickingStatePacket packet, CallbackInfo ci) {
+    MtssDataHolder.tickRate = packet.tickRate();
+}</code></pre>
+<p>
+This is why TPS works correctly on remote multiplayer without polling anything server-side —
+the vanilla client already receives this packet whenever tick rate changes, mtss just also
+grabs it. <code>mtss.mixins.json</code> has <code>"required": false</code> and an empty
+top-level <code>mixins</code> array (the actual mixin is registered in the client-only config,
+<code>mtss.client.mixins.json</code>, loaded conditionally per <code>fabric.mod.json</code>'s
+<code>"environment": "client"</code> mixin entry) — consistent with this being a client-only mod
+where a mixin failing to apply on a dedicated server should never be fatal.
+</p>
+
+<h2 id="adding-a-stat">adding a stat, mechanically</h2>
+<p>Straight from the README, reproduced here because it's the fastest way to understand the
+registry pattern by example:</p>
+<ol>
+<li>Add a constant to <code>MtssConfig.Stat</code>.</li>
+<li>Implement <code>StatDefinition</code> in <code>stat/stats/</code>. Copy
+<code>EntitiesStat</code> for a plain-text stat, or <code>PingStat</code> if you need graph/
+threshold support.</li>
+<li>Register an instance in <code>StatRegistry</code>'s static block.</li>
+<li>Add lang keys (<code>stat.mtss.&lt;name&gt;</code>, <code>mtss.stat.&lt;name&gt;</code>) to
+<code>en_us.json</code>.</li>
+<li>If it reads live game/JVM state, source it from a <code>StatSource</code> in
+<code>sample/sources/</code> (or <code>MtssDataHolder</code> directly), keeping the
+<code>StatDefinition</code> a thin delegate rather than having it poll anything itself.</li>
+<li>Add its row to the README's stat table (and, if you're maintaining this site, to
+<a href="stats.html">stats.html</a> — not automated, nobody wired up a codegen step for this).</li>
+</ol>
+<p>No file outside this list needs touching. No <code>switch(stat)</code> anywhere else to update.</p>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>

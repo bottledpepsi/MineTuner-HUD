@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — build + ci</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>build + ci</h1>
+
+<h2>local build</h2>
+<pre><code>git clone https://github.com/bottledpepsi/MineTuner-Statistics-Server.git
+cd MineTuner-Statistics-Server
+./gradlew build</code></pre>
+<p>
+Output jar lands in <code>build/libs/</code>. Fabric Loom + Gradle,
+<code>splitEnvironmentSourceSets()</code> on (see
+<a href="architecture.html#sourcesets">architecture.html#sourcesets</a> for what that actually
+buys you). <code>withSourcesJar()</code> is enabled, so a sources jar builds alongside the main
+one automatically.
+</p>
+
+<h2>toolchain</h2>
+<p>
+Target/release is Java 25 (<code>options.release = 25</code>, plus a matching
+<code>JavaLanguageVersion.of(25)</code> toolchain block). Gradle will auto-detect or
+auto-download a JDK 25 toolchain if the JDK that launched Gradle itself is older — controlled by
+<code>org.gradle.java.installations.auto-detect</code> /
+<code>.auto-download</code> in <code>gradle.properties</code>, both <code>true</code>. This
+matters if you're launching Gradle from an IDE's bundled older JDK; you don't need to manually
+install 25 first, but the first build with a new toolchain will download one.
+</p>
+
+<h2>gradle.properties — version pins</h2>
+<table>
+<tr><th>property</th><th>value</th><th>notes</th></tr>
+<tr><td><code>minecraft_version</code></td><td><code>26.2</code></td><td>—</td></tr>
+<tr><td><code>loader_version</code></td><td><code>0.19.3</code></td><td>Fabric Loader.</td></tr>
+<tr><td><code>loom_version</code></td><td><code>1.17-SNAPSHOT</code></td><td>build plugin.</td></tr>
+<tr><td><code>mod_version</code></td><td><code>1.1.1</code></td><td>injected into <code>fabric.mod.json</code>'s <code>${version}</code> placeholder by <code>processResources</code>.</td></tr>
+<tr><td><code>fabric_api_version</code></td><td><code>0.156.0+26.2</code></td><td>—</td></tr>
+<tr><td><code>cloth_config_version</code></td><td><code>26.2.155</code></td><td>hard dependency, client-only (<code>clientImplementation</code>). Pinned to match <code>minecraft_version</code> — check <a href="https://linkie.shedaniel.me/dependencies">linkie</a> when bumping MC version.</td></tr>
+<tr><td><code>modmenu_version</code></td><td><code>20.0.1</code></td><td><code>clientCompileOnly</code> — <b>not bundled, not a runtime dependency</b>. Only used to compile <code>MtssModMenuIntegration</code> against ModMenu's API; the built jar has no hard dependency on it (see <code>fabric.mod.json</code>'s <code>suggests</code>, not <code>depends</code>).</td></tr>
+</table>
+<p>
+Repositories declared beyond Loom's automatic Minecraft/library maven setup:
+<code>https://maven.shedaniel.me/</code> (Cloth Config) and
+<code>https://maven.terraformersmc.com/</code> (ModMenu).
+</p>
+
+<h2>fabric.mod.json highlights</h2>
+<ul>
+<li><code>"environment": "client"</code> — the whole mod is client-only, not just the client sourceset.</li>
+<li>Three entrypoints: <code>main</code> → <code>MtssMod</code>, <code>client</code> → <code>MtssClient</code>, <code>modmenu</code> → <code>MtssModMenuIntegration</code> (soft — only loaded if ModMenu is present).</li>
+<li>Two mixin configs: <code>mtss.mixins.json</code> (common, currently empty — no server-side mixins exist) and <code>mtss.client.mixins.json</code> (client env only, holds <code>ClientPacketListenerMixin</code>).</li>
+<li><code>depends</code>: <code>fabricloader &gt;=0.19.3</code>, <code>minecraft &gt;=26.2</code>, <code>java &gt;=25</code>, <code>fabric-api *</code>, <code>cloth-config &gt;=26.2.155</code>.</li>
+</ul>
+
+<h2>ci — .github/workflows/build.yml</h2>
+<p>Two jobs, both <code>ubuntu-latest</code>, both JDK 25 via
+<code>actions/setup-java@v4</code> (<code>distribution: microsoft</code>):</p>
+
+<h3><code>build</code></h3>
+<table>
+<tr><th>trigger</th><th>steps</th></tr>
+<tr><td>push to <code>main</code>/<code>master</code>, PRs into either, published releases</td>
+<td>
+checkout → setup JDK 25 → cache <code>~/.gradle/{caches,wrapper}</code> keyed on
+<code>hashFiles('**/*.gradle*', '**/gradle-wrapper.properties')</code> → <code>chmod +x gradlew</code>
+→ <code>./gradlew build</code> → upload <code>build/libs/*.jar</code> as artifact
+<code>mod-jar</code> (<code>if-no-files-found: error</code>, so a silently-empty build fails the
+job instead of "succeeding" with nothing to show for it) → on a tag push, attach the jar to the
+GitHub Release via <code>softprops/action-gh-release@v2</code>.
+</td></tr>
+</table>
+
+<h3><code>dependency-submission</code></h3>
+<table>
+<tr><th>trigger</th><th>steps</th></tr>
+<tr><td>same as above</td>
+<td>checkout → setup JDK 25 → <code>gradle/actions/dependency-submission</code>,
+pinned to a specific commit SHA
+(<code>af1da67850ed9a4cedd57bfd976089dd991e2582</code>, tagged <code>v4.0.0</code>) rather than a
+floating tag, with <code>permissions: contents: write</code> so it can post to the repo's
+dependency graph.</td></tr>
+</table>
+
+<h2>this docs site's own deploy</h2>
+<p>
+<code>/docs</code> is plain static HTML/CSS, zero build step, zero JS dependency, served directly
+by GitHub Pages off the <code>main</code> branch's <code>/docs</code> folder (or via the included
+Pages Actions workflow, if you'd rather deploy on push instead of relying on the classic branch-based
+Pages source — see <code>.github/workflows/deploy-docs.yml</code>). Editing a page is editing the
+HTML file directly; there is no templating layer, no static site generator, no <code>node_modules</code>.
+</p>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>

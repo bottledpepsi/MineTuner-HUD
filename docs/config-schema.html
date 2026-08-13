@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — config schema</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>config schema — mtss.json</h1>
+<p>
+Location: <code>&lt;fabric config dir&gt;/mtss.json</code>. Gson, pretty-printed, atomic write
+(<code>.tmp</code> + <code>ATOMIC_MOVE</code>). See <a href="architecture.html#config-lifecycle">
+architecture.html#config-lifecycle</a> for load/save/corruption-recovery behavior — this page is
+just the field list. Source: <code>config/MtssConfig.java</code>.
+</p>
+<div class="warn">
+There is no versioned migration system. Backward compat is handled ad hoc per-field in
+<code>load()</code>/<code>backFill()</code> (null-guards, one explicit rename:
+<code>anchorDx</code>/<code>anchorDy</code> → <code>anchorFracX</code>/<code>anchorFracY</code>).
+If you hand-edit this file, know that an unparseable result gets backed up as
+<code>mtss.json.bak-&lt;epoch-ms&gt;</code> and replaced with fresh defaults — it does not merge or repair.
+</div>
+
+<h2 id="root">root object</h2>
+<table>
+<tr><th>field</th><th>type</th><th>default</th><th>notes</th></tr>
+<tr><td><code>nextId</code></td><td>int</td><td><code>1</code></td><td>next id handed to a new <code>StatListConfig</code>; not reused after delete.</td></tr>
+<tr><td><code>lists</code></td><td><code>StatListConfig[]</code></td><td><code>[list#0]</code></td><td>see <a href="#list">per-list schema</a> below.</td></tr>
+<tr><td><code>overlayEnabled</code></td><td>bool</td><td><code>true</code></td><td>global show/hide. Same switch as the Toggle Overlay keybind.</td></tr>
+<tr><td><code>hardwareSensorsEnabled</code></td><td>bool</td><td><code>false</code></td><td>see <a href="hardware-sensors.html">hardware-sensors.html</a>.</td></tr>
+<tr><td><code>hardwareSensorBaseUrl</code></td><td>string</td><td><code>http://localhost:8085</code></td><td>LHM Remote Web Server base URL, no trailing slash.</td></tr>
+<tr><td><code>hardwareSensorPollIntervalMs</code></td><td>int</td><td><code>1500</code></td><td>clamped ≥100 by <code>clampGuiTuning()</code>. Read live by the poller thread every cycle.</td></tr>
+<tr><td><code>hardwareSensorRequestTimeoutMs</code></td><td>int</td><td><code>300</code></td><td>clamped ≥50. Baked into the poller's <code>HttpClient</code> at construction — changing this restarts the poller (see <code>reconcileWithConfig()</code>).</td></tr>
+<tr><td><code>reorderPanelMaxVisibleRows</code></td><td>int</td><td><code>16</code></td><td>clamped ≥3.</td></tr>
+<tr><td><code>panelRowHeight</code></td><td>int (px)</td><td><code>13</code></td><td>clamped ≥6.</td></tr>
+<tr><td><code>panelWidth</code></td><td>int (px)</td><td><code>160</code></td><td>clamped ≥60. Standard editor panel width.</td></tr>
+<tr><td><code>widePanelWidth</code></td><td>int (px)</td><td><code>216</code></td><td>clamped ≥ <code>panelWidth</code>. "Edit Stats" panel only.</td></tr>
+<tr><td><code>panelPadding</code></td><td>int (px)</td><td><code>4</code></td><td>clamped ≥0.</td></tr>
+<tr><td><code>dragSnapThresholdPx</code></td><td>int (px)</td><td><code>6</code></td><td>clamped ≥0.</td></tr>
+<tr><td><code>textScaleMin</code></td><td>float</td><td><code>0.5</code></td><td>clamped ≥0.1.</td></tr>
+<tr><td><code>textScaleMax</code></td><td>float</td><td><code>2.0</code></td><td>clamped ≥ <code>textScaleMin</code>.</td></tr>
+</table>
+
+<h2 id="list">StatListConfig — one per HUD panel, in <code>lists[]</code></h2>
+<table>
+<tr><th>field</th><th>type</th><th>default</th><th>notes</th></tr>
+<tr><td><code>id</code></td><td>int</td><td>—</td><td>stable identity. <code>TemplateEngine</code>'s parse cache and warned-token set are keyed by this.</td></tr>
+<tr><td><code>name</code></td><td>string</td><td><code>"List &lt;id&gt;"</code></td><td>—</td></tr>
+<tr><td><code>statEnabled</code></td><td>map&lt;Stat name, bool&gt;</td><td>all false</td><td>every stat starts disabled on a new list — nothing is on by default, contrary to older builds.</td></tr>
+<tr><td><code>statOrder</code></td><td>string[]</td><td>enum declaration order</td><td>display order for classic mode. <code>getVisibleStats()</code> filters to enabled + dedupes.</td></tr>
+<tr><td><code>statSettings</code></td><td>map&lt;Stat name, StatSettings&gt;</td><td>lazy per-stat</td><td>see <a href="#statsettings">below</a>.</td></tr>
+<tr><td><code>statThresholds</code></td><td>map&lt;Stat name, ThresholdSettings&gt;</td><td>built from each stat's own defaults</td><td>only present for stats in <code>THRESHOLD_STATS</code>.</td></tr>
+<tr><td><code>anchorCorner</code></td><td>enum</td><td><code>TOP_LEFT</code></td><td><code>TOP_LEFT</code> / <code>TOP_RIGHT</code> / <code>BOTTOM_LEFT</code> / <code>BOTTOM_RIGHT</code>.</td></tr>
+<tr><td><code>anchorFracX</code>, <code>anchorFracY</code></td><td>double</td><td><code>0.01</code>, <code>0.01</code></td><td>offset from anchor corner as a fraction of screen w/h — scale-independent by design.</td></tr>
+<tr><td><code>anchorDx</code>, <code>anchorDy</code></td><td>Integer (nullable)</td><td><code>null</code></td><td><b>legacy.</b> Pre-normalization raw pixel offsets. Migrated into <code>anchorFrac*</code> on first load if non-null, then nulled out. Don't write these in a new config.</td></tr>
+<tr><td><code>showBackground</code></td><td>bool</td><td><code>true</code></td><td>—</td></tr>
+<tr><td><code>textShadow</code></td><td>bool</td><td><code>false</code></td><td>—</td></tr>
+<tr><td><code>useCustomColor</code></td><td>bool</td><td><code>false</code></td><td>when true, <code>overrideColor</code> replaces every stat's normal/threshold color for this list.</td></tr>
+<tr><td><code>overrideColor</code></td><td>int (ARGB)</td><td><code>0xFFFFFFFF</code></td><td>—</td></tr>
+<tr><td><code>textScale</code></td><td>float</td><td><code>1.0</code></td><td>clamped to <code>[textScaleMin, textScaleMax]</code> by the +/- controls; not force-clamped on raw JSON load.</td></tr>
+<tr><td><code>snapX</code></td><td>enum</td><td><code>NONE</code></td><td><code>NONE</code> / <code>LEFT_ON_CENTER</code> / <code>CENTER_ON_CENTER</code> / <code>RIGHT_ON_CENTER</code>.</td></tr>
+<tr><td><code>snapY</code></td><td>enum</td><td><code>NONE</code></td><td><code>NONE</code> / <code>TOP_ON_CENTER</code> / <code>CENTER_ON_CENTER</code> / <code>BOTTOM_ON_CENTER</code>.</td></tr>
+<tr><td><code>useTemplate</code></td><td>bool</td><td><code>false</code></td><td><code>false</code> = classic per-stat-line mode.</td></tr>
+<tr><td><code>templateLines</code></td><td>string[]</td><td><code>[]</code></td><td>only rendered when <code>useTemplate</code> is true. See <a href="template-mode.html">template-mode.html</a>.</td></tr>
+</table>
+
+<h2 id="statsettings">StatSettings — per (list, stat) pair</h2>
+<table>
+<tr><th>field</th><th>type</th><th>default</th><th>notes</th></tr>
+<tr><td><code>showPrefix</code></td><td>bool</td><td><code>true</code></td><td>classic mode only — shows/hides the <code>"Label: "</code> prefix.</td></tr>
+<tr><td><code>decimals</code></td><td>int</td><td><code>1</code></td><td>ignored if the stat's <code>supportsDecimals()</code> is false.</td></tr>
+<tr><td><code>renderAsGraph</code></td><td>bool</td><td><code>false</code></td><td>ignored if the stat's <code>supportsGraph()</code> is false.</td></tr>
+<tr><td><code>graphStyle</code></td><td>GraphStyle</td><td>see below</td><td>used only when <code>renderAsGraph</code> is true.</td></tr>
+</table>
+
+<h2 id="graphstyle">GraphStyle</h2>
+<table>
+<tr><th>field</th><th>type</th><th>default</th><th>notes</th></tr>
+<tr><td><code>showPanelBackground</code></td><td>bool</td><td><code>true</code></td><td>—</td></tr>
+<tr><td><code>showGridlines</code></td><td>bool</td><td><code>true</code></td><td>—</td></tr>
+<tr><td><code>showPeakMarkers</code></td><td>bool</td><td><code>true</code></td><td>—</td></tr>
+<tr><td><code>valueDisplay</code></td><td>enum</td><td><code>CURRENT</code></td><td><code>NONE</code> / <code>CURRENT</code> / <code>MIN_CURRENT_MAX</code>.</td></tr>
+<tr><td><code>smoothing</code></td><td>int</td><td><code>0</code></td><td><code>0</code> = off, else moving-average window size (2/3/4 in the UI stepper).</td></tr>
+<tr><td><code>autoScale</code></td><td>bool</td><td><code>true</code></td><td>when false, uses <code>fixedMin</code>/<code>fixedMax</code> instead of scaling to observed range.</td></tr>
+<tr><td><code>fixedMin</code>, <code>fixedMax</code></td><td>float</td><td><code>0</code>, <code>100</code></td><td>only used when <code>autoScale</code> is false.</td></tr>
+<tr><td><code>width</code>, <code>height</code></td><td>int (px)</td><td><code>80</code>, <code>28</code></td><td>—</td></tr>
+<tr><td><code>colorMode</code></td><td>enum</td><td><code>CURRENT_THRESHOLD</code></td><td>see below.</td></tr>
+<tr><td><code>accentColor</code></td><td>int (ARGB)</td><td><code>0xFF55FF55</code></td><td>used only when <code>colorMode == FIXED_ACCENT</code>.</td></tr>
+</table>
+<p><code>colorMode</code> values:</p>
+<ul>
+<li><code>CURRENT_THRESHOLD</code> — whole graph tinted by the current value's threshold color.</li>
+<li><code>PER_SEGMENT_THRESHOLD</code> — each historical sample colored by its own value at record time.</li>
+<li><code>FIXED_ACCENT</code> — single user-chosen color for the whole graph, from <code>accentColor</code>.</li>
+<li><code>GRADIENT</code> — smooth interpolation across the visible range, blue→green→yellow→red.</li>
+</ul>
+
+<h2 id="thresholdsettings">ThresholdSettings</h2>
+<table>
+<tr><th>field</th><th>type</th><th>default</th><th>notes</th></tr>
+<tr><td><code>enabled</code></td><td>bool</td><td><code>false</code></td><td>false = ignore <code>goodMin</code>/<code>warnMin</code>, use the stat's own built-in <code>defaultGoodMin()</code>/<code>defaultWarnMin()</code> instead.</td></tr>
+<tr><td><code>goodMin</code></td><td>float</td><td>stat-specific</td><td>cutoff for the green band. Direction (higher-is-better vs lower-is-better) is per-stat, see <code>StatDefinition.higherIsBetter()</code>.</td></tr>
+<tr><td><code>warnMin</code></td><td>float</td><td>stat-specific</td><td>cutoff for yellow vs red, same direction as <code>goodMin</code>.</td></tr>
+</table>
+
+<h2 id="example">minimal example</h2>
+<pre><code>{
+  "nextId": 1,
+  "lists": [
+    {
+      "id": 0,
+      "name": "List 0",
+      "statEnabled": { "TPS": true, "FPS": true },
+      "statOrder": ["TPS", "FPS", "..."],
+      "statSettings": {},
+      "statThresholds": {},
+      "anchorCorner": "TOP_LEFT",
+      "anchorFracX": 0.01,
+      "anchorFracY": 0.01,
+      "showBackground": true,
+      "textShadow": false,
+      "useCustomColor": false,
+      "overrideColor": -1,
+      "textScale": 1.0,
+      "snapX": "NONE",
+      "snapY": "NONE",
+      "useTemplate": false,
+      "templateLines": []
+    }
+  ],
+  "overlayEnabled": true,
+  "hardwareSensorsEnabled": false,
+  "hardwareSensorBaseUrl": "http://localhost:8085"
+}</code></pre>
+<p>
+(<code>overrideColor: -1</code> is <code>0xFFFFFFFF</code> as a signed 32-bit int — Gson serializes
+ARGB colors as plain signed ints, not hex strings.)
+</p>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>

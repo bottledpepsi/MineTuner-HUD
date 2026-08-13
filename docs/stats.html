@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — stat reference</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>stat reference</h1>
+<p>
+46 <code>StatDefinition</code> impls, <code>stat/stats/*.java</code>, one file each, registered by
+hand in <code>StatRegistry</code>'s static block. <b>Dec</b> = <code>supportsDecimals()</code>.
+<b>Graph</b> = <code>supportsGraph()</code>. <b>Thr</b> = <code>supportsThreshold()</code>.
+<b>Cadence</b> = the <code>StatSource</code> feeding it, per <a href="architecture.html#sampling">
+sampling pipeline</a>. GPU/VRAM rows are opt-in, see <a href="hardware-sensors.html">hardware-sensors.html</a>.
+</p>
+
+<h2 id="performance">performance</h2>
+<table>
+<tr><th>stat</th><th>token</th><th>enum</th><th>dec</th><th>graph</th><th>thr</th><th>cadence / source</th><th>notes</th></tr>
+<tr><td>TPS</td><td><code>{tps}</code></td><td><code>TPS</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · fast_metrics / EVENT_PUSHED · tick packet</td><td>SP/LAN: derived from live MSPT. Multiplayer: <code>MtssDataHolder.tickRate</code>, set by the mixin.</td></tr>
+<tr><td>MSPT</td><td><code>{mspt}</code></td><td><code>MSPT</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>PER_FRAME · singleplayer_mspt</td><td>SP/LAN only, hidden on remote servers. Colored using TPS's scale, not its own.</td></tr>
+<tr><td>FPS</td><td><code>{fps}</code></td><td><code>FPS</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · client_perf</td><td>—</td></tr>
+<tr><td>Ping</td><td><code>{ping}</code></td><td><code>PING</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · ping</td><td>From the player-list ping field.</td></tr>
+<tr><td>Memory</td><td><code>{mem}</code></td><td><code>MEMORY</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · fast_metrics</td><td>JVM heap used/max MB. Graphed as heap-used %, not raw MB.</td></tr>
+<tr><td>CPU</td><td><code>{cpu}</code></td><td><code>CPU</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>THROTTLED (500ms) · slow_metrics</td><td><code>OperatingSystemMXBean</code>, HotSpot/OpenJDK only — "N/A" on other JVM vendors.</td></tr>
+<tr><td>GC Time</td><td><code>{gc}</code></td><td><code>GC_TIME</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>THROTTLED (500ms) · slow_metrics</td><td>Cumulative ms, summed across all GC beans. Not a delta.</td></tr>
+<tr><td>Rendered Sections</td><td><code>{rendered}</code></td><td><code>RENDERED_SECTIONS</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · rendered_sections</td><td>Pulled from <code>LevelRenderer</code>.</td></tr>
+<tr><td>Players Online</td><td><code>{players}</code></td><td><code>PLAYERS_ONLINE</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_counts</td><td>—</td></tr>
+<tr><td>GPU Temp <span class="tag">opt-in</span></td><td><code>{gpu_temp}</code></td><td><code>GPU_TEMP</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>background thread · HardwareSensorPoller</td><td>°C via LHM. Default cutoffs &lt;70 green / &lt;85 yellow / ≥85 red.</td></tr>
+<tr><td>GPU Clock <span class="tag">opt-in</span></td><td><code>{gpu_clock}</code></td><td><code>GPU_CLOCK</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>background thread · HardwareSensorPoller</td><td>MHz via LHM. No threshold — clock tracks workload/boost.</td></tr>
+<tr><td>GPU Usage <span class="tag">opt-in</span></td><td><code>{gpu_usage}</code></td><td><code>GPU_USAGE</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>background thread · HardwareSensorPoller</td><td>% via LHM. No threshold — high usage during gameplay is expected/normal.</td></tr>
+<tr><td>VRAM Used <span class="tag">opt-in</span></td><td><code>{vram_used}</code></td><td><code>VRAM_USED</code></td><td class="no">—</td><td class="center yes">✓</td><td class="no">—</td><td>background thread · HardwareSensorPoller</td><td>used/total MB. Only renders once both values resolve.</td></tr>
+</table>
+
+<h2 id="player">player</h2>
+<table>
+<tr><th>stat</th><th>token</th><th>enum</th><th>dec</th><th>graph</th><th>thr</th><th>cadence / source</th><th>notes</th></tr>
+<tr><td>Health</td><td><code>{health}</code></td><td><code>HEALTH</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_TICK · player_vitals</td><td>current/max.</td></tr>
+<tr><td>Hunger</td><td><code>{hunger}</code></td><td><code>HUNGER</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Saturation</td><td><code>{saturation}</code></td><td><code>SATURATION</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Armor</td><td><code>{armor}</code></td><td><code>ARMOR</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_TICK · player_vitals</td><td>armor points, not %.</td></tr>
+<tr><td>Air</td><td><code>{air}</code></td><td><code>AIR</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>remaining breath.</td></tr>
+<tr><td>XP Level</td><td><code>{xplevel}</code></td><td><code>XP_LEVEL</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>XP Progress</td><td><code>{xpprogress}</code></td><td><code>XP_PROGRESS</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>% to next level.</td></tr>
+<tr><td>Game Mode</td><td><code>{gamemode}</code></td><td><code>GAME_MODE</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>lowercased enum name, e.g. <code>survival</code>.</td></tr>
+<tr><td>Selected Slot</td><td><code>{slot}</code></td><td><code>SELECTED_SLOT</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Held Item</td><td><code>{helditem}</code></td><td><code>HELD_ITEM</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Speed</td><td><code>{speed}</code></td><td><code>SPEED</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>b/s, from <code>deltaMovement × 20</code>. Colored/graphed by a fixed movement-based scale, not a user threshold.</td></tr>
+<tr><td>Vertical Speed</td><td><code>{vspeed}</code></td><td><code>VERTICAL_SPEED</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Moving</td><td><code>{moving}</code></td><td><code>MOVING</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · targeting</td><td>bool, shares Speed's stationary epsilon (<code>0.01</code>).</td></tr>
+</table>
+
+<h2 id="world">world</h2>
+<table>
+<tr><th>stat</th><th>token</th><th>enum</th><th>dec</th><th>graph</th><th>thr</th><th>cadence / source</th><th>notes</th></tr>
+<tr><td>Entities</td><td><code>{entities}</code></td><td><code>ENTITIES</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_counts</td><td>current dimension only.</td></tr>
+<tr><td>Chunks</td><td><code>{chunks}</code></td><td><code>CHUNKS</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_counts</td><td>—</td></tr>
+<tr><td>Biome</td><td><code>{biome}</code></td><td><code>BIOME</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_environment</td><td>—</td></tr>
+<tr><td>Dimension</td><td><code>{dimension}</code></td><td><code>DIMENSION</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_environment</td><td>raw id, e.g. <code>overworld</code>, <code>the_nether</code>.</td></tr>
+<tr><td>Weather</td><td><code>{weather}</code></td><td><code>WEATHER</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_state</td><td>Clear / Rain / Thunder.</td></tr>
+<tr><td>Difficulty</td><td><code>{difficulty}</code></td><td><code>DIFFICULTY</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_state</td><td>—</td></tr>
+<tr><td>Light Level</td><td><code>{light}</code></td><td><code>LIGHT_LEVEL</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_environment</td><td>combined, at player's block.</td></tr>
+<tr><td>Sky Light</td><td><code>{skylight}</code></td><td><code>SKY_LIGHT</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_state</td><td>—</td></tr>
+<tr><td>Block Light</td><td><code>{blocklight}</code></td><td><code>BLOCK_LIGHT</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_state</td><td>—</td></tr>
+<tr><td>Can See Sky</td><td><code>{canseesky}</code></td><td><code>CAN_SEE_SKY</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · world_state</td><td>—</td></tr>
+<tr><td>Looking At</td><td><code>{lookingat}</code></td><td><code>LOOKING_AT</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · targeting</td><td>reads vanilla's own <code>hitResult</code>. Empty when nothing targeted.</td></tr>
+</table>
+
+<h2 id="position">position</h2>
+<table>
+<tr><th>stat</th><th>token</th><th>enum</th><th>dec</th><th>graph</th><th>thr</th><th>cadence / source</th><th>notes</th></tr>
+<tr><td>Coords</td><td><code>{coords}</code></td><td><code>COORDS</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>combined X/Y/Z, floor-rounded.</td></tr>
+<tr><td>X</td><td><code>{x}</code></td><td><code>X</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>block-rounded.</td></tr>
+<tr><td>Y</td><td><code>{y}</code></td><td><code>Y</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>block-rounded.</td></tr>
+<tr><td>Z</td><td><code>{z}</code></td><td><code>Z</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>block-rounded.</td></tr>
+<tr><td>Facing</td><td><code>{facing}</code></td><td><code>FACING</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>8-way cardinal/intercardinal.</td></tr>
+<tr><td>Yaw</td><td><code>{yaw}</code></td><td><code>YAW</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>normalized 0–360°.</td></tr>
+<tr><td>Pitch</td><td><code>{pitch}</code></td><td><code>PITCH</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_FRAME · player_position</td><td>-90 (up) to 90 (down).</td></tr>
+<tr><td>Chunk Pos</td><td><code>{chunkpos}</code></td><td><code>CHUNK_POS</code></td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>—</td></tr>
+<tr><td>Distance from Spawn</td><td><code>{distance}</code></td><td><code>DISTANCE_FROM_SPAWN</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>PER_TICK · player_vitals</td><td>horizontal only.</td></tr>
+</table>
+
+<div class="note">
+Cadence/source values above are read off each <code>StatSource</code>'s <code>id()</code>/
+<code>cadence()</code> in <code>sample/sources/</code>, cross-referenced against which fields
+each source writes to <code>MtssDataHolder</code>. If you add or rename a source, this table
+does not update itself — see <a href="architecture.html#adding-a-stat">architecture.html</a>.
+</div>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>

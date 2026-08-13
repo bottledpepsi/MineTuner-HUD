@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtss docs — hardware sensors</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">index</a>
+  <a href="architecture.html">architecture</a>
+  <a href="stats.html">stat-reference</a>
+  <a href="template-mode.html">template-mode</a>
+  <a href="config-schema.html">config-schema</a>
+  <a href="hardware-sensors.html">hardware-sensors</a>
+  <a href="building.html">build+ci</a>
+  <span class="sep">|</span>
+  <a href="https://github.com/bottledpepsi/MineTuner-Statistics-Server">repo↗</a>
+</div>
+
+<main>
+<h1>hardware sensors — HardwareSensorPoller</h1>
+<p>
+<code>sample/HardwareSensorPoller.java</code>. Opt-in bridge to
+<a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor">LibreHardwareMonitor</a>'s
+(LHM) built-in Remote Web Server plugin. Backs the four GPU/VRAM stats — see
+<a href="stats.html#performance">stats.html#performance</a>. No native code, no vendor SDK, no
+GPU driver calls of any kind live in this codebase; it is exclusively an HTTP client against
+LHM's own JSON endpoint.
+</p>
+
+<h2>lifecycle</h2>
+<table>
+<tr><th>call</th><th>when</th><th>effect</th></tr>
+<tr><td><code>startIfEnabled()</code></td><td><code>MtssClient.onInitializeClient()</code></td><td>no-op if <code>hardwareSensorsEnabled</code> is false or a poller is already running. Otherwise builds an <code>HttpClient</code>, spawns a daemon thread named <code>mtss-hardware-sensor-poller</code>.</td></tr>
+<tr><td><code>stop()</code></td><td>disabled via config</td><td>sets <code>stopRequested</code>, interrupts the thread. Thread exits at its next <code>Thread.sleep</code> wakeup.</td></tr>
+<tr><td><code>reconcileWithConfig()</code></td><td>after any Cloth Config save touching sensor settings</td><td>stops+restarts if base URL or request-timeout changed (timeout is baked into the <code>HttpClient</code> at construction, can't be swapped live); starts fresh if newly enabled; stops + resets published values if newly disabled.</td></tr>
+</table>
+<p>
+Poll interval, unlike the request timeout, <b>is</b> read live every cycle
+(<code>MtssConfig.getInstance().hardwareSensorPollIntervalMs</code> inside the sleep call) — a
+config change to it takes effect on the very next sleep with no restart needed. This asymmetry
+is deliberate, not an oversight; see the inline comment in <code>runLoop()</code> if you're
+touching this.
+</p>
+<div class="note">Thread is a daemon (<code>setDaemon(true)</code>) — it never keeps the JVM
+alive on its own, no explicit shutdown-on-exit logic exists or is needed.</div>
+
+<h2>poll cycle (<code>pollOnce()</code>)</h2>
+<ol>
+<li>Build a GET request to <code>&lt;baseUrl&gt;/data.json</code> with the configured request timeout.</li>
+<li>Malformed base URL → logged once per outage as an "invalid base URL" message, sensors marked unavailable, return.</li>
+<li>Any network exception (connection refused, timeout, unknown host, anything <code>java.net.http</code> throws) → logged once per outage as "could not reach", sensors marked unavailable, return.</li>
+<li>Non-200 response → logged once as "unexpected HTTP &lt;code&gt;", sensors marked unavailable, return.</li>
+<li>Unparseable JSON (e.g. LHM returned an HTML error page, or a future LHM version changed its shape) → logged once as "could not parse data.json", sensors marked unavailable, return.</li>
+<li>Success → extract readings (below), write all five <code>MtssDataHolder</code> fields, flip <code>hardwareSensorsReachable = true</code>, clear the outage-warned flag so the <i>next</i> failure logs again.</li>
+</ol>
+<p>
+The whole loop body (not just <code>pollOnce()</code>'s own internals) is additionally wrapped
+in a catch-<code>Throwable</code> at the <code>runLoop()</code> level — belt and suspenders
+against literally anything, including an <code>Error</code> subtype, so one bad response cycle
+can never silently kill the polling thread and leave stats stuck at stale values forever.
+</p>
+
+<h2>outage logging</h2>
+<p>
+Exactly one warning is logged per outage, not per poll — a boolean
+<code>warnedThisOutage</code> flag gates it, cleared only on the next successful poll. If LHM is
+simply not running, that's one log line total for as long as it stays down, not one every
+1.5 seconds.
+</p>
+
+<h2>wire format — LHM's sensor tree</h2>
+<p>
+LHM's <code>data.json</code> is a recursive node tree: every node optionally has a
+<code>"Children"</code> array of more nodes, and leaf sensor nodes carry <code>"SensorId"</code>,
+<code>"Text"</code>, and <code>"Value"</code> string fields.
+</p>
+<pre><code>SensorId: "/gpu-nvidia/0/temperature/0"
+Text:     "GPU Core"
+Value:    "45.2 °C"</code></pre>
+<p>
+<code>sensorTypeFromId(sensorId)</code> takes the second-to-last <code>/</code>-delimited
+segment as the sensor "type" (<code>temperature</code>, <code>clock</code>, <code>load</code>,
+<code>smalldata</code> in the example above). <code>findFirstSensor(root, type, nameContains)</code>
+does an <b>iterative breadth-first walk</b> — explicitly not recursive, since LHM's tree depth
+isn't bounded by anything this mod controls, and an unbounded recursive walk risks a stack
+overflow on a pathological tree. A hard cap (<code>MAX_NODES = 20_000</code>) bounds total work
+regardless, so one poll can never turn into an unbounded scan even on a huge tree — this runs on
+the background thread, not the render thread, but it's still capped.
+</p>
+<p>Matching is case-insensitive on both the sensor-type segment and a substring check against
+<code>Text</code>:</p>
+<table>
+<tr><th>published field</th><th>sensor type</th><th>text contains</th></tr>
+<tr><td><code>gpuTempC</code></td><td><code>temperature</code></td><td>"gpu core"</td></tr>
+<tr><td><code>gpuClockMhz</code></td><td><code>clock</code></td><td>"gpu core"</td></tr>
+<tr><td><code>gpuUsagePercent</code></td><td><code>load</code></td><td>"gpu core"</td></tr>
+<tr><td><code>vramUsedMb</code></td><td><code>smalldata</code></td><td>"gpu memory used"</td></tr>
+<tr><td><code>vramMaxMb</code></td><td><code>smalldata</code></td><td>"gpu memory total"</td></tr>
+</table>
+<p>
+<code>parseLeadingNumber(raw)</code> handles LHM's <code>"45.2 °C"</code>-style formatting —
+walks leading sign/digits/decimal point, normalizes a comma decimal separator to a dot (for
+locales that format that way), stops at the first non-numeric character (the unit suffix), and
+returns <code>null</code> if no digit was ever seen. No thousands-grouping handling — not needed,
+since sensor values here (temps, clocks, percentages) are always small enough not to have one.
+</p>
+
+<h2>failure state</h2>
+<p>
+Any failure — network, parse, missing sensor — sets all five fields to sentinel
+<code>-1.0</code> and <code>hardwareSensorsReachable = false</code>. Consuming
+<code>StatDefinition</code>s (<code>GpuTempStat</code> etc.) treat the sentinel as "don't render
+this line," the same degrade-silently convention MSPT uses on remote servers. There is no
+separate "error" rendering state in the HUD — a missing sensor is just absent, not shown as an
+error string.
+</p>
+
+<h2>setup, for completeness</h2>
+<ol>
+<li>Install and run <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases">LibreHardwareMonitor</a>.</li>
+<li>In LHM: <b>Options → Remote Web Server → Run</b>. Default port serves <code>http://localhost:8085/data.json</code>.</li>
+<li>Enable in mtss via <code>/mtss config</code> → <b>Hardware Sensors</b>, set base URL to match.</li>
+</ol>
+<p>Debug checklist if a stat doesn't show up (mirrors what <code>markUnavailable()</code>/outage
+logging would tell you if you're watching the client log):</p>
+<ul>
+<li><code>hardwareSensorsEnabled</code> is actually <code>true</code>.</li>
+<li>LHM's own UI shows the Remote Web Server as running.</li>
+<li><code>hardwareSensorBaseUrl</code> matches the port LHM is actually serving on.</li>
+<li>Nothing local (firewall/AV) is blocking the loopback connection.</li>
+</ul>
+
+</main>
+
+<footer>
+generated by hand, mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>
