@@ -234,8 +234,7 @@ threshold support.</li>
 <li>If it reads live game/JVM state, source it from a <code>StatSource</code> in
 <code>sample/sources/</code> (or <code>MtssDataHolder</code> directly), keeping the
 <code>StatDefinition</code> a thin delegate rather than having it poll anything itself.</li>
-<li>Add its row to the README's stat table (and, if you're maintaining this site, to
-<a href="stats.html">stats.html</a> — not automated, nobody wired up a codegen step for this).</li>
+<li>Add its row to <a href="stats.html">stats.html</a></li>
 </ol>
 <p>No file outside this list needs touching. No <code>switch(stat)</code> anywhere else to update.</p>
 
