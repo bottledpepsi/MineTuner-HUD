@@ -16,7 +16,8 @@ public class MineTunerRenderer {
 
     public static void drawRows(GuiGraphicsExtractor graphics, Font font,
                                 LineCache cache, int baseX, int baseY, boolean shadow) {
-        drawRows(graphics, font, cache, baseX, baseY, shadow, -1, false);
+        drawRows(graphics, font, cache, baseX, baseY, shadow, -1, false,
+                HudPanelChrome.PADDING_X, HudPanelChrome.PADDING_Y);
     }
 
     /**
@@ -24,13 +25,16 @@ public class MineTunerRenderer {
      * scaled panels have exactly the same composition as their 1x counterpart.
      */
     public static void drawRows(GuiGraphicsExtractor graphics, Font font, LineCache cache,
-                                int baseX, int baseY, boolean shadow, int listId, boolean animate) {
+                                int baseX, int baseY, boolean shadow, int listId, boolean animate,
+                                int paddingX, int paddingY) {
         int lineH = font.lineHeight + HudPanelChrome.ROW_GAP;
-        int contentX = baseX + HudPanelChrome.PADDING_X;
-        int contentW = HudPanelChrome.contentWidth(cache.boxW(font));
+        int px = HudPanelChrome.paddingX(paddingX);
+        int py = HudPanelChrome.paddingY(paddingY);
+        int contentX = baseX + px;
+        int contentW = HudPanelChrome.contentWidth(cache.boxW(font, px), px);
         int textIdx = 0;
         int graphIdx = 0;
-        int cursorY = baseY + HudPanelChrome.PADDING_Y;
+        int cursorY = baseY + py;
         long now = animate ? System.nanoTime() : 0L;
 
         for (RowKind kind : cache.rowKinds()) {
@@ -75,22 +79,25 @@ public class MineTunerRenderer {
             if (cache.rowKinds().isEmpty()) continue;
 
             float scale = listCfg.textScale <= 0f ? 1f : listCfg.textScale;
-            int boxW = Math.round(cache.boxW(font) * scale);
-            int boxH = Math.round(cache.boxH(font) * scale);
+            int boxW = Math.round(cache.boxW(font, listCfg.paddingX) * scale);
+            int boxH = Math.round(cache.boxH(font, listCfg.paddingY) * scale);
             int[] pos = ListPositioner.getPosition(listCfg, graphics.guiWidth(), graphics.guiHeight(), boxW, boxH);
             int x = pos[0];
             int y = pos[1];
 
-            if (listCfg.showBackground) HudPanelChrome.drawPanel(graphics, x, y, boxW, boxH);
+            if (listCfg.showBackground) {
+                HudPanelChrome.drawPanel(graphics, x, y, boxW, boxH,
+                        listCfg.overrideFillColor, listCfg.overrideOutlineColor);
+            }
 
             if (scale == 1f) {
-                drawRows(graphics, font, cache, x, y, listCfg.textShadow, listCfg.id, true);
+                drawRows(graphics, font, cache, x, y, listCfg.textShadow, listCfg.id, true, listCfg.paddingX, listCfg.paddingY);
             } else {
                 var matrices = graphics.pose();
                 matrices.pushMatrix();
                 matrices.translate(x, y);
                 matrices.scale(scale, scale);
-                drawRows(graphics, font, cache, 0, 0, listCfg.textShadow, listCfg.id, true);
+                drawRows(graphics, font, cache, 0, 0, listCfg.textShadow, listCfg.id, true, listCfg.paddingX, listCfg.paddingY);
                 matrices.popMatrix();
             }
         }

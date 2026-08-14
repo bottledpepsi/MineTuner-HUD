@@ -6,6 +6,7 @@ import bottled.minetuner.gui.panel.*;
 import bottled.minetuner.gui.render.ListPreviewRenderer;
 import bottled.minetuner.gui.render.PanelChrome;
 import bottled.minetuner.gui.render.PanelTransition;
+import bottled.minetuner.hud.HudPanelChrome;
 import bottled.minetuner.hud.LineCache;
 import bottled.minetuner.hud.ListPositioner;
 import bottled.minetuner.hud.TemplateEngine;
@@ -63,6 +64,12 @@ public class MineTunerGuiScreen extends Screen {
      */
     private boolean appearanceOpen = false;
     private boolean colorScaleOpen = false;
+    private boolean themeOpen = false;
+    /** True when the rename-style text box currently open is prompting for a NEW
+     *  theme name (Theme panel's "+ Save as new theme" row) rather than a list
+     *  rename — same MenuKind.RENAME / renameBuffer machinery, just a different
+     *  confirm action in keyPressed(). */
+    private boolean namingNewTheme = false;
     /**
      * Whether the per-stat custom-threshold sub-panel is open (opened from the
      * ⚙ cog on a stat's settings panel via StatSettingsPanel.ClickResult.OPEN_THRESHOLDS).
@@ -151,6 +158,10 @@ public class MineTunerGuiScreen extends Screen {
             MineTunerConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) colorScaleOpen = false;
             else ColorScalePanel.render(g, font, mx, my, menuX, menuY, width, height, lc);
+        } else if (themeOpen) {
+            MineTunerConfig.StatListConfig lc = getListById(menuListId);
+            if (lc == null) themeOpen = false;
+            else ThemePanel.render(g, font, mx, my, menuX, menuY, width, height, root, lc);
         } else if (appearanceOpen) {
             MineTunerConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) appearanceOpen = false;
@@ -195,6 +206,10 @@ public class MineTunerGuiScreen extends Screen {
 
         if (menuKind == MenuKind.RENAME) {
             menuKind = MenuKind.NONE;
+            if (namingNewTheme) {
+                namingNewTheme = false;
+                themeOpen = true; // click-outside cancels back to the Theme panel, not the raw canvas.
+            }
             return true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
@@ -242,6 +257,16 @@ public class MineTunerGuiScreen extends Screen {
             } else {
                 colorScaleOpen = false;
                 appearanceOpen = true; // click outside → back to Appearance, since Color/Scale nests inside it.
+            }
+            return true;
+        }
+        if (themeOpen) {
+            MineTunerConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && ThemePanel.isInside(mx, my, menuX, menuY, width, height, root)) {
+                handleThemePanelClick(mx, my, root, lc);
+            } else {
+                themeOpen = false;
+                appearanceOpen = true; // click outside → back to Appearance, since Theme nests inside it.
             }
             return true;
         }
@@ -367,16 +392,31 @@ public class MineTunerGuiScreen extends Screen {
         if (menuKind == MenuKind.RENAME) {
             if (keyCode == 256) { // Escape.
                 menuKind = MenuKind.NONE;
+                if (namingNewTheme) {
+                    namingNewTheme = false;
+                    themeOpen = true; // Esc cancels back to the Theme panel, not the raw canvas.
+                }
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter.
                 MineTunerConfig.StatListConfig lc = getListById(menuListId);
                 if (lc != null) {
-                    String trimmed = renameBuffer.toString().trim();
-                    lc.name = trimmed.isEmpty() ? "List " + lc.id : trimmed;
-                    MineTunerConfig.getInstance().save();
+                    if (namingNewTheme) {
+                        String trimmed = renameBuffer.toString().trim();
+                        if (!trimmed.isEmpty()) {
+                            MineTunerConfig.getInstance().saveTheme(trimmed, lc);
+                            MineTunerConfig.getInstance().save();
+                        }
+                    } else {
+                        String trimmed = renameBuffer.toString().trim();
+                        lc.name = trimmed.isEmpty() ? "List " + lc.id : trimmed;
+                        MineTunerConfig.getInstance().save();
+                    }
                 }
+                boolean wasNamingTheme = namingNewTheme;
+                namingNewTheme = false;
                 menuKind = MenuKind.NONE;
+                if (wasNamingTheme) themeOpen = true; // return to the Theme panel to see the new entry.
                 return true;
             }
             if (keyCode == 259 && !renameBuffer.isEmpty()) { // Backspace.
@@ -489,6 +529,8 @@ public class MineTunerGuiScreen extends Screen {
                 templateListOpen = false;
                 appearanceOpen = false;
                 colorScaleOpen = false;
+                themeOpen = false;
+                namingNewTheme = false;
             }
         }
     }
@@ -527,6 +569,10 @@ public class MineTunerGuiScreen extends Screen {
                 appearanceOpen = false;
                 colorScaleOpen = true;
             }
+            case AppearancePanel.AP_THEME -> {
+                appearanceOpen = false;
+                themeOpen = true;
+            }
             case AppearancePanel.AP_TEMPLATE_MODE -> {
                 lc.useTemplate = !lc.useTemplate;
                 root.save();
@@ -535,6 +581,23 @@ public class MineTunerGuiScreen extends Screen {
                 appearanceOpen = false;
                 menuKind = MenuKind.LIST_CONTEXT;
             }
+        }
+    }
+
+    private void handleThemePanelClick(int mx, int my, MineTunerConfig root, MineTunerConfig.StatListConfig lc) {
+        ThemePanel.ClickResult result = ThemePanel.handleClick(mx, my, menuX, menuY, width, height, root, lc);
+        switch (result.kind()) {
+            case BACK -> {
+                themeOpen = false;
+                appearanceOpen = true; // Theme nests inside Appearance, so Back returns there.
+            }
+            case PROMPT_SAVE -> {
+                themeOpen = false;
+                namingNewTheme = true;
+                menuKind = MenuKind.RENAME;
+                renameBuffer = new StringBuilder();
+            }
+            case NONE -> { /** apply/delete already applied inside handleClick. */ }
         }
     }
 
@@ -611,6 +674,8 @@ public class MineTunerGuiScreen extends Screen {
                 templateListOpen = false;
                 appearanceOpen = false;
                 colorScaleOpen = false;
+                themeOpen = false;
+                namingNewTheme = false;
                 deletePanelOpen = false;
                 menuKind = MenuKind.NONE;
             }
@@ -708,12 +773,14 @@ public class MineTunerGuiScreen extends Screen {
         if (cache.rowKinds().isEmpty()) {
             // Mirrors ListPreviewRenderer.drawList's empty-placeholder sizing (no scale).
             String placeholder = I18n.get("gui.minetuner.no_stats");
-            boxW = font.width(placeholder) + 4;
-            boxH = lineH + 3;
+            int px = HudPanelChrome.paddingX(lc.paddingX);
+            int py = HudPanelChrome.paddingY(lc.paddingY);
+            boxW = font.width(placeholder) + px * 2;
+            boxH = lineH + py * 2;
         } else {
             // Mirrors ListPreviewRenderer.drawList's scaled sizing, which mirrors.
-            boxW = Math.round(cache.boxW(font) * scale);
-            boxH = Math.round(cache.boxH(font) * scale);
+            boxW = Math.round(cache.boxW(font, lc.paddingX) * scale);
+            boxH = Math.round(cache.boxH(font, lc.paddingY) * scale);
         }
         int[] pos = ListPositioner.getPosition(lc, width, height, boxW, boxH);
         return new int[]{pos[0], pos[1], boxW, boxH};
@@ -737,6 +804,7 @@ public class MineTunerGuiScreen extends Screen {
         if (menuKind == MenuKind.TEMPLATE_EDIT) return PanelRoute.TEMPLATE_EDIT;
         if (deletePanelOpen) return PanelRoute.DELETE;
         if (colorScaleOpen) return PanelRoute.COLOR_SCALE;
+        if (themeOpen) return PanelRoute.THEME;
         if (appearanceOpen) return PanelRoute.APPEARANCE;
         if (reorderOpen && statSettingsStat != null && thresholdPanelOpen) return PanelRoute.THRESHOLDS;
         if (reorderOpen && statSettingsStat != null) return PanelRoute.STAT_SETTINGS;
@@ -751,7 +819,7 @@ public class MineTunerGuiScreen extends Screen {
     private enum MenuKind {NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT}
 
     private enum PanelRoute {
-        NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT, COLOR_SCALE,
+        NONE, LIST_CONTEXT, EMPTY_SPACE, RENAME, TEMPLATE_EDIT, COLOR_SCALE, THEME,
         APPEARANCE, THRESHOLDS, STAT_SETTINGS, REORDER, TEMPLATE_LIST, DELETE;
 
         int signature(MineTunerConfig.Stat stat) {

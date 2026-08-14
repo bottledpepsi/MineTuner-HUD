@@ -14,9 +14,10 @@ public final class AppearancePanel {
     public static final int AP_BG = 1;
     public static final int AP_SHADOW = 2;
     public static final int AP_COLOR_SCALE = 3;
-    public static final int AP_TEMPLATE_MODE = 4;
-    public static final int AP_BACK = 5;
-    public static final int AP_COUNT = 6;
+    public static final int AP_THEME = 4;
+    public static final int AP_TEMPLATE_MODE = 5;
+    public static final int AP_BACK = 6;
+    public static final int AP_COUNT = 7;
     private AppearancePanel() {
     }
 
@@ -39,6 +40,7 @@ public final class AppearancePanel {
         labels[AP_BG] = "§f" + I18n.get("gui.minetuner.menu.background") + onOffBg;
         labels[AP_SHADOW] = "§f" + I18n.get("gui.minetuner.menu.shadow") + onOffShadow;
         labels[AP_COLOR_SCALE] = "§f" + I18n.get("gui.minetuner.menu.color_scale") + " »";
+        labels[AP_THEME] = "§f" + I18n.get("gui.minetuner.menu.theme") + " »";
         labels[AP_TEMPLATE_MODE] = "§f" + I18n.get("gui.minetuner.menu.template_mode") + onOffTemplate;
         labels[AP_BACK] = "§7" + I18n.get("gui.minetuner.stat_settings.back");
 

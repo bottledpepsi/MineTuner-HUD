@@ -45,16 +45,26 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
     }
 
     public int boxW(net.minecraft.client.gui.Font font) {
+        return boxW(font, HudPanelChrome.PADDING_X);
+    }
+
+    public int boxW(net.minecraft.client.gui.Font font, int paddingX) {
         int textW = lines.stream().mapToInt(font::width).max().orElse(0);
         int graphW = graphEntries.isEmpty() ? 0 : graphEntries.stream()
                 .mapToInt(e -> Math.max(e.style().width, font.width(e.label()) + 4))
                 .max().orElse(GRAPH_W);
-        return Math.max(textW, graphW) + HudPanelChrome.PADDING_X * 2;
+        int px = HudPanelChrome.paddingX(paddingX);
+        return Math.max(textW, graphW) + px * 2;
     }
 
     public int boxH(net.minecraft.client.gui.Font font) {
+        return boxH(font, HudPanelChrome.PADDING_Y);
+    }
+
+    public int boxH(net.minecraft.client.gui.Font font, int paddingY) {
         int lineH = font.lineHeight + HudPanelChrome.ROW_GAP;
-        int h = HudPanelChrome.PADDING_Y * 2;
+        int py = HudPanelChrome.paddingY(paddingY);
+        int h = py * 2;
         for (int i = 0, g = 0; i < rowKinds.size(); i++) {
             if (rowKinds.get(i) == RowKind.GRAPH) {
                 h += graphEntries.get(g).style().height + 1;

@@ -40,6 +40,22 @@ public class MineTunerConfig {
     /** Global show/hide switch for the entire overlay. */
     public boolean overlayEnabled = true;
 
+    /** Name of the built-in theme matching MineTuner's original, pre-Themes
+     *  hardcoded default appearance (showBackground=true, textShadow=false,
+     *  useCustomColor=false, textScale=1.0, default GraphStyle for every stat).
+     *  Also the permanent fallback for a dangling {@link #defaultThemeName}. */
+    public static final String BUILTIN_DEFAULT_THEME = "Classic";
+
+    /** Named, reusable appearance presets (see {@link ListTheme}), keyed by name.
+     *  Global — server-wide, not per-list — so a theme can be applied to any list.
+     *  A {@link LinkedHashMap} preserves insertion order for stable GUI display,
+     *  the same ordering-preservation approach {@code statOrder} uses for stats. */
+    public Map<String, ListTheme> themes = new LinkedHashMap<>();
+    /** Name of the theme (a key into {@link #themes}) applied to every brand-new
+     *  list created via "Add List". Never affects existing lists. Falls back to
+     *  {@link #BUILTIN_DEFAULT_THEME} if it ever points at a deleted theme. */
+    public String defaultThemeName = BUILTIN_DEFAULT_THEME;
+
     public boolean hardwareSensorsEnabled = false;
     public String hardwareSensorBaseUrl = "http://localhost:8085";
     public int hardwareSensorPollIntervalMs = 1500;
@@ -117,7 +133,21 @@ public class MineTunerConfig {
                     // against out-of-range *values* a user (or a future
                     // Cloth Config edit) actually wrote, not missing ones.
                     cfg.clampGuiTuning();
+                    // Old configs (pre-Themes) have no "themes" key at all, and Gson
+                    // leaves a null Map field null rather than constructing an empty
+                    // one — unlike defaultThemeName just below, which is a simple
+                    // String and so behaves the same as overlayEnabled/panelRowHeight
+                    // above: its `= BUILTIN_DEFAULT_THEME` field initializer already
+                    // ran, so an old config missing the "defaultThemeName" key just
+                    // keeps that default. The check here is only a defensive guard
+                    // in case a hand-edited config explicitly sets it to null.
                     if (cfg.lists == null) cfg.lists = new ArrayList<>();
+                    if (cfg.themes == null) cfg.themes = new LinkedHashMap<>();
+                    if (cfg.defaultThemeName == null) cfg.defaultThemeName = BUILTIN_DEFAULT_THEME;
+                    // backFillThemes() populates the built-in themes (Classic/Minimal/
+                    // High Contrast) into cfg.themes and ensures defaultThemeName
+                    // always resolves to a real entry in it.
+                    cfg.backFillThemes();
                     for (StatListConfig list : cfg.lists) {
                         if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
                         if (list.statOrder == null) list.statOrder = new ArrayList<>();
@@ -144,6 +174,7 @@ public class MineTunerConfig {
             }
         }
         MineTunerConfig defaults = new MineTunerConfig();
+        defaults.backFillThemes();
         defaults.lists.add(new StatListConfig(0));
         defaults.nextId = 1;
         defaults.save();
@@ -182,6 +213,13 @@ public class MineTunerConfig {
         bottled.minetuner.gui.panel.ReorderPanel.syncFromConfig(this);
     }
 
+    /** Creates a brand-new, empty-starting-point list and applies the configured
+     *  {@link #defaultThemeName} theme to it, so a freshly-created list immediately
+     *  reflects the user's chosen default appearance instead of MineTuner's
+     *  originally-hardcoded appearance defaults. This is the ONLY list-construction
+     *  path that applies the default theme — {@link #duplicateList(int)} below
+     *  intentionally does not, since duplicating must keep copying the source
+     *  list's actual current appearance regardless of defaultThemeName. */
     public StatListConfig createList() {
         StatListConfig cfg = new StatListConfig(nextId++);
         // Stagger new lists diagonally so they don't stack on top of each
@@ -189,6 +227,7 @@ public class MineTunerConfig {
         // the stagger looks the same regardless of GUI scale.
         cfg.anchorFracX = 0.01 + lists.size() * 0.05;
         cfg.anchorFracY = 0.01 + lists.size() * 0.05;
+        resolveDefaultTheme().applyTo(cfg);
         lists.add(cfg);
         return cfg;
     }
@@ -198,7 +237,9 @@ public class MineTunerConfig {
         TemplateEngine.invalidate(id); // drop any cached template parse/warn state for the deleted list.
     }
 
-    /** Duplicates the given list (by id) and appends the copy. */
+    /** Duplicates the given list (by id) and appends the copy. Deliberately does NOT
+     *  touch themes/defaultThemeName — a duplicate always copies its source list's
+     *  actual current appearance, exactly as before this feature existed. */
     public StatListConfig duplicateList(int id) {
         for (StatListConfig lc : lists) {
             if (lc.id == id) {
@@ -208,6 +249,124 @@ public class MineTunerConfig {
             }
         }
         return null;
+    }
+
+    // --- Themes ---
+
+    /** Populates the built-in themes on first run and after loading an old config
+     *  that predates this feature. Built-ins are looked up by name and only added
+     *  if missing, so this is safe to call on every load without clobbering a
+     *  user's own edits to a same-named... well, users can't rename/overwrite
+     *  built-ins in the first place (see {@link #saveTheme}/{@link #deleteTheme}),
+     *  so built-in entries here are always exactly these hardcoded presets. Also
+     *  guarantees defaultThemeName always resolves to a real entry. */
+    public void backFillThemes() {
+        if (themes == null) themes = new LinkedHashMap<>();
+
+        themes.putIfAbsent(BUILTIN_DEFAULT_THEME, builtinClassicTheme());
+        themes.putIfAbsent("Minimal", builtinMinimalTheme());
+        themes.putIfAbsent("High Contrast", builtinHighContrastTheme());
+
+        if (defaultThemeName == null || !themes.containsKey(defaultThemeName)) {
+            defaultThemeName = BUILTIN_DEFAULT_THEME;
+        }
+    }
+
+    /** Matches MineTuner's original, pre-Themes hardcoded appearance exactly, so
+     *  every list saved before this feature shipped keeps rendering identically. */
+    private static ListTheme builtinClassicTheme() {
+        ListTheme t = new ListTheme(BUILTIN_DEFAULT_THEME);
+        t.builtin = true;
+        t.showBackground = true;
+        t.textShadow = false;
+        t.useCustomColor = false;
+        t.overrideColor = 0xFFFFFFFF;
+        t.overrideFillColor = 0xB8141820;
+        t.overrideOutlineColor = 0x5E9BA9BE;
+        t.textScale = 1.0f;
+        t.paddingX = 6;
+        t.paddingY = 5;
+        return t;
+    }
+
+    /** No background, no shadow — a lightweight overlay style. */
+    private static ListTheme builtinMinimalTheme() {
+        ListTheme t = new ListTheme("Minimal");
+        t.builtin = true;
+        t.showBackground = true;
+        t.textShadow = false;
+        t.useCustomColor = false;
+        t.overrideColor = 0xFFFFFFFF;
+        t.overrideFillColor = 0xB8141820;
+        t.overrideOutlineColor = 0x00000000;
+        t.textScale = 1.0f;
+        t.paddingX = 3;
+        t.paddingY = 3;
+        return t;
+    }
+
+    /** Bold, easy-to-read style: background on, shadow on, larger text. */
+    private static ListTheme builtinHighContrastTheme() {
+        ListTheme t = new ListTheme("High Contrast");
+        t.builtin = true;
+        t.showBackground = true;
+        t.textShadow = false;
+        t.useCustomColor = true;
+        t.overrideColor = 0xFFFFFF00;
+        t.overrideFillColor = 0xFF000000;
+        t.overrideOutlineColor = 0xFFFFFFFF;
+        t.textScale = 1.0f;
+        t.paddingX = 6;
+        t.paddingY = 5;
+        return t;
+    }
+
+    /** The theme {@link #defaultThemeName} refers to, or the built-in default if
+     *  it's ever dangling (defensive — {@link #deleteTheme} already resets
+     *  defaultThemeName at delete-time, but this guards any other stale case). */
+    public ListTheme resolveDefaultTheme() {
+        ListTheme t = themes.get(defaultThemeName);
+        if (t != null) return t;
+        ListTheme fallback = themes.get(BUILTIN_DEFAULT_THEME);
+        return fallback != null ? fallback : builtinClassicTheme();
+    }
+
+    /** Saves {@code lc}'s current appearance as a theme under {@code name}: creates
+     *  a new theme, or re-captures an existing user-created one in place. Returns
+     *  false (no-op) if {@code name} already names a built-in theme, since
+     *  built-ins can't be overwritten by "save/re-save" — callers should keep the
+     *  Theme panel from offering this in the first place rather than relying on
+     *  this false return to surface the failure.
+     *
+     *  <p>Typing an EXISTING user-created theme's name into the Theme panel's
+     *  "+ Save as new theme" prompt re-captures that theme in place rather than
+     *  erroring or creating a duplicate — this is how "update an existing
+     *  theme" is supported without a separate re-save control/interaction in
+     *  the panel itself (see item 6 in the feature spec, which allows deferring
+     *  a dedicated update action if it would complicate the panel). */
+    public boolean saveTheme(String name, StatListConfig lc) {
+        if (name == null || name.isBlank()) return false;
+        ListTheme existing = themes.get(name);
+        if (existing != null && existing.builtin) return false;
+        if (existing != null) {
+            existing.recaptureFrom(lc);
+        } else {
+            themes.put(name, ListTheme.captureFrom(name, lc));
+        }
+        return true;
+    }
+
+    /** Deletes a user-created theme by name. No-op (returns false) for built-ins
+     *  or unknown names. If defaultThemeName pointed at the deleted theme, resets
+     *  it back to the built-in default here at delete-time — the single place this
+     *  needs handling, rather than a fallback check scattered across every read
+     *  site (resolveDefaultTheme() above still guards defensively either way). */
+    public boolean deleteTheme(String name) {
+        ListTheme t = themes.get(name);
+        if (t == null || t.builtin) return false;
+        themes.remove(name);
+        if (name.equals(defaultThemeName)) defaultThemeName = BUILTIN_DEFAULT_THEME;
+        return true;
     }
 
     /** Writes the config atomically. */
@@ -416,8 +575,15 @@ public class MineTunerConfig {
         public boolean useCustomColor = false;
         /** ARGB color used when useCustomColor is true. */
         public int overrideColor = 0xFFFFFFFF;
+
+        public int overrideFillColor = 0xB8141820;
+        public int overrideOutlineColor = 0x5E9BA9BE;
         /** Text scale multiplier for this list, 0.5–2.0. */
         public float textScale = 1.0f;
+        /** Horizontal content padding in GUI pixels at 1x scale. */
+        public int paddingX = 6;
+        /** Vertical content padding in GUI pixels at 1x scale. */
+        public int paddingY = 5;
 
         // Snap.
         public SnapX snapX = SnapX.NONE;
@@ -559,6 +725,8 @@ public class MineTunerConfig {
             copy.useCustomColor = useCustomColor;
             copy.overrideColor = overrideColor;
             copy.textScale = textScale;
+            copy.paddingX = paddingX;
+            copy.paddingY = paddingY;
             copy.snapX = snapX;
             copy.snapY = snapY;
             copy.useTemplate = useTemplate;

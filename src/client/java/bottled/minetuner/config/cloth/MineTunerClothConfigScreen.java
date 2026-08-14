@@ -7,6 +7,7 @@ import bottled.minetuner.stat.StatRegistry;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import me.shedaniel.clothconfig2.impl.builders.DropdownMenuBuilder;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
@@ -58,6 +59,33 @@ public final class MineTunerClothConfigScreen {
                 .setDefaultValue(true)
                 .setTooltip(Component.translatable("gui.minetuner.cloth.overlay_enabled.tooltip"))
                 .setSaveConsumer(v -> cfg.overlayEnabled = v)
+                .build());
+
+        // "Default List Theme": which theme (by name) a brand-new list gets on
+        // creation — see MineTunerConfig.createList()/resolveDefaultTheme(). No
+        // other Cloth Config field in this screen is a free-form-but-closed-set
+        // selection over data that isn't a fixed Java enum (every other selector
+        // here uses startEnumSelector against a real enum), so there's no existing
+        // in-repo dropdown precedent to match field-for-field. Cloth Config's own
+        // startDropdownMenu is the library's documented mechanism for exactly
+        // this (a closed set of string choices that isn't a compile-time enum,
+        // since theme names are user-editable at runtime): TopCellElementBuilder.of()
+        // takes the current value plus a String -> T parse function, which for a
+        // plain String field is just identity (any typed text that doesn't match
+        // a live theme name falls back to the current defaultThemeName in the
+        // save consumer below, rather than persisting an unknown/dangling name).
+        // This is used rather than reusing startEnumSelector (which needs a real
+        // Class<Enum>, not a runtime string set) or bolting theme selection onto
+        // startStrField (which would accept arbitrary free text with no
+        // validation against the live theme set at all).
+        general.addEntry(eb.startDropdownMenu(
+                        Component.translatable("gui.minetuner.cloth.default_theme"),
+                        DropdownMenuBuilder.TopCellElementBuilder.of(cfg.defaultThemeName, str -> str))
+                .setDefaultValue(MineTunerConfig.BUILTIN_DEFAULT_THEME)
+                .setSelections(new ArrayList<>(cfg.themes.keySet()))
+                .setSuggestionMode(false) // only real theme names are valid picks, not arbitrary typed text.
+                .setTooltip(Component.translatable("gui.minetuner.cloth.default_theme.tooltip"))
+                .setSaveConsumer(v -> cfg.defaultThemeName = cfg.themes.containsKey(v) ? v : cfg.defaultThemeName)
                 .build());
     }
 

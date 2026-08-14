@@ -31,6 +31,7 @@ MineTuner is a **client-side-only** Fabric mod. It works on any server and insta
 - **46 tracked stats** across four categories — performance, player, world, and position — including four optional hardware-sensor stats. See the [full stat table](#stat-reference) below.
 - **Rolling history graphs** — Certain stats can render as a graph.
 - **Template Mode** — an alternative to the fixed stat-list layout: write your own lines of text and interpolate stat tokens like `{tps}` and `{fps}` anywhere, mixing multiple stats and literal text freely.
+- **List Themes** — save any list's full appearance (background, shadow, custom color, text scale, graph styling) as a named, reusable theme; apply it to any list in one click, and pick a default theme new lists start with.
 - **Cloth Config screen** (`/minetuner config`, or via ModMenu if installed) — a searchable, single-scroll settings screen covering every field in `minetuner.json`, including tuning options with no control in the custom editor.
 - **Optional LibreHardwareMonitor integration** — opt-in GPU temperature, GPU clock, GPU usage, and VRAM stats, polled from [LibreHardwareMonitor](https://github.com/LibreHardwaRemonitor/LibreHardwareMonitor)'s Remote Web Server on a background thread.
 
@@ -81,9 +82,29 @@ Run `/minetuner gui`, or press the **Open Editor** keybind (default: **H**).
 Right-clicking a list opens four actions:
 
 - **⚙ Edit Stats** — a category-grouped, searchable panel (Performance / Player / World / Position) to toggle stats on/off, reorder them, and open per-stat settings: show/hide the label prefix, decimal places, render-as-graph, and custom color thresholds where supported.
-- **▤ Appearance »** — rename the list, toggle its background and text shadow, override its color and text scale (0.5×–2.0×), toggle Template Mode, and configure horizontal/vertical snap.
+- **▤ Appearance »** — rename the list, toggle its background and text shadow, override its color and text scale (0.5×–2.0×), open **Theme »** to browse/apply/save/delete appearance themes, toggle Template Mode, and configure horizontal/vertical snap.
 - **⧉ Duplicate** — clone the list, including all its stats and settings, as a starting point for a variant.
 - **✕ Delete** — remove the list.
+
+### List Themes
+
+A **theme** is a named, reusable bundle of everything about how a list *looks*: background on/off, text shadow, custom color, text scale, and every stat's graph styling. It does **not** include which stats are shown, their order, the list's name, or where it sits on screen — applying a theme never moves a list or changes its stats.
+
+Open **Appearance » Theme »** from any list's context menu to:
+
+- **Apply** a theme — click any theme in the list to instantly give the current list that appearance.
+- **Save as new theme** — click **+ Save as new theme**, type a name, and press Enter to save the list's current appearance as a theme you can apply to any list later, including the one it came from. Typing the name of an existing user-created theme re-saves ("updates") that theme in place instead of making a duplicate.
+- **Delete** a theme — click the ✕ next to a user-created theme. Built-in themes are marked **(built-in)** and can't be deleted, renamed, or overwritten.
+
+MineTuner ships three built-in themes:
+
+| Theme | Look                                                                                 |
+|---|--------------------------------------------------------------------------------------|
+| **Classic** | MineTuner's original default. |
+| **Minimal** | No outline, less padding.                                                            |
+| **High Contrast** | Black background, white outline, bright yellow text.                                 |
+
+Every appearance field a theme captures is also editable directly (without going through a theme) in the Appearance/Color-Scale panels or the full Cloth Config screen below — themes are just a shortcut for applying several of those fields at once.
 
 ### Toggling the overlay
 
@@ -91,7 +112,7 @@ Press the **Toggle Overlay** keybind (unbound by default) to instantly show or h
 
 ### Full settings screen
 
-Run `/minetuner config`, open MineTuner from ModMenu's mod list (if installed), or right-click empty space in the editor and choose **Open Full Config**. This opens a Cloth Config screen covering every field in `minetuner.json` in one place — general settings, hardware-sensor settings, editor GUI tuning, and every list's full configuration (including graph styling, which has no dedicated control in the custom editor).
+Run `/minetuner config`, open MineTuner from ModMenu's mod list (if installed), or right-click empty space in the editor and choose **Open Full Config**. This opens a Cloth Config screen covering every field in `minetuner.json` in one place — general settings (including **Default List Theme**, the theme applied to every brand-new list — changing it never affects lists that already exist), hardware-sensor settings, editor GUI tuning, and every list's full configuration (including graph styling, which has no dedicated control in the custom editor).
 
 ---
 

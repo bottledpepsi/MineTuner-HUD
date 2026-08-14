@@ -36,11 +36,13 @@ public final class ListPreviewRenderer {
         int boxW, boxH;
         if (empty) {
             String placeholder = I18n.get("gui.minetuner.no_stats");
-            boxW = font.width(placeholder) + HudPanelChrome.PADDING_X * 2;
-            boxH = lineH + HudPanelChrome.PADDING_Y * 2;
+            int px = HudPanelChrome.paddingX(lc.paddingX);
+            int py = HudPanelChrome.paddingY(lc.paddingY);
+            boxW = font.width(placeholder) + px * 2;
+            boxH = lineH + py * 2;
         } else {
-            boxW = Math.round(cache.boxW(font) * scale);
-            boxH = Math.round(cache.boxH(font) * scale);
+            boxW = Math.round(cache.boxW(font, lc.paddingX) * scale);
+            boxH = Math.round(cache.boxH(font, lc.paddingY) * scale);
         }
 
         int wx, wy;
@@ -54,12 +56,11 @@ public final class ListPreviewRenderer {
         }
 
         if (lc.showBackground || empty) {
-            if (empty) {
-                g.fill(wx, wy, wx + boxW, wy + boxH, 0xB8141820);
-                g.outline(wx, wy, boxW, boxH, 0x5E9BA9BE);
-            } else {
-                HudPanelChrome.drawPanel(g, wx, wy, boxW, boxH);
-            }
+            // Empty-list placeholders also use the list's theme colors so Minimal
+            // can genuinely have a fully transparent surface/outline in the editor.
+            HudPanelChrome.drawPanel(g, wx, wy, boxW, boxH,
+                    lc.showBackground ? lc.overrideFillColor : 0x00000000,
+                    lc.showBackground ? lc.overrideOutlineColor : 0x00000000);
         }
         if (PanelChrome.isHoveringBox(mx, my, wx, wy, boxW, boxH) || isBeingDragged) {
             g.outline(wx, wy, boxW, boxH, 0xFFFFAA00);
@@ -67,17 +68,18 @@ public final class ListPreviewRenderer {
 
         boolean shadow = lc.textShadow;
         if (empty) {
-            g.text(font, "§7" + I18n.get("gui.minetuner.no_stats"), wx + HudPanelChrome.PADDING_X,
-                    wy + HudPanelChrome.PADDING_Y, 0xFFAAAAAA, shadow);
+            g.text(font, "§7" + I18n.get("gui.minetuner.no_stats"),
+                    wx + HudPanelChrome.paddingX(lc.paddingX), wy + HudPanelChrome.paddingY(lc.paddingY),
+                    0xFFAAAAAA, shadow);
         } else if (scale == 1f) {
-            MineTunerRenderer.drawRows(g, font, cache, wx, wy, shadow);
+            MineTunerRenderer.drawRows(g, font, cache, wx, wy, shadow, -1, false, lc.paddingX, lc.paddingY);
         } else {
             // Same local panel coordinate system as the live overlay.
             var matrices = g.pose();
             matrices.pushMatrix();
             matrices.translate(wx, wy);
             matrices.scale(scale, scale);
-            MineTunerRenderer.drawRows(g, font, cache, 0, 0, shadow);
+            MineTunerRenderer.drawRows(g, font, cache, 0, 0, shadow, -1, false, lc.paddingX, lc.paddingY);
             matrices.popMatrix();
         }
     }
