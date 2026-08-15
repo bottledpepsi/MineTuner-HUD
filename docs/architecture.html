@@ -124,7 +124,7 @@ and looks just like <code>CpuStat</code> to the rest of the codebase; only the s
 <code>StatDefinition</code> is the single source of truth per stat — formatting, decimals,
 graph/threshold support, and coloring all live in one implementation class, one file per stat
 in <code>stat/stats/</code>. <code>StatRegistry</code>'s static initializer block registers all
-46 by hand (no classpath scanning, no annotations) into two <code>LinkedHashMap</code>s: one
+49 by hand (no classpath scanning, no annotations) into two <code>LinkedHashMap</code>s: one
 keyed by <code>MineTunerConfig.Stat</code> enum constant, one keyed by lowercase token string for
 Template Mode lookups.
 </p>

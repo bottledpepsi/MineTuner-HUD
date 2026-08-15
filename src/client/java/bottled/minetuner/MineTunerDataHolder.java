@@ -48,6 +48,55 @@ public final class MineTunerDataHolder {
     private static final Deque<FrametimeSample> smoothWindow = new ArrayDeque<>();
     private static float smoothWindowSum = 0f;
 
+    // --- Session-scoped FPS aggregates (Avg/Min/Max) ---
+    // "Session" here means: from mod load (or the last world join/disconnect reset,
+    // whichever is more recent) to now. There's no other pre-existing "session" concept
+    // anywhere else in MineTuner to stay consistent with, so this is the definition these
+    // three stats use, full stop. Reset on ClientPlayConnectionEvents.JOIN/DISCONNECT (see
+    // MineTunerClient) so a HUD showing "Min FPS: 12" from one world doesn't silently carry
+    // over and mislead you about a totally different world/server you've since joined.
+    private static double fpsSum = 0.0;
+    private static long fpsSampleCount = 0L;
+    private static float fpsMin = Float.NaN;
+    private static float fpsMax = Float.NaN;
+
+    /** Resets the session FPS aggregates. Called on world join/disconnect (see
+     *  MineTunerClient's ClientPlayConnectionEvents registrations) — not exposed as a
+     *  standalone user-facing action, since a simple automatic reset on
+     *  join/disconnect is all this feature calls for. */
+    public static void resetSessionFpsStats() {
+        fpsSum = 0.0;
+        fpsSampleCount = 0L;
+        fpsMin = Float.NaN;
+        fpsMax = Float.NaN;
+    }
+
+    /** O(1) running-aggregate update, called once per rendered frame from
+     *  recordFrametime() right after smoothedFps is computed for that frame — the same
+     *  per-frame sampling point Feature 1 (true per-frame frametime tracking) established,
+     *  reused here rather than adding a second per-frame hook. */
+    private static void recordSessionFpsSample(float fpsValue) {
+        fpsSum += fpsValue;
+        fpsSampleCount++;
+        if (Float.isNaN(fpsMin) || fpsValue < fpsMin) fpsMin = fpsValue;
+        if (Float.isNaN(fpsMax) || fpsValue > fpsMax) fpsMax = fpsValue;
+    }
+
+    /** Running session average FPS, or 0 before the first sample lands. */
+    public static float getSessionAvgFps() {
+        return fpsSampleCount > 0 ? (float) (fpsSum / fpsSampleCount) : 0f;
+    }
+
+    /** Lowest per-frame FPS reading observed this session, or 0 before the first sample. */
+    public static float getSessionMinFps() {
+        return Float.isNaN(fpsMin) ? 0f : fpsMin;
+    }
+
+    /** Highest per-frame FPS reading observed this session, or 0 before the first sample. */
+    public static float getSessionMaxFps() {
+        return Float.isNaN(fpsMax) ? 0f : fpsMax;
+    }
+
     // --- Performance ---
     public static float tickRate = 20.0f;
     /** -1 when not on a singleplayer/LAN server (MSPT unavailable). */
@@ -157,6 +206,11 @@ public final class MineTunerDataHolder {
                 smoothedFps = sampleCount > 0
                         ? 1000f * sampleCount / smoothWindowSum
                         : 0f;
+
+                // Feed the running session Avg/Min/Max aggregates from the same true
+                // per-frame FPS value FRAMETIME's smoothing window just computed above,
+                // rather than the coarse fps field (Minecraft's own ~once/sec mc.getFps()).
+                if (smoothedFps > 0f) recordSessionFpsSample(smoothedFps);
             }
         }
 
@@ -351,6 +405,18 @@ public final class MineTunerDataHolder {
         if (fpsValue >= 60) return 0xFF55FF55;
         if (fpsValue >= 30) return 0xFFFFFF55;
         return 0xFFFF5555;
+    }
+
+    // FpsAvgStat/FpsMinStat/FpsMaxStat are not THRESHOLD_STATS (no user-configurable good/warn
+    // cutoffs — a running session average isn't a live health indicator the way instantaneous
+    // FPS is, so exposing tunable thresholds for it wasn't judged worth the extra GUI surface).
+    // But coloring them with FPS's own fixed default bands (60/30) as a lightweight, non-editable
+    // visual cue is still useful — a red "Min FPS: 9" is a clearer signal than a value with no
+    // color at all — so these call fpsColorFor(value) directly, ignoring any custom argument
+    // (LineBuilder always passes null here anyway, since getThreshold() returns null for a
+    // non-THRESHOLD_STATS stat — see MineTunerConfig.StatListConfig#getThreshold).
+    public static int getSessionFpsColor(float value) {
+        return fpsColorFor(value, null);
     }
 
     public static int getFrametimeColor() {
@@ -636,6 +702,42 @@ public final class MineTunerDataHolder {
      *  "N/A" branch — it's simply 0 until the second frame of the session lands. */
     public static String getRawFrametime(int decimals) {
         return fmt(frametimeMs, decimals);
+    }
+
+    public static String getFormattedFpsAvg() {
+        return getFormattedFpsAvg(1);
+    }
+
+    public static String getFormattedFpsAvg(int decimals) {
+        return t("minetuner.stat.fps_avg", fmt(getSessionAvgFps(), decimals));
+    }
+
+    public static String getRawFpsAvg(int decimals) {
+        return fmt(getSessionAvgFps(), decimals);
+    }
+
+    public static String getFormattedFpsMin() {
+        return getFormattedFpsMin(1);
+    }
+
+    public static String getFormattedFpsMin(int decimals) {
+        return t("minetuner.stat.fps_min", fmt(getSessionMinFps(), decimals));
+    }
+
+    public static String getRawFpsMin(int decimals) {
+        return fmt(getSessionMinFps(), decimals);
+    }
+
+    public static String getFormattedFpsMax() {
+        return getFormattedFpsMax(1);
+    }
+
+    public static String getFormattedFpsMax(int decimals) {
+        return t("minetuner.stat.fps_max", fmt(getSessionMaxFps(), decimals));
+    }
+
+    public static String getRawFpsMax(int decimals) {
+        return fmt(getSessionMaxFps(), decimals);
     }
 
     public static String getFormattedPing() {

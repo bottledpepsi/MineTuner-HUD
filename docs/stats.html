@@ -23,7 +23,7 @@
 <main>
 <h1>stat reference</h1>
 <p>
-46 <code>StatDefinition</code> impls, <code>stat/stats/*.java</code>, one file each, registered by
+49 <code>StatDefinition</code> impls, <code>stat/stats/*.java</code>, one file each, registered by
 hand in <code>StatRegistry</code>'s static block. <b>Dec</b> = <code>supportsDecimals()</code>.
 <b>Graph</b> = <code>supportsGraph()</code>. <b>Thr</b> = <code>supportsThreshold()</code>.
 <b>Cadence</b> = the <code>StatSource</code> feeding it, per <a href="architecture.html#sampling">
@@ -37,6 +37,9 @@ sampling pipeline</a>. GPU/VRAM rows are opt-in, see <a href="hardware-sensors.h
 <tr><td>MSPT</td><td><code>{mspt}</code></td><td><code>MSPT</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="no">—</td><td>PER_FRAME · singleplayer_mspt</td><td>SP/LAN only, hidden on remote servers. Colored using TPS's scale, not its own.</td></tr>
 <tr><td>FPS</td><td><code>{fps}</code></td><td><code>FPS</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · client_perf</td><td>—</td></tr>
 <tr><td>Frametime</td><td><code>{frametime}</code></td><td><code>FRAMETIME</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>every rendered frame · <code>LevelRenderEvents.START_MAIN</code>, not SamplingDriver</td><td>ms between rendered frames. Sampled outside the usual StatSource pipeline so it isn't gated by the overlay/F3/GUI — see architecture doc. 0 until the 2nd frame of the session.</td></tr>
+<tr><td>Avg FPS</td><td><code>{fps_avg}</code></td><td><code>FPS_AVG</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>every rendered frame · fed from FRAMETIME's <code>smoothedFps</code>, same as Min/Max FPS below</td><td>Running mean over the whole session (mod load, or last world join/disconnect, to now — see <code>MineTunerDataHolder</code>). No graph/threshold: a running mean moves too slowly to be graph-worthy, and it isn't a live health indicator the way instantaneous FPS is. Colored using FPS's fixed 60/30 bands anyway, just not user-editable. 0 until the 2nd frame of the session.</td></tr>
+<tr><td>Min FPS</td><td><code>{fps_min}</code></td><td><code>FPS_MIN</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>every rendered frame · fed from FRAMETIME's <code>smoothedFps</code></td><td>Lowest per-frame FPS reading observed this session. Same no-graph/no-threshold reasoning as Avg FPS. Resets on world join/disconnect, not on demand.</td></tr>
+<tr><td>Max FPS</td><td><code>{fps_max}</code></td><td><code>FPS_MAX</code></td><td class="center yes">✓</td><td class="no">—</td><td class="no">—</td><td>every rendered frame · fed from FRAMETIME's <code>smoothedFps</code></td><td>Highest per-frame FPS reading observed this session. Same no-graph/no-threshold reasoning as Avg FPS.</td></tr>
 <tr><td>Ping</td><td><code>{ping}</code></td><td><code>PING</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · ping</td><td>From the player-list ping field.</td></tr>
 <tr><td>Memory</td><td><code>{mem}</code></td><td><code>MEMORY</code></td><td class="no">—</td><td class="center yes">✓</td><td class="center yes">✓</td><td>PER_FRAME · fast_metrics</td><td>JVM heap used/max MB. Graphed as heap-used %, not raw MB.</td></tr>
 <tr><td>CPU</td><td><code>{cpu}</code></td><td><code>CPU</code></td><td class="center yes">✓</td><td class="center yes">✓</td><td class="center yes">✓</td><td>THROTTLED (500ms) · slow_metrics</td><td><code>OperatingSystemMXBean</code>, HotSpot/OpenJDK only — "N/A" on other JVM vendors.</td></tr>

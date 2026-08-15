@@ -18,6 +18,9 @@ public final class StatRegistry {
         register(new MsptStat());
         register(new FpsStat());
         register(new FrametimeStat());
+        register(new FpsAvgStat());
+        register(new FpsMinStat());
+        register(new FpsMaxStat());
         register(new PingStat());
         register(new MemoryStat());
         register(new CpuStat());

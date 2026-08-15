@@ -45,7 +45,7 @@ zero JS, zero build step — <code>docs/</code> is served as-is by GitHub Pages.
 <tr><td><a href="architecture.html">architecture.html</a></td>
     <td>package layout, sampling pipeline (<code>StatSource</code> → <code>SamplingDriver</code> → <code>MineTunerDataHolder</code>), stat registry pattern, render pipeline, config load/save lifecycle, the tick-rate mixin</td></tr>
 <tr><td><a href="stats.html">stats.html</a></td>
-    <td>all 46 <code>StatDefinition</code> implementations: token, decimals/graph/threshold support, category, source cadence</td></tr>
+    <td>all 49 <code>StatDefinition</code> implementations: token, decimals/graph/threshold support, category, source cadence</td></tr>
 <tr><td><a href="template-mode.html">template-mode.html</a></td>
     <td><code>TemplateEngine</code> token grammar, modifier parsing, escaping rules, failure modes</td></tr>
 <tr><td><a href="config-schema.html">config-schema.html</a></td>
@@ -65,7 +65,7 @@ bottled.minetuner
 ├── sample/            StatSource, Cadence, SamplingDriver, SourceRegistry, HardwareSensorPoller
 │   └── sources/       11 StatSource impls, grouped by what they read (perf/player/world/...)
 ├── stat/              StatDefinition interface + StatRegistry (token/key lookup)
-│   └── stats/         46 StatDefinition impls, one file per stat
+│   └── stats/         49 StatDefinition impls, one file per stat
 ├── hud/                render pipeline: MineTunerRenderer, LineBuilder, LineCache, GraphRenderer,
 │                        TemplateEngine, ColorMath, HudMotion, ListPositioner
 ├── gui/                custom drag/drop editor (MineTunerGuiScreen) + panel/ subpackage
