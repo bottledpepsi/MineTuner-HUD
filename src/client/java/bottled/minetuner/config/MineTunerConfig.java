@@ -90,7 +90,7 @@ public class MineTunerConfig {
     /** Which {@link StatCategory} a stat belongs to in the toggle panel. */
     public static StatCategory categoryOf(Stat stat) {
         return switch (stat) {
-            case TPS, MSPT, FPS, FRAMETIME, FPS_AVG, FPS_MIN, FPS_MAX, PING, MEMORY, CPU, GC_TIME,
+            case TPS, MSPT, FPS, FRAMETIME, FPS_AVG, FPS_MIN, FPS_MAX, FPS_1PCT_LOW, FPS_01PCT_LOW, PING, MEMORY, CPU, GC_TIME,
                  RENDERED_SECTIONS, PLAYERS_ONLINE,
                  GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED -> StatCategory.PERFORMANCE;
             case HEALTH, HUNGER, SATURATION, ARMOR, AIR, XP_LEVEL, XP_PROGRESS, GAME_MODE, SELECTED_SLOT, HELD_ITEM,
@@ -419,7 +419,7 @@ public class MineTunerConfig {
 
     public enum Stat {
         // --- Performance ---
-        TPS, MSPT, FPS, FRAMETIME, FPS_AVG, FPS_MIN, FPS_MAX, PING, MEMORY, CPU,
+        TPS, MSPT, FPS, FRAMETIME, FPS_AVG, FPS_MIN, FPS_MAX, FPS_1PCT_LOW, FPS_01PCT_LOW, PING, MEMORY, CPU,
         ENTITIES, CHUNKS, RENDERED_SECTIONS,
         COORDS, X, Y, Z, FACING, YAW, PITCH, SPEED, GC_TIME,
         BIOME, LIGHT_LEVEL, DIMENSION,
@@ -642,8 +642,10 @@ public class MineTunerConfig {
 
         /** Gets (or lazily creates) the settings for a stat. */
         public StatSettings getStatSettings(Stat stat) {
+            boolean isNew = !statSettings.containsKey(stat.name());
             StatSettings ss = statSettings.computeIfAbsent(stat.name(), k -> new StatSettings());
             if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
+            if (isNew) ss.decimals = StatRegistry.get(stat).defaultDecimals();
             return ss;
         }
 
@@ -683,7 +685,12 @@ public class MineTunerConfig {
             for (Stat s : Stat.values()) {
                 statEnabled.putIfAbsent(s.name(), false);
                 if (!statOrder.contains(s.name())) statOrder.add(s.name());
-                StatSettings ss = statSettings.computeIfAbsent(s.name(), k -> new StatSettings());
+                StatSettings ss = statSettings.computeIfAbsent(s.name(),
+                        k -> {
+                            StatSettings fresh = new StatSettings();
+                            fresh.decimals = StatRegistry.get(s).defaultDecimals();
+                            return fresh;
+                        });
                 if (ss.graphStyle == null) ss.graphStyle = new GraphStyle();
             }
             // Built once, not per-stat: defaultThresholds() allocates a whole new

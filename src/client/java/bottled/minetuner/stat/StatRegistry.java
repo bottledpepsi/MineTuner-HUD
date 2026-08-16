@@ -21,6 +21,8 @@ public final class StatRegistry {
         register(new FpsAvgStat());
         register(new FpsMinStat());
         register(new FpsMaxStat());
+        register(new Fps1LowStat());
+        register(new Fps01LowStat());
         register(new PingStat());
         register(new MemoryStat());
         register(new CpuStat());

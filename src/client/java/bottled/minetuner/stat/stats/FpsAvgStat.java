@@ -30,7 +30,7 @@ public final class FpsAvgStat implements StatDefinition {
 
     @Override
     public int defaultDecimals() {
-        return 1;
+        return 0;
     }
 
     @Override

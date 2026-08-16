@@ -118,13 +118,25 @@ per actually rendered frame regardless of HUD/overlay/GUI/F3 state, calling
 (<code>FrametimeStat</code>, its history ring buffer, its color thresholds) is completely ordinary
 and looks just like <code>CpuStat</code> to the rest of the codebase; only the sampling trigger differs.
 </p>
+<p>
+<code>FPS_1PCT_LOW</code>/<code>FPS_01PCT_LOW</code> (<code>PercentileLowSource</code>, THROTTLED)
+split the difference cleanly: their raw <i>input</i> — a second, dedicated ring buffer of
+unsmoothed per-frame deltas, deliberately separate from <code>FRAMETIME</code>'s own smoothed
+history, since a percentile-low stat exists specifically to catch individual stutter frames a
+smoothed average would wash out — is pushed from that same always-on <code>recordFrametime(long)</code>
+call, so it never has an overlay/F3/GUI gap to worry about. Only the periodic sort-and-slice
+<i>recomputation</i> of the percentile itself goes through the ordinary, gated
+<code>StatSource</code>/<code>SamplingDriver</code> path — which is fine, since that recomputation
+is exactly the "current value" case the note above already covers: it just pauses and resumes,
+never corrupts.
+</p>
 
 <h2 id="registry">stat registry pattern</h2>
 <p>
 <code>StatDefinition</code> is the single source of truth per stat — formatting, decimals,
 graph/threshold support, and coloring all live in one implementation class, one file per stat
 in <code>stat/stats/</code>. <code>StatRegistry</code>'s static initializer block registers all
-49 by hand (no classpath scanning, no annotations) into two <code>LinkedHashMap</code>s: one
+52 by hand (no classpath scanning, no annotations) into two <code>LinkedHashMap</code>s: one
 keyed by <code>MineTunerConfig.Stat</code> enum constant, one keyed by lowercase token string for
 Template Mode lookups.
 </p>

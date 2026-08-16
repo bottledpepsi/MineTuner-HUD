@@ -1,6 +1,7 @@
 package bottled.minetuner;
 
 import bottled.minetuner.config.MineTunerConfig.ThresholdSettings;
+import bottled.minetuner.stat.math.PercentileLowFps;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
@@ -29,6 +30,22 @@ public final class MineTunerDataHolder {
     private static final RingBuffer gpuClockHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer gpuUsageHistory = new RingBuffer(HISTORY_SIZE);
     private static final RingBuffer vramUsedHistory = new RingBuffer(HISTORY_SIZE);
+
+    // --- Percentile-low FPS (1%/0.1%) ---
+    // Deliberately NOT reusing frametimeHistory above: frametimeHistory stores frametimeMs,
+    // which is FRAMETIME's own 500ms-smoothed rolling average (see recordFrametime()'s
+    // smoothWindow), not the true instantaneous per-frame delta.
+    private static final RingBuffer rawFrametimeHistory = new RingBuffer(HISTORY_SIZE);
+
+    private static final int LOW_FPS_GRAPH_HISTORY_SIZE = 240;
+    private static final RingBuffer fps1LowGraphHistory = new RingBuffer(LOW_FPS_GRAPH_HISTORY_SIZE);
+    private static final RingBuffer fps01LowGraphHistory = new RingBuffer(LOW_FPS_GRAPH_HISTORY_SIZE);
+
+    public static final int FPS_1LOW_MIN_SAMPLES = 200;
+    public static final int FPS_01LOW_MIN_SAMPLES = 2000;
+
+    static float fps1LowValue = Float.NaN;
+    static float fps01LowValue = Float.NaN;
 
     // --- JVM/OS metric sources ---
     private static final MemoryMXBean MEM_BEAN = ManagementFactory.getMemoryMXBean();
@@ -69,6 +86,21 @@ public final class MineTunerDataHolder {
         fpsSampleCount = 0L;
         fpsMin = Float.NaN;
         fpsMax = Float.NaN;
+    }
+
+    public static void resetPercentileLowFps() {
+        rawFrametimeHistory.clear();
+        fps1LowGraphHistory.clear();
+        fps01LowGraphHistory.clear();
+        fps1LowValue = Float.NaN;
+        fps01LowValue = Float.NaN;
+    }
+
+    public static void updatePercentileLowFps(float fps1Low, float fps01Low) {
+        fps1LowValue = fps1Low;
+        fps01LowValue = fps01Low;
+        if (!Float.isNaN(fps1Low)) fps1LowGraphHistory.push(fps1Low);
+        if (!Float.isNaN(fps01Low)) fps01LowGraphHistory.push(fps01Low);
     }
 
     /** O(1) running-aggregate update, called once per rendered frame from
@@ -195,6 +227,12 @@ public final class MineTunerDataHolder {
             if (deltaMs > 0f && deltaMs < 10_000f) {
                 frametimeHistory.push(frametimeMs);
 
+                // Raw (unsmoothed) sample for percentile-low FPS — see rawFrametimeHistory's
+                // doc above for why this can't reuse frametimeHistory just above, which is
+                // fed the already-smoothed frametimeMs instead. This is the one point in
+                // recordFrametime() where a genuinely-instantaneous deltaMs is available.
+                rawFrametimeHistory.push(deltaMs);
+
                 pushSmoothWindow(nowNanos, deltaMs);
 
                 int sampleCount = smoothWindow.size();
@@ -303,6 +341,18 @@ public final class MineTunerDataHolder {
         return frametimeHistory.snapshot();
     }
 
+    public static float[] getRawFrametimeHistory() {
+        return rawFrametimeHistory.snapshot();
+    }
+
+    public static float[] getFps1LowGraphHistory() {
+        return fps1LowGraphHistory.snapshot();
+    }
+
+    public static float[] getFps01LowGraphHistory() {
+        return fps01LowGraphHistory.snapshot();
+    }
+
     public static float[] getCpuHistory() {
         return cpuHistory.snapshot();
     }
@@ -407,16 +457,13 @@ public final class MineTunerDataHolder {
         return 0xFFFF5555;
     }
 
-    // FpsAvgStat/FpsMinStat/FpsMaxStat are not THRESHOLD_STATS (no user-configurable good/warn
-    // cutoffs — a running session average isn't a live health indicator the way instantaneous
-    // FPS is, so exposing tunable thresholds for it wasn't judged worth the extra GUI surface).
-    // But coloring them with FPS's own fixed default bands (60/30) as a lightweight, non-editable
-    // visual cue is still useful — a red "Min FPS: 9" is a clearer signal than a value with no
-    // color at all — so these call fpsColorFor(value) directly, ignoring any custom argument
-    // (LineBuilder always passes null here anyway, since getThreshold() returns null for a
-    // non-THRESHOLD_STATS stat — see MineTunerConfig.StatListConfig#getThreshold).
+
     public static int getSessionFpsColor(float value) {
         return fpsColorFor(value, null);
+    }
+
+    public static int getPercentileLowFpsColor(float value, ThresholdSettings custom) {
+        return fpsColorFor(value, custom);
     }
 
     public static int getFrametimeColor() {
@@ -738,6 +785,41 @@ public final class MineTunerDataHolder {
 
     public static String getRawFpsMax(int decimals) {
         return fmt(getSessionMaxFps(), decimals);
+    }
+
+    public static String getFormattedFps1Low() {
+        return getFormattedFps1Low(1);
+    }
+
+    public static String getFormattedFps1Low(int decimals) {
+        return !Float.isNaN(fps1LowValue) ? t("minetuner.stat.fps_1low", fmt(fps1LowValue, decimals)) : "";
+    }
+
+    public static String getRawFps1Low(int decimals) {
+        return !Float.isNaN(fps1LowValue) ? fmt(fps1LowValue, decimals) : "N/A";
+    }
+
+    /** Same shape as getFormattedFps1Low(), gated on FPS_01LOW_MIN_SAMPLES instead. */
+    public static String getFormattedFps01Low() {
+        return getFormattedFps01Low(1);
+    }
+
+    public static String getFormattedFps01Low(int decimals) {
+        return !Float.isNaN(fps01LowValue) ? t("minetuner.stat.fps_01low", fmt(fps01LowValue, decimals)) : "";
+    }
+
+    /** Same shape/reasoning as getRawFps1Low(). */
+    public static String getRawFps01Low(int decimals) {
+        return !Float.isNaN(fps01LowValue) ? fmt(fps01LowValue, decimals) : "N/A";
+    }
+
+    public static float getFps1LowRawValue() {
+        return fps1LowValue;
+    }
+
+    /** Same as getFps1LowRawValue(), for the 0.1% low FPS stat. */
+    public static float getFps01LowRawValue() {
+        return fps01LowValue;
     }
 
     public static String getFormattedPing() {
@@ -1107,6 +1189,17 @@ public final class MineTunerDataHolder {
                 out[i] = buf[(start + i) % buf.length];
             }
             return out;
+        }
+
+        /** Discards all samples without reallocating the backing array — resetting
+         *  count/head is sufficient since snapshot() only ever reads the [0, count)
+         *  valid range; the stale float values left behind in buf are never visible
+         *  through snapshot() until push() overwrites them again. Added specifically
+         *  for MineTunerDataHolder#resetPercentileLowFps(); no other ring buffer in
+         *  this class needed a mid-session reset before this feature. */
+        void clear() {
+            count = 0;
+            head = 0;
         }
     }
 }

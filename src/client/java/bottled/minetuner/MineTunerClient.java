@@ -70,10 +70,14 @@ public class MineTunerClient implements ClientModInitializer {
         // completely different one you've since joined. Both fire for both singleplayer world
         // entry/exit and multiplayer server connect/disconnect — there's no separate "world"
         // vs "server" distinction to make here.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
-                MineTunerDataHolder.resetSessionFpsStats());
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-                MineTunerDataHolder.resetSessionFpsStats());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            MineTunerDataHolder.resetSessionFpsStats();
+            MineTunerDataHolder.resetPercentileLowFps();
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            MineTunerDataHolder.resetSessionFpsStats();
+            MineTunerDataHolder.resetPercentileLowFps();
+        });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 MineTunerCommand.register(dispatcher));

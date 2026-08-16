@@ -24,6 +24,7 @@ public final class SourceRegistry {
         register(new WorldStateSource());          // weather, difficulty, chunk pos, distance from spawn, etc.
         register(new RenderedSectionsSource());
         register(new SlowMetricsSource());         // THROTTLED.
+        register(new PercentileLowSource());       // THROTTLED — 1%/0.1% low FPS.
         register(new FastMetricsSource());         // memory + history push.
         // Server tick rate is EVENT_PUSHED by ClientPacketListenerMixin#minetuner$onTickingState,
         // not driven from here — not registered as an instance, since its sample() would

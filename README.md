@@ -28,7 +28,7 @@ MineTuner is a **client-side-only** Fabric mod. It works on any server and insta
 - **Multiple stat lists** — create as many separate HUD panels as you want, each positioned, styled, and configured independently.
 - **Drag-and-drop editor** (default keybind **H**) — drag lists anywhere on screen; right-click a list for its context menu; right-click empty space to create a new one.
 - **Snap-to-center** while dragging with a visible guide line.
-- **49 tracked stats** across four categories — performance, player, world, and position — including four optional hardware-sensor stats. See the [full stat table](#stat-reference) below.
+- **52 tracked stats** across four categories — performance, player, world, and position — including four optional hardware-sensor stats. See the [full stat table](https://bottledpepsi.github.io/MineTuner-HUD/stats.html) below.
 - **Rolling history graphs** — Certain stats can render as a graph.
 - **Template Mode** — an alternative to the fixed stat-list layout: write your own lines of text and interpolate stat tokens like `{tps}` and `{fps}` anywhere, mixing multiple stats and literal text freely.
 - **List Themes** — save any list's full appearance (background, shadow, custom color, text scale, graph styling) as a named, reusable theme; apply it to any list in one click, and pick a default theme new lists start with.
@@ -154,7 +154,7 @@ By default a template line renders in one flat color: the list's custom color if
 
 ### Full token table
 
-See the [Stat Reference](#stat-reference) table below — the **Token** column is the exact text to use inside `{ }`.
+See the [Stat Reference](https://bottledpepsi.github.io/MineTuner-HUD/stats.html) table — the **Token** column is the exact text to use inside `{ }`.
 
 ---
 
