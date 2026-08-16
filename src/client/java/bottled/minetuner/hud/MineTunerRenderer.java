@@ -41,8 +41,8 @@ public class MineTunerRenderer {
             if (kind == RowKind.TEXT) {
                 List<TemplateEngine.ColoredRun> runs = cache.runs().get(textIdx);
                 float pulse = animate ? HudMotion.pulseFor(listId, textIdx, runs, now) : 0f;
-                int settleY = cursorY - Math.round(pulse);
-                drawColoredRuns(graphics, font, runs, contentX, settleY, shadow, pulse);
+//                int settleY = cursorY - Math.round(pulse);
+                drawColoredRuns(graphics, font, runs, contentX, cursorY, shadow, pulse);
                 textIdx++;
                 cursorY += lineH;
             } else {
