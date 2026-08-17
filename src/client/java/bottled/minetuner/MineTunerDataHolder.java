@@ -227,11 +227,9 @@ public final class MineTunerDataHolder {
             if (deltaMs > 0f && deltaMs < 10_000f) {
                 frametimeHistory.push(frametimeMs);
 
-                // Raw (unsmoothed) sample for percentile-low FPS — see rawFrametimeHistory's
-                // doc above for why this can't reuse frametimeHistory just above, which is
-                // fed the already-smoothed frametimeMs instead. This is the one point in
-                // recordFrametime() where a genuinely-instantaneous deltaMs is available.
                 rawFrametimeHistory.push(deltaMs);
+
+                bottled.minetuner.benchmark.BenchmarkSession.recordFrametimeIfRecording(deltaMs);
 
                 pushSmoothWindow(nowNanos, deltaMs);
 

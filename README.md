@@ -33,6 +33,7 @@ MineTuner is a **client-side-only** Fabric mod. It works on any server and insta
 - **Template Mode** — an alternative to the fixed stat-list layout: write your own lines of text and interpolate stat tokens like `{tps}` and `{fps}` anywhere, mixing multiple stats and literal text freely.
 - **List Themes** — save any list's full appearance (background, shadow, custom color, text scale, graph styling) as a named, reusable theme; apply it to any list in one click, and pick a default theme new lists start with.
 - **Cloth Config screen** (`/minetuner config`, or via ModMenu if installed) — a searchable, single-scroll settings screen covering every field in `minetuner.json`, including tuning options with no control in the custom editor.
+- **Benchmark Mode** — an RTSS-style start/stop performance run with its own dedicated screen (`/minetuner benchmark`): tracks Avg FPS, 1% Low, 0.1% Low, and average CPU over exactly the recorded window, independent of the live overlay's rolling stats. See [Benchmark Mode](#benchmark-mode) below.
 - **Optional LibreHardwareMonitor integration** — opt-in GPU temperature, GPU clock, GPU usage, and VRAM stats, polled from [LibreHardwareMonitor](https://github.com/LibreHardwaRemonitor/LibreHardwareMonitor)'s Remote Web Server on a background thread.
 
 ---
@@ -113,6 +114,42 @@ Press the **Toggle Overlay** keybind (unbound by default) to instantly show or h
 ### Full settings screen
 
 Run `/minetuner config`, open MineTuner from ModMenu's mod list (if installed), or right-click empty space in the editor and choose **Open Full Config**. This opens a Cloth Config screen covering every field in `minetuner.json` in one place — general settings (including **Default List Theme**, the theme applied to every brand-new list — changing it never affects lists that already exist), hardware-sensor settings, editor GUI tuning, and every list's full configuration (including graph styling, which has no dedicated control in the custom editor).
+
+---
+
+## Benchmark Mode
+
+Benchmark Mode is an RTSS-style start/stop performance run, independent from the live overlay's own rolling stats: press Start, play through whatever you want to measure — a same-settings comparison after a config change, a specific area of a map, a set duration — then press Stop to freeze the result. Unlike the overlay's session Avg/Min/Max FPS (which resets on every world join/disconnect and keeps rolling for as long as you're connected), a benchmark result stays frozen exactly as it was the moment you stopped it, until you start another run.
+
+A finished benchmark reports:
+
+- **Avg FPS** — the average frame rate across the entire recorded run.
+- **1% Low** and **0.1% Low** — the same percentile-low FPS calculation the overlay's own `{fps_1pct_low}`/`{fps_01pct_low}` stats use, computed over just the benchmark's window. Shows **N/A** if the run was too short to have enough samples for a statistically meaningful percentile (matching the same minimum-sample thresholds the live stats use).
+- **Avg CPU** — average CPU usage sampled at the start and end of the run. Shows **N/A** if CPU sampling isn't available (see [Hardware Sensors](#hardware-sensors-opt-in-via-librehardwaremonitor) below — CPU% itself doesn't require LibreHardwareMonitor, only the GPU stats do).
+- **Duration** and **sample count** for the run.
+
+### Controls
+
+| Action | Keybind (default) | Also available via |
+|---|---|---|
+| Start / Reset benchmark | unbound | Start/Reset button in the Benchmark screen |
+| Stop / Freeze benchmark | unbound | Stop/Freeze button in the Benchmark screen |
+| Open Benchmark screen | unbound | `/minetuner benchmark` |
+
+All three are unbound by default, the same as the **Toggle Overlay** keybind — bind whichever you'll use from Minecraft's Controls settings. Start and Stop work anywhere in-game without needing the Benchmark screen open at all, the same way RTSS's own hotkeys do; the screen itself is there for watching a run live and reviewing the result afterward, not a requirement for starting or stopping one.
+
+Pressing **Start** while a previous result is still showing discards it and begins a fresh run — there's no separate "clear results" step. Pressing **Stop** with nothing running does nothing (no result is generated from an empty run).
+
+### The Benchmark screen
+
+Opened via the **Open Benchmark** keybind or `/minetuner benchmark`. It shows the current state (Idle / Recording / Stopped), Start/Reset and Stop/Freeze buttons, and:
+
+- **While recording** — a live elapsed-time counter, sample count, and a live frametime graph.
+- **After stopping** — the frozen Avg FPS / 1% Low / 0.1% Low / Avg CPU readout described above, plus the run's duration and sample count.
+
+This screen is separate from the drag-and-drop editor and doesn't share any settings with it — closing it (**Esc**) doesn't stop an in-progress benchmark, and an in-progress or completed benchmark has no effect on your HUD lists.
+
+> **Note:** a benchmark result is **not** saved to `minetuner.json` and won't survive restarting the game — it's meant for an in-session comparison, not a permanent log. If you need to keep a result, note it down before closing the game or starting a new run.
 
 ---
 
