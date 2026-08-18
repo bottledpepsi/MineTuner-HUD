@@ -119,7 +119,7 @@ public final class ReorderPanel {
 
     public static int panelHeight(MineTunerConfig.StatListConfig lc, UiState ui) {
         int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRowCount(lc, ui));
-        return PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
+        return PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows - 1;
     }
 
     public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
@@ -140,13 +140,15 @@ public final class ReorderPanel {
         float scrollPixels = ui.scrollFraction() * ROW_H;
 
         int fullPanelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * fullVisibleRows;
-        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
+        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows - 1;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         // Clamp against the final height so a menu opened near the lower edge
         // grows down from one stable anchor instead of sliding while unfolding.
         int py = PanelChrome.clampY(menuY, fullPanelH, screenH);
 
         PanelChrome.drawBackground(g, px, py, PANEL_W, panelH);
+
+        g.enableScissor(px, py, px + PANEL_W, py + panelH - 1);
 
         // Title, with a paging hint so it's clear more rows exist off-screen.
         String title = "§e" + I18n.get("gui.minetuner.reorder.title");
@@ -157,7 +159,13 @@ public final class ReorderPanel {
         int searchY = py + PANEL_PAD + ROW_H;
         renderSearchRow(g, font, mx, my, px, searchY, ui);
 
-        int rowTop = searchY + ROW_H;
+        // Clip only the scrollable list below the search field.
+        int listTop = searchY + ROW_H;
+        int listBottom = py + panelH;
+
+        g.enableScissor(px, listTop, px + PANEL_W, listBottom);
+
+        int rowTop = listTop;
 
         int renderCount = paged ? Math.min(rowsToRender + 1, totalRows - renderOffset) : rowsToRender;
         for (int visIdx = 0; visIdx < renderCount; visIdx++) {
@@ -194,6 +202,9 @@ public final class ReorderPanel {
                 pose.popMatrix();
             }
         }
+
+        g.disableScissor();
+
         // Do this only after every layout calculation above has observed the
         // same state. Retiring a collapse mid-render was the source of the
         // expansion flicker: later rows treated it as fully open again.
