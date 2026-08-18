@@ -144,14 +144,7 @@ Pressing **Start** while a previous result is still showing discards it and begi
 
 ### The Benchmark screen
 
-Opened via the **Open Benchmark** keybind or `/minetuner benchmark`. It shows the current state (Idle / Recording / Stopped), Start/Reset and Stop/Freeze buttons, and:
-
-- **While recording** — a live elapsed-time counter, sample count, and a live frametime graph.
-- **After stopping** — the frozen Avg FPS / 1% Low / 0.1% Low / Avg CPU readout described above, plus the run's duration and sample count.
-
-This screen is separate from the drag-and-drop editor and doesn't share any settings with it — closing it (**Esc**) doesn't stop an in-progress benchmark, and an in-progress or completed benchmark has no effect on your HUD lists.
-
-> **Note:** a benchmark result is **not** saved to `minetuner.json` and won't survive restarting the game — it's meant for an in-session comparison, not a permanent log. If you need to keep a result, note it down before closing the game or starting a new run.
+Opened via the **Open Benchmark** keybind or `/minetuner benchmark`. It shows the current state (Idle / Recording / Stopped), Start/Reset and Stop/Freeze buttons:
 
 ---
 
