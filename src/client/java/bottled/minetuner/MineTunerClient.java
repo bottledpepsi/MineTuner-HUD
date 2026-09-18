@@ -34,7 +34,7 @@ public class MineTunerClient implements ClientModInitializer {
     private static final KeyMapping OPEN_GUI_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.minetuner.open_gui",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.KEY_H,
                     CATEGORY
             ));
@@ -43,7 +43,7 @@ public class MineTunerClient implements ClientModInitializer {
     private static final KeyMapping TOGGLE_OVERLAY_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.minetuner.toggle_overlay",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.UNKNOWN.getValue(),
                     CATEGORY
             ));
@@ -55,7 +55,7 @@ public class MineTunerClient implements ClientModInitializer {
     private static final KeyMapping BENCHMARK_START_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.minetuner.benchmark_start",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.UNKNOWN.getValue(),
                     CATEGORY
             ));
@@ -65,7 +65,7 @@ public class MineTunerClient implements ClientModInitializer {
     private static final KeyMapping BENCHMARK_STOP_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.minetuner.benchmark_stop",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.UNKNOWN.getValue(),
                     CATEGORY
             ));
@@ -76,7 +76,7 @@ public class MineTunerClient implements ClientModInitializer {
     private static final KeyMapping OPEN_BENCHMARK_GUI_KEY = KeyMappingHelper.registerKeyMapping(
             new KeyMapping(
                     "key.minetuner.open_benchmark_gui",
-                    InputConstants.Type.KEYSYM,
+                    InputConstants.Type.KEYBOARD,
                     InputConstants.UNKNOWN.getValue(),
                     CATEGORY
             ));
