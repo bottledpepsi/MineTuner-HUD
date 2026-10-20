@@ -2,6 +2,7 @@ package bottled.minetuner.benchmark;
 
 import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.MineTunerMod;
+import bottled.minetuner.core.FpsMath;
 import bottled.minetuner.core.PercentileLowFps;
 
 import java.nio.file.Path;
@@ -128,15 +129,9 @@ public final class BenchmarkSession {
         finalCpuSeries = Arrays.copyOf(cpuCapture, captureSize);
         finalGpuSeries = Arrays.copyOf(gpuCapture, captureSize);
 
-        // Averaging each raw sample's instantaneous FPS (rather than averaging deltaMs
-        // once and converting a single time) matches how MineTunerDataHolder's own
-        // session Avg FPS is defined — see recordSessionFpsSample()'s fpsSum/fpsValue,
-        // which likewise sums per-frame FPS values, not per-frame frametimes.
-        double sum = 0.0;
-        for (float deltaMs : window) {
-            if (deltaMs > 0f) sum += 1000f / deltaMs;
-        }
-        finalAvgFps = captureSize > 0 ? (float) (sum / captureSize) : 0f;
+        // True average: frames / elapsed time (not the mean of per-frame FPS, which
+        // overstates the average whenever frame times vary). Matches the session Avg FPS stat.
+        finalAvgFps = FpsMath.averageFps(window);
         final1LowFps = PercentileLowFps.computeLowFps(
                 window, 0.01f, MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES);
         final01LowFps = PercentileLowFps.computeLowFps(

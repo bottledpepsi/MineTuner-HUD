@@ -123,7 +123,8 @@ Benchmark Mode is a start/stop performance run, independent from the live overla
 
 A finished benchmark reports:
 
-- **Avg FPS** — the average frame rate across the entire recorded run.
+- **Avg FPS** — the average frame rate across the entire recorded run (total frames ÷ total time, so long stalls are
+  weighted by their duration).
 - **1% Low** and **0.1% Low** — the same percentile-low FPS calculation the overlay's own `{fps_1pct_low}`/`{fps_01pct_low}` stats use, computed over just the benchmark's window. Shows **N/A** if the run was too short to have enough samples for a statistically meaningful percentile (matching the same minimum-sample thresholds the live stats use).
 - **Frametime**
 - **CPU**
