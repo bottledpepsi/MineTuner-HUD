@@ -2,6 +2,7 @@ package bottled.minetuner.stat.stats;
 
 import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.TickMath;
 import bottled.minetuner.stat.StatDefinition;
 
 /** Milliseconds per tick. */
@@ -50,7 +51,10 @@ public final class MsptStat implements StatDefinition {
 
     @Override
     public int colorFor(float value, MineTunerConfig.ThresholdSettings custom) {
-        return MineTunerDataHolder.tpsColorFor(value, custom);
+        // The MSPT history stores raw milliseconds, but the colour bands are in TPS:
+        // convert each sample the same way getTps() does before colouring it.
+        return MineTunerDataHolder.tpsColorFor(
+                TickMath.tpsFromMspt(value, MineTunerDataHolder.tickRate), custom);
     }
 
     @Override
