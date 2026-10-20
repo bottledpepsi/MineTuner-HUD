@@ -9,6 +9,7 @@
 <body>
 <div class="topbar">
   <a href="index.html">index</a>
+    <a href="usage.html">usage</a>
   <a href="architecture.html">architecture</a>
   <a href="stats.html">stat-reference</a>
   <a href="template-mode.html">template-mode</a>
@@ -29,10 +30,9 @@
 
 <p>
 MineTuner HUD. Client-side Fabric mod, replaces the vanilla
-F3 screen with a configurable stat HUD. This site is the implementation reference, not
-the user manual — for install/usage instructions read the
-<a href="https://github.com/bottledpepsi/MineTuner-HUD#readme">README</a>.
-Everything here assumes you've read the source or are about to.
+    F3 screen with a configurable stat HUD. Start with <a href="usage.html">usage.html</a> for install and how to use
+    it; the other pages are
+    the implementation reference. Everything here assumes you've read the source or are about to.
 </p>
 
 <div class="note">
@@ -43,6 +43,12 @@ Everything here assumes you've read the source or are about to.
 <h2>pages</h2>
 <table>
 <tr><th>page</th><th>covers</th></tr>
+    <tr>
+        <td><a href="usage.html">usage.html</a></td>
+        <td>requirements/install, the editor and its controls, list themes, benchmark mode, template mode overview,
+            compatibility notes
+        </td>
+    </tr>
 <tr><td><a href="architecture.html">architecture.html</a></td>
     <td>package layout, sampling pipeline (<code>StatSource</code> → <code>SamplingDriver</code> → <code>MineTunerDataHolder</code>), stat registry pattern, render pipeline, config load/save lifecycle, the tick-rate mixin</td></tr>
 <tr><td><a href="stats.html">stats.html</a></td>
@@ -54,7 +60,8 @@ Everything here assumes you've read the source or are about to.
 <tr><td><a href="hardware-sensors.html">hardware-sensors.html</a></td>
     <td><code>HardwareSensorPoller</code> internals — LHM wire format, polling thread, failure handling</td></tr>
 <tr><td><a href="building.html">building.html</a></td>
-    <td>gradle properties, dependency versions, GitHub Actions workflow, release process</td></tr>
+    <td>gradle properties, dependency versions, GitHub Actions workflow, release process, contributing</td>
+</tr>
 </table>
 
 <h2>tl;dr package map</h2>

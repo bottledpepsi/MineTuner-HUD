@@ -9,6 +9,7 @@
 <body>
 <div class="topbar">
   <a href="index.html">index</a>
+    <a href="usage.html">usage</a>
   <a href="architecture.html">architecture</a>
   <a href="stats.html">stat-reference</a>
   <a href="template-mode.html">template-mode</a>
@@ -245,8 +246,7 @@ the vanilla client already receives this packet whenever tick rate changes, mine
 </p>
 
 <h2 id="adding-a-stat">adding a stat, mechanically</h2>
-<p>Straight from the README, reproduced here because it's the fastest way to understand the
-registry pattern by example:</p>
+    <p>The fastest way to understand the registry pattern is by example:</p>
 <ol>
 <li>Add a constant to <code>MineTunerConfig.Stat</code>.</li>
 <li>Implement <code>StatDefinition</code> in <code>stat/stats/</code>. Copy

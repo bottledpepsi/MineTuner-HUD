@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>minetuner docs — usage</title>
+    <link href="style.css" rel="stylesheet">
+</head>
+<body>
+<div class="topbar">
+    <a href="index.html">index</a>
+    <a href="usage.html">usage</a>
+    <a href="architecture.html">architecture</a>
+    <a href="stats.html">stat-reference</a>
+    <a href="template-mode.html">template-mode</a>
+    <a href="config-schema.html">config-schema</a>
+    <a href="hardware-sensors.html">hardware-sensors</a>
+    <a href="building.html">build+ci</a>
+    <span class="sep">|</span>
+    <a href="https://github.com/bottledpepsi/MineTuner-HUD">repo↗</a>
+    <a href="https://bottledpepsi.github.io">homepage↗</a>
+</div>
+
+<main>
+    <h1>usage</h1>
+    <p>
+        User-facing guide: install, the in-game editor, themes, benchmark mode, compatibility.
+        For the internals behind any of this, follow the links to the other pages.
+    </p>
+
+    <div class="toc">
+        <a href="#install">install</a> ·
+        <a href="#editor">editor</a> ·
+        <a href="#themes">themes</a> ·
+        <a href="#overlay">overlay toggle</a> ·
+        <a href="#config">settings screen + config file</a> ·
+        <a href="#templates">template mode</a> ·
+        <a href="#benchmark">benchmark mode</a> ·
+        <a href="#compat">compatibility</a>
+    </div>
+
+    <h2 id="install">requirements + install</h2>
+    <table>
+        <tr>
+            <th>component</th>
+            <th>version</th>
+        </tr>
+        <tr>
+            <td>Minecraft</td>
+            <td>≥ 26.3</td>
+        </tr>
+        <tr>
+            <td>Fabric Loader</td>
+            <td>≥ 0.19.5</td>
+        </tr>
+        <tr>
+            <td>Fabric API</td>
+            <td>required</td>
+        </tr>
+        <tr>
+            <td>Java</td>
+            <td>≥ 25</td>
+        </tr>
+        <tr>
+            <td><a href="https://modrinth.com/mod/cloth-config">Cloth Config API</a></td>
+            <td>≥ 26.3.158, hard dependency</td>
+        </tr>
+        <tr>
+            <td><a href="https://modrinth.com/mod/modmenu">ModMenu</a></td>
+            <td>optional</td>
+        </tr>
+    </table>
+    <ol>
+        <li>Install <a href="https://fabricmc.net/use/installer/">Fabric Loader</a>.</li>
+        <li>Put Fabric API and Cloth Config API in your <code>mods</code> folder.</li>
+        <li>Optionally add ModMenu for a settings entry in the mod list.</li>
+        <li>Drop the MineTuner jar into <code>mods</code> and launch.</li>
+    </ol>
+    <p>Client-side only: nothing is needed on the server, and it works on any server.</p>
+
+    <h2 id="editor">the editor</h2>
+    <p>Open with <code>/minetuner gui</code> or the <b>Open Editor</b> keybind (default <b>H</b>).</p>
+    <table>
+        <tr>
+            <th>action</th>
+            <th>result</th>
+        </tr>
+        <tr>
+            <td>left-click + drag</td>
+            <td>move a stat list (snaps to the screen's center lines, with a guide line)</td>
+        </tr>
+        <tr>
+            <td>right-click on a list</td>
+            <td>open its context menu</td>
+        </tr>
+        <tr>
+            <td>right-click on empty space</td>
+            <td>create a new list there, or open the full config screen</td>
+        </tr>
+        <tr>
+            <td>Escape</td>
+            <td>close the editor and save</td>
+        </tr>
+    </table>
+
+    <h3>list context menu</h3>
+    <ul>
+        <li><b>⚙ Edit Stats</b> — category-grouped, searchable panel (performance / player / world / position).
+            Toggle stats, reorder them, and open per-stat settings: label prefix, decimal places, render as graph,
+            custom color thresholds where supported. In <a href="#templates">template mode</a> this row becomes
+            <b>Edit Template Lines</b>.
+        </li>
+        <li><b>▤ Appearance »</b> — rename, background, text shadow, custom color, text scale (0.5×–2.0×),
+            <b>Theme »</b>, template mode toggle, horizontal/vertical snap.
+        </li>
+        <li><b>⧉ Duplicate</b> — clone the list with all its stats and settings.</li>
+        <li><b>✕ Delete</b> — remove the list (asks for confirmation).</li>
+    </ul>
+
+    <h2 id="themes">list themes</h2>
+    <p>
+        A theme is a named bundle of everything about how a list <i>looks</i>: background, text shadow,
+        custom color, text scale, and every stat's graph styling. It does <b>not</b> include which stats are
+        shown, their order, the list's name, or its position — applying a theme never moves a list or changes its stats.
+    </p>
+    <p>In <b>Appearance » Theme »</b>:</p>
+    <ul>
+        <li><b>apply</b> — click a theme to give the current list that appearance.</li>
+        <li><b>save</b> — click <b>+ Save as new theme</b>, type a name, press Enter. Using the name of an
+            existing user theme re-saves it in place instead of duplicating it.
+        </li>
+        <li><b>delete</b> — click the ✕ next to a user theme. Built-ins are marked <b>(built-in)</b> and can't be
+            deleted, renamed, or overwritten.
+        </li>
+    </ul>
+    <table>
+        <tr>
+            <th>built-in</th>
+            <th>look</th>
+        </tr>
+        <tr>
+            <td>Classic</td>
+            <td>the original default</td>
+        </tr>
+        <tr>
+            <td>Minimal</td>
+            <td>no outline, less padding</td>
+        </tr>
+        <tr>
+            <td>High Contrast</td>
+            <td>black background, white outline, bright yellow text</td>
+        </tr>
+    </table>
+    <p>
+        The <b>Default List Theme</b> setting (full config screen) is applied to every brand-new list;
+        changing it never touches existing lists. Every field a theme captures is also editable directly in
+        the Appearance / Color-Scale panels or the config screen.
+    </p>
+
+    <h2 id="overlay">toggling the overlay</h2>
+    <p>
+        The <b>Toggle Overlay</b> keybind (unbound by default) shows/hides the HUD without opening the editor.
+        The editor still opens and previews your lists while the overlay is hidden.
+    </p>
+
+    <h2 id="config">settings screen + config file</h2>
+    <p>
+        Open the Cloth Config screen via <code>/minetuner config</code>, ModMenu's mod list, or right-click empty
+        space in the editor → <b>Open Full Config</b>. It covers every field in <code>minetuner.json</code>:
+        general settings, hardware sensors, editor GUI tuning, and every list's full configuration (including
+        graph styling, which has no control in the custom editor).
+    </p>
+    <p>
+        Settings save automatically and atomically to <code>.minecraft/config/minetuner.json</code>. You never
+        need to hand-edit it. If it fails to parse it's backed up as <code>minetuner.json.bak-&lt;timestamp&gt;</code>
+        and defaults are used. See <a href="config-schema.html">config-schema.html</a>.
+    </p>
+
+    <h2 id="templates">template mode</h2>
+    <p>
+        Per-list alternative to the one-line-per-stat layout: write your own text with stat tokens such as
+        <code>{tps}</code> interpolated anywhere. Enable it in <b>Appearance »</b>; edit lines in
+        <b>Edit Template Lines</b> (Enter confirms, Esc cancels).
+    </p>
+    <pre><code>FPS: {fps} | TPS: {tps:2} | {ping}ms     →     FPS: 144 | TPS: 19.86 | 42ms</code></pre>
+    <p>
+        Modifiers: <code>:N</code> decimals, <code>graph=true</code>, <code>color=#RRGGBB</code>. Literal braces
+        are doubled (<code>{{</code>, <code>}}</code>). Unknown or malformed tokens render as literal text and log a
+        one-time warning. Full grammar: <a href="template-mode.html">template-mode.html</a>; token names:
+        the <b>token</b> column in <a href="stats.html">stats.html</a>.
+    </p>
+
+    <h2 id="benchmark">benchmark mode</h2>
+    <p>
+        A start/stop performance run, independent of the overlay's rolling stats. Press Start, play, press Stop to
+        freeze the result. Unlike the overlay's session Avg/Min/Max FPS (which reset on world join/disconnect), a
+        benchmark result stays frozen until you start another run. Starting while a result is showing discards it;
+        stopping with nothing running does nothing.
+    </p>
+    <p>A finished run reports:</p>
+    <ul>
+        <li><b>Avg FPS</b> — total frames ÷ total time, so long stalls are weighted by duration.</li>
+        <li><b>1% Low</b> / <b>0.1% Low</b> — the same percentile calculation as the overlay's
+            <code>{fps_1pct_low}</code>/<code>{fps_01pct_low}</code>, over the run only. <b>N/A</b> if the run is too
+            short for a meaningful percentile.
+        </li>
+        <li><b>Frametime</b>.</li>
+        <li><b>CPU (process)</b> — the game process's load (JVM <code>getProcessCpuLoad</code>, normalised across
+            cores), time-weighted. Not whole-system CPU, so it differs from Task Manager.
+        </li>
+        <li><b>GPU</b> — <b>N/A</b> unless <a href="hardware-sensors.html">hardware sensors</a> are available.</li>
+        <li><b>Duration</b> and <b>sample count</b>.</li>
+    </ul>
+    <p>
+        Saving writes <code>summary.txt</code> and <code>samples.csv</code> on a background thread (the screen shows
+        "Saving…" until done).
+    </p>
+    <table>
+        <tr>
+            <th>action</th>
+            <th>keybind</th>
+            <th>also</th>
+        </tr>
+        <tr>
+            <td>Start / Reset</td>
+            <td>unbound</td>
+            <td>button on the benchmark screen</td>
+        </tr>
+        <tr>
+            <td>Stop / Freeze</td>
+            <td>unbound</td>
+            <td>button on the benchmark screen</td>
+        </tr>
+        <tr>
+            <td>Open benchmark screen</td>
+            <td>unbound</td>
+            <td><code>/minetuner benchmark</code></td>
+        </tr>
+    </table>
+    <p>
+        Bind whichever you need in Minecraft's Controls settings. Start and Stop work anywhere in-game without the
+        screen open; the screen is for watching a run live and reviewing the result. It shows the state
+        (Idle / Recording / Stopped) and the Start/Reset, Stop/Freeze and Save buttons.
+    </p>
+
+    <h2 id="compat">compatibility</h2>
+    <ul>
+        <li>Client-side only; works on vanilla, Paper, Fabric servers, etc.</li>
+        <li><b>MSPT</b> is only available in singleplayer and LAN worlds; hidden on remote servers.</li>
+        <li><b>GPU/VRAM stats</b> are opt-in and need LibreHardwareMonitor's Remote Web Server running; hidden
+            otherwise.
+            See <a href="hardware-sensors.html">hardware-sensors.html</a> for setup and troubleshooting.
+        </li>
+        <li>The overlay registers through Fabric API's <code>HudElementRegistry</code>, just before the chat layer,
+            so it doesn't conflict with other HUD mods.
+        </li>
+        <li>Stats are sampled once per client tick (ping and CPU/GC/percentile readings at most every 500 ms),
+            whether or not the overlay is visible, but only while something needs them: a visible list (including
+            template tokens) or a recording benchmark. See <a href="architecture.html#sampling">architecture.html#sampling</a>.
+        </li>
+    </ul>
+
+</main>
+
+<footer>
+    mostly correct as of the commit it was written against. if it's wrong, the code is the source of truth, not this.
+</footer>
+</body>
+</html>
