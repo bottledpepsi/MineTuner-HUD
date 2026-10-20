@@ -2,11 +2,16 @@ package bottled.minetuner.benchmark;
 
 import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.MineTunerMod;
+import bottled.minetuner.core.CpuMath;
 import bottled.minetuner.core.FpsMath;
 import bottled.minetuner.core.PercentileLowFps;
+import bottled.minetuner.core.SeriesPlot;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class BenchmarkSession {
 
@@ -46,28 +51,31 @@ public final class BenchmarkSession {
 
     private static long startNanos = 0L;
     private static long stopNanos = 0L;
-    /** CPU% sampled once at Start, for a "what was CPU doing during this run" reference
-     *  point — see the class doc; this mirrors the same cpuPercent field/sentinel
-     *  MineTunerDataHolder#getFormattedCpu already uses, not a separate CPU reading path. */
-    private static double startCpuPercent = -1.0;
+    private static final ExecutorService SAVE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "MineTuner-BenchmarkSave");
+        t.setDaemon(true);
+        return t;
+    });
+    /**
+     * Wall-clock instants of Start/Stop, for the saved summary's "Started" line. The
+     * nanoTime fields above are monotonic and meaningless as calendar times.
+     */
+    private static Instant startedAt = Instant.EPOCH;
 
     // --- Frozen final results, valid only once state == STOPPED ---
     private static float finalAvgFps = 0f;
     private static float final1LowFps = PercentileLowFps.UNAVAILABLE;
     private static float final01LowFps = PercentileLowFps.UNAVAILABLE;
     private static double finalAvgCpuPercent = -1.0;
+    private static Instant stoppedAt = Instant.EPOCH;
+    /**
+     * Whether each frozen series holds at least one real (non-sentinel) sample. Decided once
+     * in stop() so the GUI never scans a series per frame.
+     */
+    private static boolean finalHasCpuData = false;
     private static long finalDurationNanos = 0L;
     private static int finalSampleCount = 0;
-
-    // Frozen copies of the full per-sample series, sized exactly to finalSampleCount, kept
-    // around after stop() (unlike the older behavior of only keeping the derived summary
-    // numbers) so the GUI's post-stop graphs and saveToFolder() both have real per-sample
-    // history to draw/write from, not just the three headline numbers. Frozen separately
-    // from the live `capture`/`cpuCapture`/`gpuCapture` buffers (rather than just trusting
-    // captureSize to still be valid) so a subsequent start() — which resets captureSize back
-    // to 0 to begin reusing the same backing arrays — can never retroactively invalidate or
-    // truncate a previous run's already-stopped results out from under the GUI/writer.
-    private static float[] finalFrametimes = new float[0];
+    private static boolean finalHasGpuData = false;
     private static float[] finalCpuSeries = new float[0];
     private static float[] finalGpuSeries = new float[0];
 
@@ -75,105 +83,21 @@ public final class BenchmarkSession {
     }
 
     // --- Lifecycle ---
-
-    /** Starts a fresh benchmark, discarding any previous run's results — matches RTSS's
-     *  F9 "start/reset" semantics: pressing Start while a previous run is STOPPED (still
-     *  showing old results) clearly discards those results and begins fresh rather than
-     *  blending two runs' data together, and pressing Start again while already RECORDING
-     *  restarts cleanly rather than corrupting/appending to the in-progress capture. */
-    public static void start() {
-        captureSize = 0; // Retains the backing arrays (no reallocation) — see clear()'s
-        // reasoning below in MineTunerDataHolder.RingBuffer for the same "just reset the
-        // count" approach; stale float values beyond captureSize are never read by
-        // anything that inspects capture/cpuCapture/gpuCapture, since every reader is
-        // bounded by captureSize.
-        startNanos = System.nanoTime();
-        stopNanos = 0L;
-        startCpuPercent = MineTunerDataHolder.cpuPercent;
-        finalAvgFps = 0f;
-        final1LowFps = PercentileLowFps.UNAVAILABLE;
-        final01LowFps = PercentileLowFps.UNAVAILABLE;
-        finalAvgCpuPercent = -1.0;
-        finalDurationNanos = 0L;
-        finalSampleCount = 0;
-        // Deliberately NOT resetting finalFrametimes/finalCpuSeries/finalGpuSeries here,
-        // unlike every scalar final* field above. Those scalars are safe to clear early
-        // because nothing ever reads them outside state()==STOPPED (see drawLiveSection(),
-        // which reads only elapsedNanos()/liveSampleCount() while RECORDING, never the
-        // final* getters). The three series arrays are different: they're also the class's
-        // documented on-the-record "valid once hasFrozenResult() is true" contract (see
-        // their own field doc above), and hasFrozenResult() only flips to false once THIS
-        // start() call's state=RECORDING below takes effect — clearing them here, before
-        // stop() has produced this run's own data to replace them with, would leave a
-        // (currently harmless, but contract-violating) window where a caller could observe
-        // an empty series for a run whose headline numbers might still be visible elsewhere.
-        // They're correctly overwritten only inside stop(), the one place that should ever
-        // change them with real data — see stop()'s own finalFrametimes = window; line below.
-        state = State.RECORDING;
-    }
-
-    /** Stops recording and computes final avg/1%-low/0.1%-low over exactly the recorded
-     *  window, freezing them (and the full per-sample series behind {@link #finalFrametimeSeries()}
-     *  / {@link #finalCpuSeries()} / {@link #finalGpuSeries()}) for display until the next
-     *  {@link #start()}. A no-op if not currently RECORDING (e.g. a stray Stop keypress
-     *  while IDLE/STOPPED). */
-    public static void stop() {
-        if (state != State.RECORDING) return;
-
-        stopNanos = System.nanoTime();
-        finalDurationNanos = stopNanos - startNanos;
-        finalSampleCount = captureSize;
-
-        float[] window = Arrays.copyOf(capture, captureSize);
-        finalFrametimes = window;
-        finalCpuSeries = Arrays.copyOf(cpuCapture, captureSize);
-        finalGpuSeries = Arrays.copyOf(gpuCapture, captureSize);
-
-        // True average: frames / elapsed time (not the mean of per-frame FPS, which
-        // overstates the average whenever frame times vary). Matches the session Avg FPS stat.
-        finalAvgFps = FpsMath.averageFps(window);
-        PercentileLowFps.Lows lows = PercentileLowFps.computeLows(window,
-                MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
-        final1LowFps = lows.low1Pct();
-        final01LowFps = lows.low01Pct();
-
-        double endCpuPercent = MineTunerDataHolder.cpuPercent;
-        if (startCpuPercent >= 0 && endCpuPercent >= 0) {
-            finalAvgCpuPercent = (startCpuPercent + endCpuPercent) / 2.0;
-        } else if (endCpuPercent >= 0) {
-            finalAvgCpuPercent = endCpuPercent;
-        } else {
-            finalAvgCpuPercent = startCpuPercent;
-        }
-
-        state = State.STOPPED;
-    }
-
-    /** Discards any frozen results and returns to IDLE, e.g. if a future settings/reset
-     *  action ever needs a "forget everything" path distinct from starting a new run.
-     *  Not currently wired to any keybind/button — {@link #start()} already covers the
-     *  "discard old results and go fresh" UX this feature calls for — but kept as a
-     *  small, clearly-named seam rather than folding "discard" logic only into start(). */
-    public static void reset() {
-        captureSize = 0;
-        startNanos = 0L;
-        stopNanos = 0L;
-        startCpuPercent = -1.0;
-        finalAvgFps = 0f;
-        final1LowFps = PercentileLowFps.UNAVAILABLE;
-        final01LowFps = PercentileLowFps.UNAVAILABLE;
-        finalAvgCpuPercent = -1.0;
-        finalDurationNanos = 0L;
-        finalSampleCount = 0;
-        // Unlike start() above (which deliberately leaves these three alone — see its own
-        // comment), reset()'s whole documented purpose is "discard everything and go back
-        // to IDLE", so clearing them here is correct, not the same premature-clear bug
-        // start() had.
-        finalFrametimes = new float[0];
-        finalCpuSeries = new float[0];
-        finalGpuSeries = new float[0];
-        state = State.IDLE;
-    }
+    // Frozen copies of the full per-sample series, sized exactly to finalSampleCount, kept
+    // around after stop() (unlike the older behavior of only keeping the derived summary
+    // numbers) so the GUI's post-stop graphs and the background save both have real per-sample
+    // history to draw/write from, not just the three headline numbers. Frozen separately
+    // from the live `capture`/`cpuCapture`/`gpuCapture` buffers (rather than just trusting
+    // captureSize to still be valid) so a subsequent start() — which resets captureSize back
+    // to 0 to begin reusing the same backing arrays — can never retroactively invalidate or
+    // truncate a previous run's already-stopped results out from under the GUI/writer.
+    private static float[] finalFrametimes = new float[0];
+    /**
+     * Incremented by start()/reset(); lets an in-flight save notice that its run was
+     * discarded and not report its outcome against the next run.
+     */
+    private static volatile int runId = 0;
+    private static volatile SaveState saveState = SaveState.IDLE;
 
     // --- Per-frame hook ---
 
@@ -320,22 +244,196 @@ public final class BenchmarkSession {
     public static float[] finalGpuSeries() {
         return Arrays.copyOf(finalGpuSeries, finalGpuSeries.length);
     }
+    private static volatile Path lastSavedPath = null;
+
+    /** Starts a fresh benchmark, discarding any previous run's results — matches RTSS's
+     *  F9 "start/reset" semantics: pressing Start while a previous run is STOPPED (still
+     *  showing old results) clearly discards those results and begins fresh rather than
+     *  blending two runs' data together, and pressing Start again while already RECORDING
+     *  restarts cleanly rather than corrupting/appending to the in-progress capture. */
+    public static void start() {
+        captureSize = 0; // Retains the backing arrays (no reallocation) — see clear()'s
+        // reasoning below in MineTunerDataHolder.RingBuffer for the same "just reset the
+        // count" approach; stale float values beyond captureSize are never read by
+        // anything that inspects capture/cpuCapture/gpuCapture, since every reader is
+        // bounded by captureSize.
+        startNanos = System.nanoTime();
+        stopNanos = 0L;
+        startedAt = Instant.now();
+        stoppedAt = Instant.EPOCH;
+        runId++;
+        saveState = SaveState.IDLE;
+        lastSavedPath = null;
+        finalAvgFps = 0f;
+        final1LowFps = PercentileLowFps.UNAVAILABLE;
+        final01LowFps = PercentileLowFps.UNAVAILABLE;
+        finalAvgCpuPercent = -1.0;
+        finalHasCpuData = false;
+        finalHasGpuData = false;
+        finalDurationNanos = 0L;
+        finalSampleCount = 0;
+        // Deliberately NOT resetting finalFrametimes/finalCpuSeries/finalGpuSeries here,
+        // unlike every scalar final* field above. Those scalars are safe to clear early
+        // because nothing ever reads them outside state()==STOPPED (see drawLiveSection(),
+        // which reads only elapsedNanos()/liveSampleCount() while RECORDING, never the
+        // final* getters). The three series arrays are different: they're also the class's
+        // documented on-the-record "valid once hasFrozenResult() is true" contract (see
+        // their own field doc above), and hasFrozenResult() only flips to false once THIS
+        // start() call's state=RECORDING below takes effect — clearing them here, before
+        // stop() has produced this run's own data to replace them with, would leave a
+        // (currently harmless, but contract-violating) window where a caller could observe
+        // an empty series for a run whose headline numbers might still be visible elsewhere.
+        // They're correctly overwritten only inside stop(), the one place that should ever
+        // change them with real data — see stop()'s own finalFrametimes = window; line below.
+        state = State.RECORDING;
+    }
+
+    /** Stops recording and computes final avg/1%-low/0.1%-low over exactly the recorded
+     *  window, freezing them (and the full per-sample series behind {@link #finalFrametimeSeries()}
+     *  / {@link #finalCpuSeries()} / {@link #finalGpuSeries()}) for display until the next
+     *  {@link #start()}. A no-op if not currently RECORDING (e.g. a stray Stop keypress
+     *  while IDLE/STOPPED). */
+    public static void stop() {
+        if (state != State.RECORDING) return;
+
+        stopNanos = System.nanoTime();
+        stoppedAt = Instant.now();
+        finalDurationNanos = stopNanos - startNanos;
+        finalSampleCount = captureSize;
+
+        float[] window = Arrays.copyOf(capture, captureSize);
+        finalFrametimes = window;
+        finalCpuSeries = Arrays.copyOf(cpuCapture, captureSize);
+        finalGpuSeries = Arrays.copyOf(gpuCapture, captureSize);
+
+        // True average: frames / elapsed time (not the mean of per-frame FPS, which
+        // overstates the average whenever frame times vary). Matches the session Avg FPS stat.
+        finalAvgFps = FpsMath.averageFps(window);
+        PercentileLowFps.Lows lows = PercentileLowFps.computeLows(window,
+                MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
+        final1LowFps = lows.low1Pct();
+        final01LowFps = lows.low01Pct();
+
+        // Process CPU load averaged over the whole run: each frame's reading is held for
+        // that frame's duration, unavailable (-1) frames are ignored.
+        finalAvgCpuPercent = CpuMath.timeWeightedAverage(window, finalCpuSeries);
+        finalHasCpuData = SeriesPlot.hasAvailableData(finalCpuSeries);
+        finalHasGpuData = SeriesPlot.hasAvailableData(finalGpuSeries);
+
+        state = State.STOPPED;
+    }
+
+    /** Discards any frozen results and returns to IDLE, e.g. if a future settings/reset
+     *  action ever needs a "forget everything" path distinct from starting a new run.
+     *  Not currently wired to any keybind/button — {@link #start()} already covers the
+     *  "discard old results and go fresh" UX this feature calls for — but kept as a
+     *  small, clearly-named seam rather than folding "discard" logic only into start(). */
+    public static void reset() {
+        captureSize = 0;
+        startNanos = 0L;
+        stopNanos = 0L;
+        startedAt = Instant.EPOCH;
+        stoppedAt = Instant.EPOCH;
+        runId++;
+        saveState = SaveState.IDLE;
+        lastSavedPath = null;
+        finalHasCpuData = false;
+        finalHasGpuData = false;
+        finalAvgFps = 0f;
+        final1LowFps = PercentileLowFps.UNAVAILABLE;
+        final01LowFps = PercentileLowFps.UNAVAILABLE;
+        finalAvgCpuPercent = -1.0;
+        finalDurationNanos = 0L;
+        finalSampleCount = 0;
+        // Unlike start() above (which deliberately leaves these three alone — see its own
+        // comment), reset()'s whole documented purpose is "discard everything and go back
+        // to IDLE", so clearing them here is correct, not the same premature-clear bug
+        // start() had.
+        finalFrametimes = new float[0];
+        finalCpuSeries = new float[0];
+        finalGpuSeries = new float[0];
+        state = State.IDLE;
+    }
+
+    /**
+     * Read-only views of the frozen series for per-frame drawing: no copy is made, and
+     * callers MUST NOT modify the returned arrays (they are the frozen backing arrays; a
+     * new run replaces them with fresh arrays, it never edits them in place).
+     */
+    public static float[] finalFrametimeSeriesView() {
+        return finalFrametimes;
+    }
+
+    public static float[] finalCpuSeriesView() {
+        return finalCpuSeries;
+    }
 
     // --- Saving ---
 
-    /** Saves the currently-frozen run to its own timestamped subfolder on disk — see
-     *  {@link BenchmarkResultWriter} for the on-disk format and exact save location. A
-     *  no-op (returns null) if there's no frozen result to save, e.g. hasFrozenResult() is
-     *  false because nothing has completed yet or {@link #reset()} was since called.
-     *
-     *  @return the path to the created run folder, or null if there was nothing to save
-     *          or the save failed (a failure is also logged by BenchmarkResultWriter itself,
-     *          so callers don't need to log a second time on a null return). */
-    public static Path saveToFolder() {
-        if (state != State.STOPPED) return null;
-        return BenchmarkResultWriter.write(new BenchmarkResultWriter.Result(
+    public static float[] finalGpuSeriesView() {
+        return finalGpuSeries;
+    }
+
+    /**
+     * True if the frozen run captured at least one frametime sample.
+     */
+    public static boolean hasFrametimeData() {
+        return finalSampleCount > 0;
+    }
+
+    /**
+     * True if CPU load was available on at least one frame of the frozen run.
+     */
+    public static boolean hasCpuData() {
+        return finalHasCpuData;
+    }
+
+    /**
+     * True if GPU usage was available on at least one frame (false whenever hardware
+     * sensors were off, which is the default).
+     */
+    public static boolean hasGpuData() {
+        return finalHasGpuData;
+    }
+
+    public static SaveState saveState() {
+        return saveState;
+    }
+
+    /**
+     * Folder of the most recent successful save of this run, or null.
+     */
+    public static Path lastSavedPath() {
+        return lastSavedPath;
+    }
+
+    /**
+     * Saves the currently-frozen run on a background thread (see {@link BenchmarkResultWriter}
+     * for the format and location); poll {@link #saveState()} for the outcome. A no-op unless
+     * a frozen result exists and no save is already in flight. The frozen arrays are never
+     * modified after stop(), so the writer reads them directly; a later start() replaces
+     * them with fresh arrays and cannot corrupt a write that is still running.
+     */
+    public static void saveToFolderAsync() {
+        if (state != State.STOPPED || saveState == SaveState.SAVING) return;
+        final BenchmarkResultWriter.Result result = new BenchmarkResultWriter.Result(
                 startNanos, stopNanos, finalDurationNanos, finalSampleCount,
                 finalAvgFps, final1LowFps, final01LowFps, finalAvgCpuPercent,
-                finalFrametimes, finalCpuSeries, finalGpuSeries));
+                finalFrametimes, finalCpuSeries, finalGpuSeries, startedAt, stoppedAt);
+        final int savingRun = runId;
+        saveState = SaveState.SAVING;
+        SAVE_EXECUTOR.execute(() -> {
+            Path dir = BenchmarkResultWriter.write(result);
+            if (runId != savingRun) return; // a newer run started meanwhile: stay out of its state.
+            lastSavedPath = dir;
+            saveState = dir != null ? SaveState.SAVED : SaveState.FAILED;
+        });
+    }
+
+    /**
+     * Progress of the background save of the frozen run.
+     */
+    public enum SaveState {
+        IDLE, SAVING, SAVED, FAILED
     }
 }

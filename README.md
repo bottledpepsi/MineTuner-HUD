@@ -127,9 +127,13 @@ A finished benchmark reports:
   weighted by their duration).
 - **1% Low** and **0.1% Low** — the same percentile-low FPS calculation the overlay's own `{fps_1pct_low}`/`{fps_01pct_low}` stats use, computed over just the benchmark's window. Shows **N/A** if the run was too short to have enough samples for a statistically meaningful percentile (matching the same minimum-sample thresholds the live stats use).
 - **Frametime**
-- **CPU**
+- **CPU (process)** — the game process's CPU load (the JVM's `getProcessCpuLoad`, normalised across cores),
+  time-weighted over the run. This is *not* whole-system CPU, so it will differ from Task Manager's overall figure.
 - **GPU** Shows **N/A** if GPU sampling isn't available (see [Hardware Sensors](#hardware-sensors-opt-in-via-librehardwaremonitor) below
 - **Duration** and **sample count** for the run.
+
+Saving a run writes `summary.txt` and `samples.csv` on a background thread (the screen shows "Saving…" until it
+finishes).
 
 ### Controls
 

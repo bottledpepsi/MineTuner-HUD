@@ -1,6 +1,7 @@
 package bottled.minetuner.benchmark;
 
 import bottled.minetuner.MineTunerMod;
+import bottled.minetuner.core.BenchmarkReport;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.BufferedWriter;
@@ -8,9 +9,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 
 /** Writes a single completed {@link BenchmarkSession} run to its own folder on disk.
  *
@@ -43,13 +45,10 @@ final class BenchmarkResultWriter {
     private BenchmarkResultWriter() {
     }
 
-    /** Immutable snapshot of exactly the fields a completed run needs to write out —
-     *  passed in by {@link BenchmarkSession#saveToFolder()} rather than this class reading
-     *  BenchmarkSession's static state directly, so this writer stays independently
-     *  testable/reusable and has no dependency on BenchmarkSession's own lifecycle/locking. */
-    record Result(long startNanos, long stopNanos, long durationNanos, int sampleCount,
-                  float avgFps, float low1Fps, float low01Fps, double avgCpuPercent,
-                  float[] frametimesMs, float[] cpuPercentSeries, float[] gpuPercentSeries) {
+    private static void writeSummary(BufferedWriter w, Result r) throws IOException {
+        String started = LocalDateTime.ofInstant(r.startedAt(), ZoneId.systemDefault()).format(FOLDER_NAME_FORMAT);
+        BenchmarkReport.writeSummary(w, started, r.durationNanos(), r.sampleCount(), r.avgFps(),
+                r.low1Fps(), r.low01Fps(), r.avgCpuPercent(), r.gpuPercentSeries());
     }
 
     /** Creates the run's timestamped subfolder and writes summary.txt + samples.csv into
@@ -120,84 +119,17 @@ final class BenchmarkResultWriter {
         }
     }
 
-    private static void writeSummary(BufferedWriter w, Result r) throws IOException {
-        w.write("MineTuner Benchmark Result");
-        w.newLine();
-        w.write("Started:   " + LocalDateTime.now().minusNanos(r.durationNanos()).format(FOLDER_NAME_FORMAT));
-        w.newLine();
-        w.write("Duration:  " + formatDuration(r.durationNanos()));
-        w.newLine();
-        w.write("Samples:   " + r.sampleCount());
-        w.newLine();
-        w.newLine();
-        w.write(String.format(Locale.ROOT, "Avg FPS:     %.2f", r.avgFps()));
-        w.newLine();
-        w.write("1% Low:      " + formatPercentile(r.low1Fps()));
-        w.newLine();
-        w.write("0.1% Low:    " + formatPercentile(r.low01Fps()));
-        w.newLine();
-        w.write("Avg CPU:     " + (r.avgCpuPercent() >= 0
-                ? String.format(Locale.ROOT, "%.1f%%", r.avgCpuPercent()) : "N/A"));
-        w.newLine();
-
-        // Avg GPU isn't one of BenchmarkSession's existing frozen headline fields (only
-        // avgFps/low1Fps/low01Fps/avgCpuPercent are — see its own frozen-getters section),
-        // so it's derived here directly from the full per-sample series instead, the same
-        // "skip unavailable samples rather than let them drag the average toward 0" approach
-        // stop()'s own Avg FPS computation above already uses for frametimesMs.
-        double gpuSum = 0.0;
-        int gpuCount = 0;
-        for (float v : r.gpuPercentSeries()) {
-            if (v >= 0f) {
-                gpuSum += v;
-                gpuCount++;
-            }
-        }
-        w.write("Avg GPU:     " + (gpuCount > 0
-                ? String.format(Locale.ROOT, "%.1f%%", gpuSum / gpuCount) : "N/A"));
-        w.newLine();
-    }
-
     private static void writeCsv(BufferedWriter w, Result r) throws IOException {
-        w.write("index,elapsed_ms,fps,cpu_percent,gpu_percent");
-        w.newLine();
-
-        float[] frametimes = r.frametimesMs();
-        float[] cpu = r.cpuPercentSeries();
-        float[] gpu = r.gpuPercentSeries();
-
-        double elapsedMs = 0.0;
-        for (int i = 0; i < r.sampleCount(); i++) {
-            float deltaMs = frametimes[i];
-            // First row's elapsed_ms is 0 (the start line), matching how elapsedNanos()
-            // itself is defined as time-since-start rather than time-since-first-sample;
-            // every subsequent row accumulates that frame's own captured deltaMs on top,
-            // giving a running "time into the run" column a spreadsheet chart can use
-            // directly as its X axis instead of the bare sample index.
-            float fps = deltaMs > 0f ? 1000f / deltaMs : 0f;
-            String cpuCell = cpu[i] >= 0f ? String.format(Locale.ROOT, "%.1f", cpu[i]) : "";
-            String gpuCell = gpu[i] >= 0f ? String.format(Locale.ROOT, "%.1f", gpu[i]) : "";
-
-            w.write(i + "," + String.format(Locale.ROOT, "%.1f", elapsedMs) + ","
-                    + String.format(Locale.ROOT, "%.2f", fps) + "," + cpuCell + "," + gpuCell);
-            w.newLine();
-
-            elapsedMs += deltaMs;
-        }
+        BenchmarkReport.writeCsv(w, r.frametimesMs(), r.cpuPercentSeries(), r.gpuPercentSeries(), r.sampleCount());
     }
 
-    private static String formatDuration(long nanos) {
-        long totalMs = nanos / 1_000_000L;
-        long totalSeconds = totalMs / 1000L;
-        long minutes = totalSeconds / 60;
-        long seconds = totalSeconds % 60;
-        long tenths = (totalMs % 1000L) / 100L;
-        return minutes > 0
-                ? String.format(Locale.ROOT, "%d:%02d.%d", minutes, seconds, tenths)
-                : String.format(Locale.ROOT, "%d.%ds", seconds, tenths);
-    }
-
-    private static String formatPercentile(float value) {
-        return Float.isNaN(value) ? "N/A" : String.format(Locale.ROOT, "%.2f", value);
+    /** Immutable snapshot of exactly the fields a completed run needs to write out —
+     *  passed in by {@link BenchmarkSession#saveToFolderAsync()} rather than this class reading
+     *  BenchmarkSession's static state directly, so this writer stays independently
+     *  testable/reusable and has no dependency on BenchmarkSession's own lifecycle/locking. */
+    record Result(long startNanos, long stopNanos, long durationNanos, int sampleCount,
+                  float avgFps, float low1Fps, float low01Fps, double avgCpuPercent,
+                  float[] frametimesMs, float[] cpuPercentSeries, float[] gpuPercentSeries,
+                  Instant startedAt, Instant stoppedAt) {
     }
 }

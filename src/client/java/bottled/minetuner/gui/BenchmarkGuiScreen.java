@@ -2,9 +2,10 @@ package bottled.minetuner.gui;
 
 import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.benchmark.BenchmarkSession;
+import bottled.minetuner.core.SeriesPlot;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 
@@ -50,6 +51,16 @@ public class BenchmarkGuiScreen extends Screen {
     private String saveMessage = null;
     private int saveMessageColor = COL_TEXT_DIM;
     private long saveMessageShownAtMs = 0L;
+    // Per-graph cache of display-ready plot data, keyed on the frozen series instance and
+    // the plot width, so drawing never scans or copies the (up to 432,000 sample) series.
+    private static final int GRAPH_FRAMETIME = 0, GRAPH_CPU = 1, GRAPH_GPU = 2;
+    private final float[][] plotSeries = new float[3][];
+    private final int[] plotWidths = new int[3];
+    private final SeriesPlot.Plot[] plots = new SeriesPlot.Plot[3];
+    /**
+     * True between clicking Save and the background write reporting its outcome.
+     */
+    private boolean awaitingSaveResult = false;
 
     public BenchmarkGuiScreen() {
         super(Component.translatable("gui.minetuner.benchmark.title"));
@@ -153,13 +164,31 @@ public class BenchmarkGuiScreen extends Screen {
 
         y += BUTTON_H;
 
-        // Confirmation message under the button row, auto-hidden after
-        // SAVE_MESSAGE_DURATION_MS — see the field doc for why this doesn't stay up forever.
-        if (saveMessage != null) {
-            if (System.currentTimeMillis() - saveMessageShownAtMs > SAVE_MESSAGE_DURATION_MS) {
-                saveMessage = null;
-            } else {
-                g.centeredText(font, saveMessage, x + w / 2, y + 4, saveMessageColor); // Save text position
+        // Save progress / confirmation under the button row. "Saving..." stays up while the
+        // background write runs; the outcome message then auto-hides after
+        // SAVE_MESSAGE_DURATION_MS.
+        BenchmarkSession.SaveState saveState = BenchmarkSession.saveState();
+        if (saveState == BenchmarkSession.SaveState.SAVING) {
+            g.centeredText(font, I18n.get("gui.minetuner.benchmark.saving"), x + w / 2, y + 4, COL_TEXT_DIM);
+        } else {
+            if (awaitingSaveResult && saveState != BenchmarkSession.SaveState.IDLE) {
+                awaitingSaveResult = false;
+                Path saved = BenchmarkSession.lastSavedPath();
+                if (saveState == BenchmarkSession.SaveState.SAVED && saved != null) {
+                    saveMessage = I18n.get("gui.minetuner.benchmark.saved", saved.getFileName().toString());
+                    saveMessageColor = COL_STOPPED;
+                } else {
+                    saveMessage = I18n.get("gui.minetuner.benchmark.save_failed");
+                    saveMessageColor = COL_RECORDING;
+                }
+                saveMessageShownAtMs = System.currentTimeMillis();
+            }
+            if (saveMessage != null) {
+                if (System.currentTimeMillis() - saveMessageShownAtMs > SAVE_MESSAGE_DURATION_MS) {
+                    saveMessage = null;
+                } else {
+                    g.centeredText(font, saveMessage, x + w / 2, y + 4, saveMessageColor);
+                }
             }
         }
 
@@ -231,11 +260,13 @@ public class BenchmarkGuiScreen extends Screen {
         // CPU gets its own row below the three-up FPS columns — a different unit/scale
         // (percent, not FPS) reads awkwardly crammed into the same three-column layout,
         // and it's explicitly called out as its own line item ("Final Benchmark CPU").
+        // Avg CPU is the JVM *process* load (time-weighted over the run), not whole-system
+        // CPU, so the label says so; Task Manager's system figure will differ.
         double avgCpu = BenchmarkSession.finalAvgCpuPercent();
         String cpuValue = avgCpu >= 0
-                ? I18n.get("minetuner.stat.cpu", String.format("%.1f", avgCpu))
-                : I18n.get("minetuner.stat.cpu.na");
-        String cpuLabel = I18n.get("gui.minetuner.benchmark.avg_cpu") + ": ";
+                ? String.format("%.1f%%", avgCpu)
+                : I18n.get("gui.minetuner.benchmark.not_enough_samples");
+        String cpuLabel = I18n.get("gui.minetuner.benchmark.avg_cpu_process") + ": ";
         g.text(font, cpuLabel, innerX, innerY, COL_TEXT, false);
         g.text(font, cpuValue, innerX + font.width(cpuLabel), innerY,
                 MineTunerDataHolder.cpuColorFor(avgCpu), false);
@@ -245,21 +276,19 @@ public class BenchmarkGuiScreen extends Screen {
         int graphW = w - 12;
         int graphH = singleGraphHeight();
 
-        float[] frametimeSeries = BenchmarkSession.finalFrametimeSeries();
-        drawFullLineGraph(g, graphX, innerY, graphW, graphH,
-                frametimeSeries, COL_FRAMETIME_LINE,
+        // Zero-copy views of the frozen series; plot data is cached per (series, width).
+        drawFullLineGraph(g, graphX, innerY, graphW, graphH, GRAPH_FRAMETIME,
+                BenchmarkSession.finalFrametimeSeriesView(), COL_FRAMETIME_LINE,
                 I18n.get("gui.minetuner.benchmark.graph.frametime"), "ms", Trend.LOWER_IS_BETTER);
         innerY += graphH + GRAPH_GAP;
 
-        float[] cpuSeries = BenchmarkSession.finalCpuSeries();
-        drawFullLineGraph(g, graphX, innerY, graphW, graphH,
-                cpuSeries, COL_CPU_LINE,
-                I18n.get("gui.minetuner.benchmark.graph.cpu"), "%", Trend.NEUTRAL);
+        drawFullLineGraph(g, graphX, innerY, graphW, graphH, GRAPH_CPU,
+                BenchmarkSession.finalCpuSeriesView(), COL_CPU_LINE,
+                I18n.get("gui.minetuner.benchmark.graph.cpu_process"), "%", Trend.NEUTRAL);
         innerY += graphH + GRAPH_GAP;
 
-        float[] gpuSeries = BenchmarkSession.finalGpuSeries();
-        drawFullLineGraph(g, graphX, innerY, graphW, graphH,
-                gpuSeries, COL_GPU_LINE,
+        drawFullLineGraph(g, graphX, innerY, graphW, graphH, GRAPH_GPU,
+                BenchmarkSession.finalGpuSeriesView(), COL_GPU_LINE,
                 I18n.get("gui.minetuner.benchmark.graph.gpu"), "%", Trend.NEUTRAL);
     }
 
@@ -321,57 +350,6 @@ public class BenchmarkGuiScreen extends Screen {
         g.text(font, value, x, y + font.lineHeight + 1, valueColor, false);
     }
 
-    /** Small live line graph in this screen's own visual language (line + soft fill,
-     *  thin border) — see the class doc for why this doesn't reuse
-     *  bottled.minetuner.hud.GraphRenderer directly. */
-    private void drawFrametimeGraph(GuiGraphicsExtractor g, int x, int y, int w, int h,
-                                    float[] rawFrametimesMs, int lineColor, String label) {
-        g.fill(x, y, x + w, y + h, 0x30FFFFFF);
-        g.outline(x, y, w, h, 0x60FFFFFF);
-        int plotX = x + 1, plotY = y + 1, plotW = w - 2, plotH = h - 2;
-        if (plotW <= 0 || plotH <= 0 || rawFrametimesMs.length == 0) return;
-
-        float[] fpsSeries = toFpsSeries(rawFrametimesMs);
-        float[] bounds = seriesBounds(fpsSeries);
-        drawLineSeries(g, fpsSeries, bounds[0], bounds[1], plotX, plotY, plotW, plotH, lineColor);
-        drawGraphLabel(g, x, y, w, label, lineColor);
-    }
-
-    /** Converts a raw per-frame frametime series (ms) to FPS. Used by the live section's
-     *  graph (drawFrametimeGraph, fed from MineTunerDataHolder's rolling window) — the
-     *  results section's own Frametime graph draws BenchmarkSession#finalFrametimeSeries()
-     *  directly in ms and does not call this. A 0-or-negative frametime (shouldn't normally
-     *  happen — see MineTunerDataHolder#recordFrametime's own deltaMs > 0f guard upstream —
-     *  but kept defensive here too) maps to 0 FPS rather than dividing by zero/going
-     *  negative. */
-    private static float[] toFpsSeries(float[] frametimesMs) {
-        float[] out = new float[frametimesMs.length];
-        for (int i = 0; i < frametimesMs.length; i++) {
-            out[i] = frametimesMs[i] > 0f ? 1000f / frametimesMs[i] : 0f;
-        }
-        return out;
-    }
-
-    /** [min, max] over a series, ignoring -1-sentinel "unavailable" entries (see
-     *  BenchmarkSession#finalCpuSeries()/finalGpuSeries()'s own doc on that sentinel) so a
-     *  run where GPU usage was off for part of the time doesn't have its whole graph's
-     *  vertical scale dragged down toward -1 by samples that were never real. If every
-     *  sample is unavailable this returns [0, 1] as a harmless default range — the caller
-     *  ends up drawing a flat empty-looking graph, not a divide-by-zero. */
-    private static float[] seriesBounds(float[] series) {
-        float minV = 0f, maxV = 0f;
-        boolean seen = false;
-        for (float v : series) {
-            if (v < 0f) continue; // -1 sentinel: unavailable this sample, skip.
-            if (!seen || v < minV) minV = v;
-            if (v > maxV) maxV = v;
-            seen = true;
-        }
-        if (!seen) return new float[]{0f, 1f};
-        if (maxV <= minV) maxV = minV + 1f;
-        return new float[]{minV, maxV};
-    }
-
     /** Which direction is "good" for a results-screen graph's axis labels — see
      *  drawFullLineGraph's own doc for how this affects min/max label coloring. HIGHER
      *  (Frametime's opposite; used by nothing yet but kept for symmetry/future use),
@@ -389,7 +367,7 @@ public class BenchmarkGuiScreen extends Screen {
      *  (if either) gets colored as "the good end" for a quick-glance read, matching
      *  drawResultsSection's own use of MineTunerDataHolder#fpsColorFor/cpuColorFor
      *  elsewhere on this same screen. */
-    private void drawFullLineGraph(GuiGraphicsExtractor g, int x, int y, int w, int h,
+    private void drawFullLineGraph(GuiGraphicsExtractor g, int x, int y, int w, int h, int slot,
                                    float[] series, int lineColor, String title, String unit,
                                    Trend trend) {
         int labelY = y;
@@ -401,12 +379,14 @@ public class BenchmarkGuiScreen extends Screen {
 
         int plotX = x + 1, plotY = plotOuterY + 1, plotW = w - 2, plotH = plotOuterH - 2;
 
-        boolean hasData = plotW > 0 && plotH > 0 && series.length > 0;
-        float[] bounds = hasData ? seriesBounds(series) : new float[]{0f, 1f};
-        float minV = bounds[0], maxV = bounds[1];
+        // "Has data" means at least one real (non-sentinel) sample, decided by SeriesPlot once
+        // per (series, width) rather than by scanning the series every frame.
+        SeriesPlot.Plot plot = plotFor(slot, series, plotW);
+        boolean hasData = plotW > 0 && plotH > 0 && plot.hasData();
+        float minV = plot.min(), maxV = plot.max();
 
         if (hasData) {
-            drawLineSeries(g, series, minV, maxV, plotX, plotY, plotW, plotH, lineColor);
+            drawLineSeries(g, plot.columns(), minV, maxV, plotX, plotY, plotW, plotH, lineColor);
         } else {
             // No samples at all for this stat (e.g. GPU usage never once became available
             // during the run because hardware sensors were off) — an empty bordered plot
@@ -448,36 +428,30 @@ public class BenchmarkGuiScreen extends Screen {
         }
     }
 
-    /** Small "STAT NAME" label chip in the corner of a graph, used by the live section's
-     *  single graph (drawFullLineGraph handles its own title row separately, above the
-     *  plot rather than overlaid on it, since the results section has real width budget
-     *  for a dedicated label row — the live section's single fixed-height graph doesn't). */
-    private void drawGraphLabel(GuiGraphicsExtractor g, int x, int y, int w, String label, int color) {
-        if (label.isEmpty()) return;
-        int labelW = font.width(label);
-        g.fill(x + 2, y + 2, x + 2 + labelW + 2, y + 2 + font.lineHeight, 0x80000000);
-        g.text(font, label, x + 3, y + 2, color, false);
+    /**
+     * Cached plot data for one graph slot; recomputed only when the frozen series instance or
+     * the plot width changes.
+     */
+    private SeriesPlot.Plot plotFor(int slot, float[] series, int plotW) {
+        if (plots[slot] == null || plotSeries[slot] != series || plotWidths[slot] != plotW) {
+            plots[slot] = SeriesPlot.compute(series, plotW);
+            plotSeries[slot] = series;
+            plotWidths[slot] = plotW;
+        }
+        return plots[slot];
     }
 
-    private void drawLineSeries(GuiGraphicsExtractor g, float[] series, float minV, float maxV,
+    /**
+     * Draws precomputed per-column values (gap-filled by SeriesPlot) as a soft-filled line.
+     */
+    private void drawLineSeries(GuiGraphicsExtractor g, float[] columns, float minV, float maxV,
                                 int plotX, int plotY, int plotW, int plotH, int color) {
-        int n = series.length;
         float range = Math.max(1e-4f, maxV - minV);
         int baseY = plotY + plotH;
         int prevY = -1;
-        for (int col = 0; col < plotW; col++) {
-            float t = (n <= 1) ? 0f : (col / (float) Math.max(1, plotW - 1)) * (n - 1);
-            int i0 = (int) Math.floor(t);
-            int i1 = Math.min(n - 1, i0 + 1);
-            float frac = t - i0;
-            float rawV0 = series[i0], rawV1 = series[i1];
-            // A -1-sentinel "unavailable" sample (see seriesBounds()'s own doc on this same
-            // convention) is skipped by interpolating from/to its nearest available
-            // neighbor instead of blending toward -1, so a brief CPU/GPU sensor gap doesn't
-            // draw as a sudden fake dip to the bottom of the graph.
-            float v0 = rawV0 >= 0f ? rawV0 : nearestAvailable(series, i0);
-            float v1 = rawV1 >= 0f ? rawV1 : nearestAvailable(series, i1);
-            float v = v0 + (v1 - v0) * frac;
+        int cols = Math.min(plotW, columns.length);
+        for (int col = 0; col < cols; col++) {
+            float v = columns[col];
             float norm = Math.max(0f, Math.min(1f, (v - minV) / range));
             int colY = plotY + plotH - Math.max(1, Math.round(norm * (plotH - 1)));
             int screenX = plotX + col;
@@ -490,20 +464,6 @@ public class BenchmarkGuiScreen extends Screen {
             }
             prevY = colY;
         }
-    }
-
-    /** Nearest sample to `fromIdx` (searching outward both directions) that isn't the -1
-     *  "unavailable" sentinel, or 0f if the whole series is unavailable (seriesBounds()
-     *  already special-cases an all-unavailable series before this is ever reached in
-     *  practice, but this stays defined rather than throwing either way). */
-    private static float nearestAvailable(float[] series, int fromIdx) {
-        int n = series.length;
-        for (int d = 0; d < n; d++) {
-            int lo = fromIdx - d, hi = fromIdx + d;
-            if (lo >= 0 && series[lo] >= 0f) return series[lo];
-            if (hi < n && series[hi] >= 0f) return series[hi];
-        }
-        return 0f;
     }
 
     // --- Formatting helpers ---
@@ -559,6 +519,7 @@ public class BenchmarkGuiScreen extends Screen {
             // every other frozen-result field.
             BenchmarkSession.start();
             saveMessage = null;
+            awaitingSaveResult = false;
             return true;
         }
         if (BenchmarkSession.isRecording()
@@ -568,15 +529,13 @@ public class BenchmarkGuiScreen extends Screen {
         }
         if (BenchmarkSession.hasFrozenResult()
                 && isInside(mx, my, saveBtnX, saveBtnY, saveBtnW, saveBtnH)) {
-            Path saved = BenchmarkSession.saveToFolder();
-            if (saved != null) {
-                saveMessage = I18n.get("gui.minetuner.benchmark.saved", saved.getFileName().toString());
-                saveMessageColor = COL_STOPPED;
-            } else {
-                saveMessage = I18n.get("gui.minetuner.benchmark.save_failed");
-                saveMessageColor = COL_RECORDING;
+            // Written on a background thread; the outcome is picked up in
+            // drawStateAndControls via BenchmarkSession.saveState().
+            if (BenchmarkSession.saveState() != BenchmarkSession.SaveState.SAVING) {
+                BenchmarkSession.saveToFolderAsync();
+                awaitingSaveResult = true;
+                saveMessage = null;
             }
-            saveMessageShownAtMs = System.currentTimeMillis();
             return true;
         }
         return super.mouseClicked(event, doubleClick);
