@@ -129,6 +129,8 @@ public final class ThresholdPanel {
                 if (ts.warnMin < ts.goodMin) ts.goodMin = ts.warnMin;
             }
         }
+        // Final safety net shared with the Cloth screen and config load: >= 0 and ordered.
+        ts.normalize(higherBetter);
     }
 
     /** Rounds to the nearest 0.1 to avoid float drift from repeated +/- 0.5 steps. */

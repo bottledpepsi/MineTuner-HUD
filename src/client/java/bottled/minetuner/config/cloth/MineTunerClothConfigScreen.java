@@ -428,7 +428,11 @@ public final class MineTunerClothConfigScreen {
                 .setTooltip(Component.translatable(def.higherIsBetter()
                         ? "gui.minetuner.cloth.threshold_good_min.tooltip.higher_better"
                         : "gui.minetuner.cloth.threshold_good_min.tooltip.lower_better"))
-                .setSaveConsumer(v -> lc.getThreshold(stat).goodMin = v)
+                .setSaveConsumer(v -> {
+                    MineTunerConfig.ThresholdSettings t = lc.getThreshold(stat);
+                    t.goodMin = v;
+                    t.normalize(def.higherIsBetter());
+                })
                 .build());
 
         thresholdCat.add(eb.startFloatField(Component.translatable("gui.minetuner.cloth.threshold_warn_min"), threshold.warnMin)
@@ -436,7 +440,11 @@ public final class MineTunerClothConfigScreen {
                 .setTooltip(Component.translatable(def.higherIsBetter()
                         ? "gui.minetuner.cloth.threshold_warn_min.tooltip.higher_better"
                         : "gui.minetuner.cloth.threshold_warn_min.tooltip.lower_better"))
-                .setSaveConsumer(v -> lc.getThreshold(stat).warnMin = v)
+                .setSaveConsumer(v -> {
+                    MineTunerConfig.ThresholdSettings t = lc.getThreshold(stat);
+                    t.warnMin = v;
+                    t.normalize(def.higherIsBetter());
+                })
                 .build());
 
         return thresholdCat;

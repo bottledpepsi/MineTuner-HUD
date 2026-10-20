@@ -2,6 +2,7 @@ package bottled.minetuner.config;
 
 import bottled.minetuner.MineTunerMod;
 import bottled.minetuner.core.Sanitize;
+import bottled.minetuner.core.ThresholdBands;
 import bottled.minetuner.hud.TemplateEngine;
 import bottled.minetuner.stat.StatDefinition;
 import bottled.minetuner.stat.StatRegistry;
@@ -610,6 +611,16 @@ public class MineTunerConfig {
         public ThresholdSettings copy() {
             return new ThresholdSettings(this.enabled, this.goodMin, this.warnMin);
         }
+
+        /**
+         * Enforces cut-offs that are finite, &gt;= 0 and ordered for the stat's direction
+         * (see {@link ThresholdBands#normalize}). Already-valid values are left untouched.
+         */
+        public void normalize(boolean higherIsBetter) {
+            ThresholdBands.Cutoffs c = ThresholdBands.normalize(goodMin, warnMin, higherIsBetter);
+            goodMin = c.good();
+            warnMin = c.warn();
+        }
     }
 
     public static class StatListConfig {
@@ -775,7 +786,8 @@ public class MineTunerConfig {
             // rebuild the whole thing for every missing entry.
             Map<String, ThresholdSettings> defaults = defaultThresholds();
             for (Stat s : THRESHOLD_STATS) {
-                statThresholds.computeIfAbsent(s.name(), defaults::get);
+                statThresholds.computeIfAbsent(s.name(), defaults::get)
+                        .normalize(StatRegistry.get(s).higherIsBetter());
             }
         }
 
