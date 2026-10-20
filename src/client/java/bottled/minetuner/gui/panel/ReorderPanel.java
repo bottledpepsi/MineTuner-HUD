@@ -1,6 +1,7 @@
 package bottled.minetuner.gui.panel;
 
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.EditBuffer;
 import bottled.minetuner.core.LangKeys;
 import bottled.minetuner.gui.render.PanelChrome;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -47,12 +48,8 @@ public final class ReorderPanel {
         Map<MineTunerConfig.StatCategory, List<MineTunerConfig.Stat>> byCat = new EnumMap<>(MineTunerConfig.StatCategory.class);
         for (MineTunerConfig.StatCategory cat : CATEGORY_ORDER) byCat.put(cat, new ArrayList<>());
         for (String name : lc.statOrder) {
-            MineTunerConfig.Stat stat;
-            try {
-                stat = MineTunerConfig.Stat.valueOf(name);
-            } catch (IllegalArgumentException ignored) {
-                continue;
-            }
+            MineTunerConfig.Stat stat = MineTunerConfig.Stat.byName(name);
+            if (stat == null) continue;
             byCat.get(MineTunerConfig.categoryOf(stat)).add(stat);
         }
         return byCat;
@@ -316,7 +313,7 @@ public final class ReorderPanel {
 
     /** Handles a click at (mx, my). */
     public static MineTunerConfig.Stat handleClick(int mx, int my, int menuX, int menuY, int screenW, int screenH,
-                                              MineTunerConfig.StatListConfig lc, UiState ui, Runnable onClose) {
+                                                   MineTunerConfig.StatListConfig lc, UiState ui, Runnable onClose) {
         List<Row> rows = buildRows(lc, ui);
         int totalRows = rows.size() + 1;
         int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
@@ -423,10 +420,8 @@ public final class ReorderPanel {
 
         int target = from + direction;
         while (target >= 0 && target < lc.statOrder.size()) {
-            MineTunerConfig.Stat candidate;
-            try {
-                candidate = MineTunerConfig.Stat.valueOf(lc.statOrder.get(target));
-            } catch (IllegalArgumentException e) {
+            MineTunerConfig.Stat candidate = MineTunerConfig.Stat.byName(lc.statOrder.get(target));
+            if (candidate == null) {
                 target += direction;
                 continue;
             }
@@ -448,7 +443,7 @@ public final class ReorderPanel {
                 new EnumMap<>(MineTunerConfig.StatCategory.class);
         private static final long ROLLOUT_NANOS = 210_000_000L;
         /** Live filter text, entered by the search field toggled from the title row. */
-        private final StringBuilder search = new StringBuilder();
+        private final EditBuffer search = new EditBuffer(32);
         private int scrollOffset = 0;
         private float renderedScrollOffset = 0f;
         private long lastScrollUpdateNanos;
@@ -460,7 +455,7 @@ public final class ReorderPanel {
             expanded.clear();
             rolloutStartedAt.clear();
             resetScroll();
-            search.setLength(0);
+            search.clear();
             searchFocused = false;
         }
 
@@ -520,22 +515,16 @@ public final class ReorderPanel {
             resetScroll();
         }
 
-        public void appendSearch(char c) {
-            if (search.length() < 32) {
-                search.append(c);
-                resetScroll();
-            }
+        public void appendSearch(int codePoint) {
+            if (search.appendCodePoint(codePoint)) resetScroll();
         }
 
         public void backspaceSearch() {
-            if (!search.isEmpty()) {
-                search.deleteCharAt(search.length() - 1);
-                resetScroll();
-            }
+            if (search.backspace()) resetScroll();
         }
 
         public void clearSearch() {
-            search.setLength(0);
+            search.clear();
             resetScroll();
         }
 

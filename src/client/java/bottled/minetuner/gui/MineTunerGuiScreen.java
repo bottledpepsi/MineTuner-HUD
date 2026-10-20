@@ -1,7 +1,8 @@
 package bottled.minetuner.gui;
 
 import bottled.minetuner.config.MineTunerConfig;
-import bottled.minetuner.config.cloth.MineTunerClothConfigScreen;
+import bottled.minetuner.core.EditBuffer;
+import bottled.minetuner.core.Keys;
 import bottled.minetuner.gui.panel.*;
 import bottled.minetuner.gui.render.ListPreviewRenderer;
 import bottled.minetuner.gui.render.PanelChrome;
@@ -10,7 +11,6 @@ import bottled.minetuner.hud.HudPanelChrome;
 import bottled.minetuner.hud.LineCache;
 import bottled.minetuner.hud.ListPositioner;
 import bottled.minetuner.hud.TemplateEngine;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -44,7 +44,15 @@ public class MineTunerGuiScreen extends Screen {
      * Which stat's settings panel is open (null = reorder panel showing).
      */
     private MineTunerConfig.Stat statSettingsStat = null;
-    private StringBuilder renameBuffer = new StringBuilder();
+    /**
+     * Max length of a list/theme name, in code points.
+     */
+    private static final int RENAME_MAX_CODE_POINTS = 32;
+    /**
+     * Max length of a template line, in code points (higher: lines mix text and tokens).
+     */
+    private static final int TEMPLATE_LINE_MAX_CODE_POINTS = 200;
+    private EditBuffer renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS);
 
     /**
      * Whether the template line list (one row per templateLines entry, plus an
@@ -56,7 +64,7 @@ public class MineTunerGuiScreen extends Screen {
      * (not a specific line) is what's open, or when nothing template-related is open.
      */
     private int templateEditIndex = -1;
-    private StringBuilder templateEditBuffer = new StringBuilder();
+    private EditBuffer templateEditBuffer = new EditBuffer(TEMPLATE_LINE_MAX_CODE_POINTS);
 
     /**
      * True when the Appearance sub-panel (rename, background, shadow, color/scale,
@@ -390,7 +398,7 @@ public class MineTunerGuiScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         int keyCode = event.key();
         if (menuKind == MenuKind.RENAME) {
-            if (keyCode == 256) { // Escape.
+            if (keyCode == Keys.ESCAPE) {
                 menuKind = MenuKind.NONE;
                 if (namingNewTheme) {
                     namingNewTheme = false;
@@ -398,7 +406,7 @@ public class MineTunerGuiScreen extends Screen {
                 }
                 return true;
             }
-            if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter.
+            if (Keys.isEnter(keyCode)) {
                 MineTunerConfig.StatListConfig lc = getListById(menuListId);
                 if (lc != null) {
                     if (namingNewTheme) {
@@ -419,20 +427,20 @@ public class MineTunerGuiScreen extends Screen {
                 if (wasNamingTheme) themeOpen = true; // return to the Theme panel to see the new entry.
                 return true;
             }
-            if (keyCode == 259 && !renameBuffer.isEmpty()) { // Backspace.
-                renameBuffer.deleteCharAt(renameBuffer.length() - 1);
+            if (keyCode == Keys.BACKSPACE) {
+                renameBuffer.backspace();
                 return true;
             }
             return true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
-            if (keyCode == 256) { // Escape.
+            if (keyCode == Keys.ESCAPE) {
                 menuKind = MenuKind.NONE;
                 templateEditIndex = -1;
                 templateListOpen = true; // return to the line list, not the raw canvas.
                 return true;
             }
-            if (keyCode == 257 || keyCode == 335) { // Enter / numpad Enter.
+            if (Keys.isEnter(keyCode)) {
                 MineTunerConfig.StatListConfig lc = getListById(menuListId);
                 if (lc != null && templateEditIndex >= 0 && templateEditIndex < lc.templateLines.size()) {
                     lc.templateLines.set(templateEditIndex, templateEditBuffer.toString());
@@ -444,8 +452,8 @@ public class MineTunerGuiScreen extends Screen {
                 templateListOpen = true; // return to the line list to keep editing other lines.
                 return true;
             }
-            if (keyCode == 259 && !templateEditBuffer.isEmpty()) { // Backspace.
-                templateEditBuffer.deleteCharAt(templateEditBuffer.length() - 1);
+            if (keyCode == Keys.BACKSPACE) {
+                templateEditBuffer.backspace();
                 return true;
             }
             return true;
@@ -456,17 +464,17 @@ public class MineTunerGuiScreen extends Screen {
             // Escape-to-unfocus / Enter-to-confirm / Backspace pattern as.
             // RENAME and TEMPLATE_EDIT above, just against reorderUiState.
             // instead of a local StringBuilder field.
-            if (keyCode == 256 || keyCode == 257 || keyCode == 335) { // Escape or Enter.
+            if (keyCode == Keys.ESCAPE || Keys.isEnter(keyCode)) {
                 reorderUiState.toggleSearchFocus();
                 return true;
             }
-            if (keyCode == 259) { // Backspace.
+            if (keyCode == Keys.BACKSPACE) {
                 reorderUiState.backspaceSearch();
                 return true;
             }
             return true;
         }
-        if (keyCode == 256) {
+        if (keyCode == Keys.ESCAPE) {
             onClose();
             return true;
         }
@@ -476,24 +484,18 @@ public class MineTunerGuiScreen extends Screen {
     @Override
     public boolean charTyped(CharacterEvent event) {
         int codepoint = event.codepoint();
+        // EditBuffer appends whole code points (so emoji are never split into a lone
+        // surrogate) and enforces its cap in code points; control characters are ignored.
         if (menuKind == MenuKind.RENAME) {
-            // (char) truncates codepoints outside the BMP (e.g. most emoji) down to
-            // their low 16 bits, corrupting them, so this uses
-            // Character.toChars() which expands to a surrogate pair instead when needed.
-            if (codepoint >= 32 && renameBuffer.length() < 32)
-                renameBuffer.append(Character.toChars(codepoint));
+            renameBuffer.appendCodePoint(codepoint);
             return true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
-            // Higher cap than renameBuffer's 32 since template lines mix text.
-            // and tokens and run longer.
-            if (codepoint >= 32 && templateEditBuffer.length() < 200)
-                templateEditBuffer.append(Character.toChars(codepoint));
+            templateEditBuffer.appendCodePoint(codepoint);
             return true;
         }
         if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
-            if (codepoint >= 32)
-                reorderUiState.appendSearch((char) codepoint); // stat names are plain ASCII, so no surrogate-pair handling needed here unlike.
+            reorderUiState.appendSearch(codepoint);
             return true;
         }
         return super.charTyped(event);
@@ -555,7 +557,7 @@ public class MineTunerGuiScreen extends Screen {
             case AppearancePanel.AP_RENAME -> {
                 appearanceOpen = false;
                 menuKind = MenuKind.RENAME;
-                renameBuffer = new StringBuilder(lc.displayName());
+                renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS, lc.displayName());
             }
             case AppearancePanel.AP_BG -> {
                 lc.showBackground = !lc.showBackground;
@@ -595,7 +597,7 @@ public class MineTunerGuiScreen extends Screen {
                 themeOpen = false;
                 namingNewTheme = true;
                 menuKind = MenuKind.RENAME;
-                renameBuffer = new StringBuilder();
+                renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS);
             }
             case NONE -> { /** apply/delete already applied inside handleClick. */ }
         }
@@ -645,7 +647,7 @@ public class MineTunerGuiScreen extends Screen {
             case CLOSED -> templateListOpen = false;
             case EDIT_LINE -> {
                 templateEditIndex = result.editIndex();
-                templateEditBuffer = new StringBuilder(lc.templateLines.get(result.editIndex()));
+                templateEditBuffer = new EditBuffer(TEMPLATE_LINE_MAX_CODE_POINTS, lc.templateLines.get(result.editIndex()));
                 menuKind = MenuKind.TEMPLATE_EDIT;
             }
             case NONE -> { /** add/remove already applied inside handleClick. */}
