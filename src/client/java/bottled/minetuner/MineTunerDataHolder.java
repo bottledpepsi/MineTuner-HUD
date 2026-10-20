@@ -1,7 +1,6 @@
 package bottled.minetuner;
 
 import bottled.minetuner.config.MineTunerConfig.ThresholdSettings;
-import bottled.minetuner.stat.math.PercentileLowFps;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;

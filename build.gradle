@@ -51,6 +51,26 @@ dependencies {
 
 
 	clientCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// --- Tests ---
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	// Lets tests load classes that touch Fabric/Minecraft types (e.g. the config classes).
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+// Loom's split source sets keep client code out of the default test classpath, so
+// expose the client output and its dependencies to the tests explicitly.
+sourceSets {
+	test {
+		compileClasspath += sourceSets.client.output + sourceSets.client.compileClasspath
+		runtimeClasspath += sourceSets.client.output + sourceSets.client.runtimeClasspath
+	}
+}
+
+test {
+	useJUnitPlatform()
 }
 
 processResources {

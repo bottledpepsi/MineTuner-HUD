@@ -1,0 +1,57 @@
+{
+  "nextId": 2,
+  "lists": [
+    {
+      "id": 0,
+      "name": "Main",
+      "statEnabled": {
+        "TPS": true,
+        "FPS": true,
+        "PING": true,
+        "REMOVED_STAT": true
+      },
+      "statOrder": [
+        "FPS",
+        "TPS",
+        "OLD_RENAMED_STAT",
+        "PING",
+        "FPS"
+      ],
+      "anchorCorner": "TOP_LEFT",
+      "anchorDx": 8,
+      "anchorDy": 12,
+      "showBackground": true,
+      "textShadow": false,
+      "useCustomColor": false,
+      "overrideColor": -1,
+      "textScale": 1.0,
+      "paddingX": 6,
+      "paddingY": 5
+    },
+    {
+      "id": 1,
+      "name": "Second",
+      "statEnabled": {
+        "MEMORY": true
+      },
+      "statOrder": [
+        "MEMORY",
+        "CPU"
+      ],
+      "statSettings": {
+        "MEMORY": {
+          "showPrefix": false,
+          "decimals": 2,
+          "renderAsGraph": true,
+          "graphStyle": {
+            "width": 100,
+            "height": 30
+          }
+        }
+      },
+      "alignment": "TOP_RIGHT",
+      "anchorFracX": 0.5,
+      "anchorFracY": 0.25
+    }
+  ]
+}

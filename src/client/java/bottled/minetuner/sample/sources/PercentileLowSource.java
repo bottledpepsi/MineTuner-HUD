@@ -1,10 +1,10 @@
 package bottled.minetuner.sample.sources;
 
 import bottled.minetuner.MineTunerDataHolder;
+import bottled.minetuner.core.PercentileLowFps;
 import bottled.minetuner.sample.Cadence;
 import bottled.minetuner.sample.SamplingContext;
 import bottled.minetuner.sample.StatSource;
-import bottled.minetuner.stat.math.PercentileLowFps;
 
 public final class PercentileLowSource implements StatSource {
 

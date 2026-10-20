@@ -14,6 +14,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class MineTunerConfig {
@@ -31,8 +32,12 @@ public class MineTunerConfig {
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH =
-            FabricLoader.getInstance().getConfigDir().resolve("minetuner.json");
+    /**
+     * Resolved lazily (never in a static initializer) so this class can be loaded
+     * without a running Fabric loader, e.g. from unit tests.
+     */
+    private static Supplier<Path> configPathSupplier =
+            () -> FabricLoader.getInstance().getConfigDir().resolve("minetuner.json");
     private static MineTunerConfig INSTANCE;
 
     public int nextId = 1;
@@ -111,14 +116,27 @@ public class MineTunerConfig {
         return m;
     }
 
+    private static Path configPath() {
+        return configPathSupplier.get();
+    }
+
+    /**
+     * Test hook: redirects where the config file is read from / written to and
+     * drops the cached instance so the next {@link #getInstance()} reloads.
+     */
+    public static void setConfigPathSupplier(Supplier<Path> supplier) {
+        configPathSupplier = Objects.requireNonNull(supplier);
+        INSTANCE = null;
+    }
+
     public static MineTunerConfig getInstance() {
         if (INSTANCE == null) INSTANCE = load();
         return INSTANCE;
     }
 
     public static MineTunerConfig load() {
-        if (Files.exists(CONFIG_PATH)) {
-            try (Reader r = Files.newBufferedReader(CONFIG_PATH)) {
+        if (Files.exists(configPath())) {
+            try (Reader r = Files.newBufferedReader(configPath())) {
                 MineTunerConfig cfg = GSON.fromJson(r, MineTunerConfig.class);
                 if (cfg != null) {
                     // overlayEnabled needs no backfill: MineTunerConfig has no custom
@@ -185,9 +203,9 @@ public class MineTunerConfig {
     /** Copies an unparsable minetuner.json aside as "minetuner.json.bak-<timestamp>" instead. */
     private static void backupCorruptConfig() {
         try {
-            Path backup = CONFIG_PATH.resolveSibling(
-                    CONFIG_PATH.getFileName() + ".bak-" + System.currentTimeMillis());
-            Files.copy(CONFIG_PATH, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Path backup = configPath().resolveSibling(
+                    configPath().getFileName() + ".bak-" + System.currentTimeMillis());
+            Files.copy(configPath(), backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             MineTunerMod.LOGGER.error("Backed up unreadable config to {}", backup);
         } catch (IOException copyFailed) {
             MineTunerMod.LOGGER.error("Could not back up unreadable config: {}", copyFailed.getMessage());
@@ -373,17 +391,17 @@ public class MineTunerConfig {
     /** Writes the config atomically. */
     public void save() {
         clampGuiTuning();
-        Path tmp = CONFIG_PATH.resolveSibling(CONFIG_PATH.getFileName() + ".tmp");
+        Path tmp = configPath().resolveSibling(configPath().getFileName() + ".tmp");
         try {
             try (Writer w = Files.newBufferedWriter(tmp)) {
                 GSON.toJson(this, w);
             }
             try {
-                Files.move(tmp, CONFIG_PATH,
+                Files.move(tmp, configPath(),
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                         java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                Files.move(tmp, CONFIG_PATH, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.move(tmp, configPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
             MineTunerMod.LOGGER.error("Failed to save config: {}", e.getMessage());

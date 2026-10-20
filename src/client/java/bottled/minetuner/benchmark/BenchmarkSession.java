@@ -2,7 +2,7 @@ package bottled.minetuner.benchmark;
 
 import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.MineTunerMod;
-import bottled.minetuner.stat.math.PercentileLowFps;
+import bottled.minetuner.core.PercentileLowFps;
 
 import java.nio.file.Path;
 import java.util.Arrays;

@@ -1,4 +1,4 @@
-package bottled.minetuner.stat.math;
+package bottled.minetuner.core;
 
 import java.util.Arrays;
 

@@ -31,7 +31,7 @@ import java.util.Locale;
  *
  *  <p>Saved under the mod's own subfolder of the instance's game directory (parallel to,
  *  but distinct from, {@code config/} — this is per-run output data, not a setting), the
- *  same {@link FabricLoader}-resolved-path approach {@code MineTunerConfig#CONFIG_PATH}
+ *  same {@link FabricLoader}-resolved-path approach {@code MineTunerConfig}'s config path
  *  already uses for its own file, and written with the same tmp-file-then-atomic-move
  *  pattern as {@code MineTunerConfig#save()} so a crash or an out-of-space disk mid-write
  *  can never leave a half-written file behind under the final name. */
