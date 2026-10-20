@@ -23,16 +23,17 @@ public final class TemplateEngine {
      *  source hasn't changed since the last parse (see {@link #invalidate(int)} and
      *  the source-hash check below for how staleness is detected). */
     public static List<List<Token>> getParsedLines(MineTunerConfig.StatListConfig cfg) {
-        String joined = String.join("\u0000", cfg.templateLines); // NUL is a safe separator.
         CacheEntry cached = PARSE_CACHE.get(cfg.id);
-        if (cached != null && cached.sourceHash().equals(joined)) {
+        // List.equals compares element-wise and String.equals short-circuits on identical
+        // instances, so the unchanged (per-frame) path allocates nothing.
+        if (cached != null && cached.source().equals(cfg.templateLines)) {
             return cached.perLine();
         }
         List<List<Token>> parsed = new ArrayList<>(cfg.templateLines.size());
         for (String line : cfg.templateLines) {
             parsed.add(parse(cfg.id, line));
         }
-        PARSE_CACHE.put(cfg.id, new CacheEntry(joined, parsed));
+        PARSE_CACHE.put(cfg.id, new CacheEntry(List.copyOf(cfg.templateLines), parsed));
         return parsed;
     }
 
@@ -201,19 +202,6 @@ public final class TemplateEngine {
         }
     }
 
-    /** Renders a parsed token list to text, reusing the same {@link #renderStat}
-     *  helper that {@link #renderRuns} uses for its per-token value formatting. */
-    public static String render(List<Token> tokens) {
-        StringBuilder sb = new StringBuilder();
-        for (Token t : tokens) {
-            switch (t) {
-                case LiteralToken lit -> sb.append(lit.text());
-                case StatToken st -> sb.append(renderStat(st));
-            }
-        }
-        return sb.toString();
-    }
-
     private static String renderStat(StatToken token) {
         StatDefinition def = StatRegistry.get(token.stat());
         int decimals = token.decimals() >= 0 ? token.decimals() : def.defaultDecimals();
@@ -287,6 +275,6 @@ public final class TemplateEngine {
 
     /** Keyed per list (by {@code MineTunerConfig.StatListConfig.id}), so parsing happens
      *  once per edit (or once after {@link #invalidate(int)}), not once per frame. */
-    private record CacheEntry(String sourceHash, List<List<Token>> perLine) {
+    private record CacheEntry(List<String> source, List<List<Token>> perLine) {
     }
 }

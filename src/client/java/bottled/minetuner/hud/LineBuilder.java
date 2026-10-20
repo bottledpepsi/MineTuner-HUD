@@ -42,11 +42,21 @@ final class LineBuilder {
                 continue;
             }
             List<TemplateEngine.ColoredRun> lineRuns = TemplateEngine.renderRuns(tokens, color);
-            lines.add(TemplateEngine.render(tokens));
+            lines.add(joinRunText(lineRuns)); // same values as drawn, formatted once.
             colors.add(color);
             runs.add(lineRuns);
             rowKinds.add(RowKind.TEXT);
         }
+    }
+
+    /**
+     * The plain text of a line, derived from the runs that will actually be drawn so box
+     * width and drawn text can never disagree.
+     */
+    static String joinRunText(List<TemplateEngine.ColoredRun> runs) {
+        StringBuilder sb = new StringBuilder();
+        for (TemplateEngine.ColoredRun run : runs) sb.append(run.text());
+        return sb.toString();
     }
 
     /** Classic mode. */
