@@ -11,6 +11,7 @@ import bottled.minetuner.hud.HudPanelChrome;
 import bottled.minetuner.hud.LineCache;
 import bottled.minetuner.hud.ListPositioner;
 import bottled.minetuner.hud.TemplateEngine;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -315,7 +316,7 @@ public class MineTunerGuiScreen extends Screen {
             MineTunerConfig.StatListConfig lc = lists.get(i);
             int[] b = getListBounds(lc);
             if (!PanelChrome.isHoveringBox(mx, my, b[0], b[1], b[2], b[3])) continue;
-            if (btn == 0) {
+            if (btn == InputConstants.MOUSE_BUTTON_LEFT) {
                 dragging = true;
                 draggingListId = lc.id;
                 dragOffsetX = mx - b[0];
@@ -327,7 +328,7 @@ public class MineTunerGuiScreen extends Screen {
                 dragSnapX = MineTunerConfig.SnapX.NONE;
                 dragSnapY = MineTunerConfig.SnapY.NONE;
                 return true;
-            } else if (btn == 1) {
+            } else if (btn == InputConstants.MOUSE_BUTTON_RIGHT) {
                 menuKind = MenuKind.LIST_CONTEXT;
                 menuListId = lc.id;
                 menuX = mx;
@@ -336,7 +337,7 @@ public class MineTunerGuiScreen extends Screen {
             }
         }
 
-        if (btn == 1) {
+        if (btn == InputConstants.MOUSE_BUTTON_RIGHT) {
             menuKind = MenuKind.EMPTY_SPACE;
             menuX = mx;
             menuY = my;
@@ -350,7 +351,7 @@ public class MineTunerGuiScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (dragging && event.button() == 0) {
+        if (dragging && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             int mx = (int) event.x();
             int my = (int) event.y();
             int rawX = Math.max(0, Math.min(width - dragBoxW, mx - dragOffsetX));
@@ -377,7 +378,7 @@ public class MineTunerGuiScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (dragging && event.button() == 0) {
+        if (dragging && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             MineTunerConfig.StatListConfig lc = getListById(draggingListId);
             if (lc != null) {
                 lc.snapX = dragSnapX;
