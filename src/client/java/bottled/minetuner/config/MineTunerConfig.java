@@ -1,6 +1,7 @@
 package bottled.minetuner.config;
 
 import bottled.minetuner.MineTunerMod;
+import bottled.minetuner.core.Sanitize;
 import bottled.minetuner.hud.TemplateEngine;
 import bottled.minetuner.stat.StatDefinition;
 import bottled.minetuner.stat.StatRegistry;
@@ -135,60 +136,24 @@ public class MineTunerConfig {
     }
 
     public static MineTunerConfig load() {
-        if (Files.exists(configPath())) {
-            try (Reader r = Files.newBufferedReader(configPath())) {
+        Path path = configPath();
+        if (Files.exists(path)) {
+            try (Reader r = Files.newBufferedReader(path)) {
                 MineTunerConfig cfg = GSON.fromJson(r, MineTunerConfig.class);
                 if (cfg != null) {
-                    // overlayEnabled needs no backfill: MineTunerConfig has no custom
-                    // constructor, so the `= true` field initializer already
-                    // ran before the JSON was applied, and an old config file
-                    // with no "overlayEnabled" key just leaves it in place.
-                    // Same is true of every newly-added primitive field below
-                    // (hardwareSensorPollIntervalMs, panelRowHeight, etc.):
-                    // Gson only overwrites a field when its key is present in
-                    // the JSON, so an old minetuner.json missing these keys just
-                    // keeps the `= <default>` values from the field
-                    // initializers. clampGuiTuning() below only guards
-                    // against out-of-range *values* a user (or a future
-                    // Cloth Config edit) actually wrote, not missing ones.
-                    cfg.clampGuiTuning();
-                    // Old configs (pre-Themes) have no "themes" key at all, and Gson
-                    // leaves a null Map field null rather than constructing an empty
-                    // one — unlike defaultThemeName just below, which is a simple
-                    // String and so behaves the same as overlayEnabled/panelRowHeight
-                    // above: its `= BUILTIN_DEFAULT_THEME` field initializer already
-                    // ran, so an old config missing the "defaultThemeName" key just
-                    // keeps that default. The check here is only a defensive guard
-                    // in case a hand-edited config explicitly sets it to null.
-                    if (cfg.lists == null) cfg.lists = new ArrayList<>();
-                    if (cfg.themes == null) cfg.themes = new LinkedHashMap<>();
-                    if (cfg.defaultThemeName == null) cfg.defaultThemeName = BUILTIN_DEFAULT_THEME;
-                    // backFillThemes() populates the built-in themes (Classic/Minimal/
-                    // High Contrast) into cfg.themes and ensures defaultThemeName
-                    // always resolves to a real entry in it.
-                    cfg.backFillThemes();
-                    for (StatListConfig list : cfg.lists) {
-                        if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
-                        if (list.statOrder == null) list.statOrder = new ArrayList<>();
-                        // Null for configs written before this field existed;
-                        // backFill() below fills in the defaults.
-                        if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
-                        if (list.templateLines == null) list.templateLines = new ArrayList<>();
-
-                        // anchorCorner was renamed from "alignment".
-                        if (list.anchorCorner == null) list.anchorCorner = Corner.TOP_LEFT;
-                        list.backFill();
-                    }
+                    // Gson only overwrites a field when its key is present, so keys missing
+                    // from an old file keep their field-initializer defaults; but it leaves
+                    // null for anything it could not map (unknown enum constants, explicit
+                    // nulls). normalize() turns every such hole back into a usable value.
+                    cfg.normalize();
                     return cfg;
                 }
-            } catch (IOException | com.google.gson.JsonSyntaxException | com.google.gson.JsonIOException e) {
-                // Corrupt/truncated JSON (e.g. a crash mid-write before the atomic-save
-                // fix, or manual editing gone wrong) used to silently fall through
-                // to fresh defaults, discarding the user's lists with no trace.
-                // Preserve the broken file next to a timestamped ".bak" instead,
-                // so a config that fails to parse is recoverable rather than
-                // just gone, then continue on to fresh defaults below.
-                MineTunerMod.LOGGER.error("Failed to load config ({}); backing up and starting fresh.", e.getMessage());
+            } catch (IOException | RuntimeException e) {
+                // Covers JsonParseException (a RuntimeException) as well as any failure while
+                // normalising. A config that cannot be used must never crash startup: keep
+                // the broken file aside as a timestamped ".bak" so it is recoverable, then
+                // continue on to fresh defaults below.
+                MineTunerMod.LOGGER.error("Failed to load config ({}); backing up and starting fresh.", e.toString());
                 backupCorruptConfig();
             }
         }
@@ -209,6 +174,56 @@ public class MineTunerConfig {
             MineTunerMod.LOGGER.error("Backed up unreadable config to {}", backup);
         } catch (IOException copyFailed) {
             MineTunerMod.LOGGER.error("Could not back up unreadable config: {}", copyFailed.getMessage());
+        }
+    }
+
+    /**
+     * Brings a freshly deserialised config into a fully usable state: no null collections,
+     * elements or enum fields, in-range numerics, unique list ids and a consistent
+     * {@link #nextId}. Idempotent.
+     */
+    void normalize() {
+        clampGuiTuning();
+        if (lists == null) lists = new ArrayList<>();
+        lists.removeIf(Objects::isNull);
+        if (themes == null) themes = new LinkedHashMap<>();
+        themes.values().removeIf(Objects::isNull);
+        if (defaultThemeName == null) defaultThemeName = BUILTIN_DEFAULT_THEME;
+        for (ListTheme t : themes.values()) t.normalize(textScaleMin, textScaleMax);
+        backFillThemes();
+
+        for (StatListConfig list : lists) {
+            if (list.statEnabled == null) list.statEnabled = new LinkedHashMap<>();
+            if (list.statOrder == null) list.statOrder = new ArrayList<>();
+            if (list.statSettings == null) list.statSettings = new LinkedHashMap<>();
+            // Null elements/values (explicit JSON nulls) are dropped; backFill() re-creates
+            // the ones a known stat needs.
+            list.statOrder.removeIf(Objects::isNull);
+            list.statSettings.values().removeIf(Objects::isNull);
+            if (list.statThresholds == null) list.statThresholds = new LinkedHashMap<>();
+            list.statThresholds.values().removeIf(Objects::isNull);
+            if (list.templateLines == null) list.templateLines = new ArrayList<>();
+            list.templateLines.removeIf(Objects::isNull);
+            list.backFill();
+            list.normalize(textScaleMin, textScaleMax);
+        }
+        assignUniqueListIds();
+    }
+
+    /**
+     * Makes list ids unique (re-ids later duplicates) and keeps {@link #nextId} above every id.
+     */
+    private void assignUniqueListIds() {
+        int maxId = -1;
+        for (StatListConfig l : lists) maxId = Math.max(maxId, l.id);
+        nextId = Math.max(nextId, maxId + 1);
+        Set<Integer> seen = new HashSet<>();
+        for (StatListConfig l : lists) {
+            if (!seen.add(l.id)) {
+                MineTunerMod.LOGGER.warn("Duplicate list id {} in config; assigning a new id.", l.id);
+                l.id = nextId++;
+                seen.add(l.id);
+            }
         }
     }
 
@@ -452,7 +467,21 @@ public class MineTunerConfig {
         // --- Targeting ---
         LOOKING_AT, MOVING,
         // --- Hardware sensors ---
-        GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED
+        GPU_TEMP, GPU_CLOCK, GPU_USAGE, VRAM_USED;
+
+        private static final Map<String, Stat> BY_NAME = new HashMap<>();
+
+        static {
+            for (Stat s : values()) BY_NAME.put(s.name(), s);
+        }
+
+        /**
+         * The stat whose constant name equals {@code name} (case-insensitively, locale
+         * independent), or null. Never throws.
+         */
+        public static Stat byName(String name) {
+            return name == null ? null : BY_NAME.get(name.toUpperCase(Locale.ROOT));
+        }
     }
 
     /** Groups {@link Stat} constants for the redesigned toggle/reorder panel — see
@@ -487,6 +516,15 @@ public class MineTunerConfig {
         /** Graph visuals, used only when renderAsGraph is true. */
         public GraphStyle graphStyle = new GraphStyle();
 
+        /**
+         * Repairs a null graph style and clamps decimals into the supported 0-6 range.
+         */
+        void normalize() {
+            if (graphStyle == null) graphStyle = new GraphStyle();
+            decimals = Sanitize.clamp(decimals, 0, 6);
+            graphStyle.normalize();
+        }
+
         public StatSettings copy() {
             StatSettings c = new StatSettings();
             c.showPrefix = showPrefix;
@@ -513,6 +551,19 @@ public class MineTunerConfig {
         public int accentColor = 0xFF55FF55; // used when colorMode == FIXED_ACCENT.
 
         public GraphStyle() {
+        }
+
+        /**
+         * Repairs null enum fields and clamps numerics into the ranges the editors offer.
+         */
+        void normalize() {
+            if (valueDisplay == null) valueDisplay = GraphValueDisplay.CURRENT;
+            if (colorMode == null) colorMode = GraphColorMode.CURRENT_THRESHOLD;
+            width = Sanitize.clamp(width, 20, 400);
+            height = Sanitize.clamp(height, 10, 200);
+            smoothing = Sanitize.clamp(smoothing, 0, 4);
+            fixedMin = Sanitize.clamp(fixedMin, -1.0e9f, 1.0e9f, 0f);
+            fixedMax = Sanitize.clamp(fixedMax, -1.0e9f, 1.0e9f, 100f);
         }
 
         /** Field-by-field copy. */
@@ -677,7 +728,15 @@ public class MineTunerConfig {
         /** Back-fills any fields added since this config was written. */
         public void backFill() {
             if (name == null) name = "List " + id;
+            if (statEnabled == null) statEnabled = new LinkedHashMap<>();
+            if (statOrder == null) statOrder = new ArrayList<>();
             if (statSettings == null) statSettings = new LinkedHashMap<>();
+            if (anchorCorner == null) anchorCorner = Corner.TOP_LEFT;
+            if (snapX == null) snapX = SnapX.NONE;
+            if (snapY == null) snapY = SnapY.NONE;
+            // Names that no longer map to a Stat (renamed/removed constants) are dropped so
+            // they are not carried around forever.
+            statOrder.removeIf(n -> n == null || Stat.byName(n) == null);
             if (statThresholds == null) statThresholds = new LinkedHashMap<>();
             // Gson leaves this null (not the field initializer) if it's missing
             // from an old config's JSON.
@@ -718,6 +777,22 @@ public class MineTunerConfig {
             for (Stat s : THRESHOLD_STATS) {
                 statThresholds.computeIfAbsent(s.name(), defaults::get);
             }
+        }
+
+        /**
+         * Clamps every per-list numeric and every nested graph/stat setting into its valid
+         * range and repairs null enum fields. {@code textScaleMin/Max} are the global bounds.
+         */
+        void normalize(float textScaleMin, float textScaleMax) {
+            if (anchorCorner == null) anchorCorner = Corner.TOP_LEFT;
+            if (snapX == null) snapX = SnapX.NONE;
+            if (snapY == null) snapY = SnapY.NONE;
+            textScale = Sanitize.clamp(textScale, textScaleMin, textScaleMax, 1.0f);
+            paddingX = Math.max(0, paddingX);
+            paddingY = Math.max(0, paddingY);
+            anchorFracX = Sanitize.clamp(anchorFracX, 0.0, 1.0, 0.01);
+            anchorFracY = Sanitize.clamp(anchorFracY, 0.0, 1.0, 0.01);
+            for (StatSettings ss : statSettings.values()) ss.normalize();
         }
 
         /** Display name used in the GUI header. */

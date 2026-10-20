@@ -1,5 +1,7 @@
 package bottled.minetuner.config;
 
+import bottled.minetuner.core.Sanitize;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,6 +34,18 @@ public class ListTheme {
 
     public ListTheme(String name) {
         this.name = name;
+    }
+
+    /**
+     * Repairs null collections and clamps numerics of a theme read from disk.
+     */
+    void normalize(float textScaleMin, float textScaleMax) {
+        if (graphStyles == null) graphStyles = new LinkedHashMap<>();
+        graphStyles.values().removeIf(java.util.Objects::isNull);
+        for (MineTunerConfig.GraphStyle g : graphStyles.values()) g.normalize();
+        textScale = Sanitize.clamp(textScale, textScaleMin, textScaleMax, 1.0f);
+        paddingX = Math.max(0, paddingX);
+        paddingY = Math.max(0, paddingY);
     }
 
     /** Deep-copies this theme into a brand-new instance, nested mutable maps
