@@ -17,20 +17,26 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class MineTunerConfig {
 
     /** Stats for which the rolling graph render mode is available. */
-    public static final Set<Stat> GRAPHABLE_STATS = StatRegistry.all().stream()
-            .filter(StatDefinition::supportsGraph)
-            .map(StatDefinition::key)
-            .collect(Collectors.toUnmodifiableSet());
+    public static final Set<Stat> GRAPHABLE_STATS = statsWhere(StatDefinition::supportsGraph);
     /** Same idea as {@link #GRAPHABLE_STATS}, driven by {@code supportsThreshold()}. */
-    public static final Set<Stat> THRESHOLD_STATS = StatRegistry.all().stream()
-            .filter(StatDefinition::supportsThreshold)
-            .map(StatDefinition::key)
-            .collect(Collectors.toUnmodifiableSet());
+    public static final Set<Stat> THRESHOLD_STATS = statsWhere(StatDefinition::supportsThreshold);
+
+    /**
+     * Unmodifiable view over an EnumSet, so iteration is always in enum order (a
+     * {@code toUnmodifiableSet()} would be randomised per JVM launch and make the saved
+     * JSON's key order differ between launches).
+     */
+    private static Set<Stat> statsWhere(java.util.function.Predicate<StatDefinition> test) {
+        EnumSet<Stat> out = EnumSet.noneOf(Stat.class);
+        for (StatDefinition def : StatRegistry.all()) {
+            if (test.test(def)) out.add(def.key());
+        }
+        return Collections.unmodifiableSet(out);
+    }
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
@@ -710,12 +716,10 @@ public class MineTunerConfig {
         /** Returns stats in statOrder order, enabled only, no duplicates. */
         public List<Stat> getVisibleStats() {
             List<Stat> result = new ArrayList<>();
+            EnumSet<Stat> seen = EnumSet.noneOf(Stat.class);
             for (String n : statOrder) {
-                try {
-                    Stat s = Stat.valueOf(n.toUpperCase(Locale.ROOT));
-                    if (isEnabled(s) && !result.contains(s)) result.add(s);
-                } catch (IllegalArgumentException ignored) {
-                }
+                Stat s = Stat.byName(n);
+                if (s != null && isEnabled(s) && seen.add(s)) result.add(s);
             }
             return result;
         }
