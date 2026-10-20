@@ -1,10 +1,13 @@
 package bottled.minetuner.sample.sources;
 
 import bottled.minetuner.MineTunerDataHolder;
+import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.sample.Cadence;
 import bottled.minetuner.sample.SamplingContext;
 import bottled.minetuner.sample.StatSource;
 import net.minecraft.client.multiplayer.PlayerInfo;
+
+import java.util.Set;
 
 /** Network round-trip latency to the server, as reported in the player list. */
 public final class PingSource implements StatSource {
@@ -14,8 +17,13 @@ public final class PingSource implements StatSource {
     }
 
     @Override
+    public Set<MineTunerConfig.Stat> feeds() {
+        return Set.of(MineTunerConfig.Stat.PING);
+    }
+
+    @Override
     public Cadence cadence() {
-        return Cadence.PER_FRAME;
+        return Cadence.THROTTLED;
     }
 
     @Override

@@ -1,9 +1,12 @@
 package bottled.minetuner.sample.sources;
 
 import bottled.minetuner.MineTunerDataHolder;
+import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.sample.Cadence;
 import bottled.minetuner.sample.SamplingContext;
 import bottled.minetuner.sample.StatSource;
+
+import java.util.Set;
 
 /** Number of level-renderer sections currently rendered. */
 public final class RenderedSectionsSource implements StatSource {
@@ -13,8 +16,13 @@ public final class RenderedSectionsSource implements StatSource {
     }
 
     @Override
+    public Set<MineTunerConfig.Stat> feeds() {
+        return Set.of(MineTunerConfig.Stat.RENDERED_SECTIONS);
+    }
+
+    @Override
     public Cadence cadence() {
-        return Cadence.PER_FRAME;
+        return Cadence.PER_TICK;
     }
 
     @Override

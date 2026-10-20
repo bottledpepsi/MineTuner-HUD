@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Central registry of every {@link StatSource} that {@link SamplingDriver} drives each frame.
+ * Central registry of every {@link StatSource} that {@link SamplingDriver} drives (per client tick, for needed stats only).
  * To add a new client-side value, implement {@link StatSource} and register an instance below.
  */
 public final class SourceRegistry {

@@ -7,6 +7,7 @@ import bottled.minetuner.gui.BenchmarkGuiScreen;
 import bottled.minetuner.gui.MineTunerGuiScreen;
 import bottled.minetuner.hud.MineTunerRenderer;
 import bottled.minetuner.sample.HardwareSensorPoller;
+import bottled.minetuner.sample.SamplingDriver;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -15,9 +16,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -129,6 +130,9 @@ public class MineTunerClient implements ClientModInitializer {
                 MineTunerCommand.register(dispatcher));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Sampling is driven by ticks, not rendering, so histories, CPU and percentile
+            // lows keep updating while the overlay is hidden, F3 is open or a screen is up.
+            SamplingDriver.instance().sampleTick();
             while (OPEN_GUI_KEY.consumeClick()) {
                 if (client.gui.screen() == null) {
                     client.gui.setScreen(new MineTunerGuiScreen());

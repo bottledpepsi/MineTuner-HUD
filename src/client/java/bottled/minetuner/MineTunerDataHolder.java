@@ -2,10 +2,7 @@ package bottled.minetuner;
 
 import bottled.minetuner.config.MineTunerConfig.ThresholdSettings;
 
-import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
-import java.lang.management.OperatingSystemMXBean;
+import java.lang.management.*;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -51,7 +48,6 @@ public final class MineTunerDataHolder {
     private static final OperatingSystemMXBean OS_BEAN = ManagementFactory.getOperatingSystemMXBean();
     private static final List<GarbageCollectorMXBean> GC_BEANS =
             ManagementFactory.getGarbageCollectorMXBeans();
-    private static final long SLOW_MS = 500;
 
     // --- Frametime sampling state ---
     // Fed directly by LevelRenderEvents.START_MAIN (see MineTunerClient), NOT by SamplingDriver
@@ -215,7 +211,6 @@ public final class MineTunerDataHolder {
     public static volatile double vramMaxMb = -1.0;
     /** True once the poller has successfully reached LHM at least once this session. */
     public static volatile boolean hardwareSensorsReachable = false;
-    private static long lastSlowUpdateMs = 0;
     private MineTunerDataHolder() {
     }
 
@@ -267,8 +262,9 @@ public final class MineTunerDataHolder {
     }
 
     public static void updateFastMetrics() {
-        long used = MEM_BEAN.getHeapMemoryUsage().getUsed();
-        long max = MEM_BEAN.getHeapMemoryUsage().getMax();
+        MemoryUsage heap = MEM_BEAN.getHeapMemoryUsage(); // one MXBean call per sample.
+        long used = heap.getUsed();
+        long max = heap.getMax();
         memUsedMb = used / (1024 * 1024);
         memMaxMb = max / (1024 * 1024);
 
@@ -303,10 +299,7 @@ public final class MineTunerDataHolder {
     }
 
     public static void updateSlowMetrics() {
-        long now = System.currentTimeMillis();
-        if (now - lastSlowUpdateMs < SLOW_MS) return;
-        lastSlowUpdateMs = now;
-
+        // Cadence (500 ms) is owned by SamplingDriver; no second throttle here.
         // HotSpot-only API.
         if (OS_BEAN instanceof com.sun.management.OperatingSystemMXBean sun) {
             double raw = sun.getProcessCpuLoad();

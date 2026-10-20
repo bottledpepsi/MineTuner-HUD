@@ -1,9 +1,12 @@
 package bottled.minetuner.sample.sources;
 
 import bottled.minetuner.MineTunerDataHolder;
+import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.sample.Cadence;
 import bottled.minetuner.sample.SamplingContext;
 import bottled.minetuner.sample.StatSource;
+
+import java.util.Set;
 
 /** Player position, facing, orientation, and horizontal speed. */
 public final class PlayerPositionSource implements StatSource {
@@ -13,8 +16,13 @@ public final class PlayerPositionSource implements StatSource {
     }
 
     @Override
+    public Set<MineTunerConfig.Stat> feeds() {
+        return Set.of(MineTunerConfig.Stat.COORDS, MineTunerConfig.Stat.X, MineTunerConfig.Stat.Y, MineTunerConfig.Stat.Z, MineTunerConfig.Stat.FACING, MineTunerConfig.Stat.YAW, MineTunerConfig.Stat.PITCH, MineTunerConfig.Stat.SPEED);
+    }
+
+    @Override
     public Cadence cadence() {
-        return Cadence.PER_FRAME;
+        return Cadence.PER_TICK;
     }
 
     @Override

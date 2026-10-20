@@ -1,6 +1,7 @@
 package bottled.minetuner.sample.sources;
 
 import bottled.minetuner.MineTunerDataHolder;
+import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.sample.Cadence;
 import bottled.minetuner.sample.SamplingContext;
 import bottled.minetuner.sample.StatSource;
@@ -8,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.storage.LevelData;
+
+import java.util.Set;
 
 /** World/session-level readings that aren't tied to the player's exact block. */
 public final class WorldStateSource implements StatSource {
@@ -24,8 +27,13 @@ public final class WorldStateSource implements StatSource {
     }
 
     @Override
+    public Set<MineTunerConfig.Stat> feeds() {
+        return Set.of(MineTunerConfig.Stat.WEATHER, MineTunerConfig.Stat.DIFFICULTY, MineTunerConfig.Stat.SKY_LIGHT, MineTunerConfig.Stat.BLOCK_LIGHT, MineTunerConfig.Stat.CAN_SEE_SKY, MineTunerConfig.Stat.PLAYERS_ONLINE, MineTunerConfig.Stat.DISTANCE_FROM_SPAWN, MineTunerConfig.Stat.CHUNK_POS);
+    }
+
+    @Override
     public Cadence cadence() {
-        return Cadence.PER_FRAME;
+        return Cadence.PER_TICK;
     }
 
     @Override

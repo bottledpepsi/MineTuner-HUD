@@ -3,7 +3,6 @@ package bottled.minetuner.hud;
 import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.hud.LineCache.GraphEntry;
 import bottled.minetuner.hud.LineCache.RowKind;
-import bottled.minetuner.sample.SamplingDriver;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -11,7 +10,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-/** Renders the live stat overlay using the same panel geometry as the editor preview. */
+/**
+ * Renders the live stat overlay using the same panel geometry as the editor preview.
+ * Strictly read-only with respect to sampling: data is collected by
+ * {@link bottled.minetuner.sample.SamplingDriver} on client ticks, independent of whether
+ * this overlay is visible.
+ */
 public class MineTunerRenderer {
 
     public static void drawRows(GuiGraphicsExtractor graphics, Font font,
@@ -70,7 +74,6 @@ public class MineTunerRenderer {
                 || mc.getConnection() == null || mc.gui.screen() instanceof bottled.minetuner.gui.MineTunerGuiScreen) return;
 
         LineCache.tickCache();
-        SamplingDriver.sampleAll();
 
         MineTunerConfig root = MineTunerConfig.getInstance();
         Font font = mc.font;
