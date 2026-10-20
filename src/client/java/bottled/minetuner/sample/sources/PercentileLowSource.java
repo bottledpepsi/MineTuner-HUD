@@ -23,11 +23,9 @@ public final class PercentileLowSource implements StatSource {
 
         float[] rawFrametimes = MineTunerDataHolder.getRawFrametimeHistory();
 
-        float fps1Low = PercentileLowFps.computeLowFps(
-                rawFrametimes, 0.01f, MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES);
-        float fps01Low = PercentileLowFps.computeLowFps(
-                rawFrametimes, 0.001f, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
+        PercentileLowFps.Lows lows = PercentileLowFps.computeLows(rawFrametimes,
+                MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
 
-        MineTunerDataHolder.updatePercentileLowFps(fps1Low, fps01Low);
+        MineTunerDataHolder.updatePercentileLowFps(lows.low1Pct(), lows.low01Pct());
     }
 }

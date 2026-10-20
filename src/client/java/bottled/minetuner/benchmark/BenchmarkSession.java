@@ -132,10 +132,10 @@ public final class BenchmarkSession {
         // True average: frames / elapsed time (not the mean of per-frame FPS, which
         // overstates the average whenever frame times vary). Matches the session Avg FPS stat.
         finalAvgFps = FpsMath.averageFps(window);
-        final1LowFps = PercentileLowFps.computeLowFps(
-                window, 0.01f, MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES);
-        final01LowFps = PercentileLowFps.computeLowFps(
-                window, 0.001f, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
+        PercentileLowFps.Lows lows = PercentileLowFps.computeLows(window,
+                MineTunerDataHolder.FPS_1LOW_MIN_SAMPLES, MineTunerDataHolder.FPS_01LOW_MIN_SAMPLES);
+        final1LowFps = lows.low1Pct();
+        final01LowFps = lows.low01Pct();
 
         double endCpuPercent = MineTunerDataHolder.cpuPercent;
         if (startCpuPercent >= 0 && endCpuPercent >= 0) {
