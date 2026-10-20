@@ -73,6 +73,12 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
                 h += lineH;
             }
         }
+        // Each row reserves a trailing gap for the row below it; the last row has
+        // none, so drop it or the box ends up bottom-heavy (more space under the
+        // final row than above the first).
+        if (!rowKinds.isEmpty()) {
+            h -= rowKinds.get(rowKinds.size() - 1) == RowKind.GRAPH ? 1 : HudPanelChrome.ROW_GAP;
+        }
         return h;
     }
 
