@@ -26,7 +26,6 @@
 		]
 	},
 	"mixins": [
-		"minetuner.mixins.json",
 		{
 			"config": "minetuner.client.mixins.json",
 			"environment": "client"

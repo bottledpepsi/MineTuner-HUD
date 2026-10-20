@@ -99,9 +99,8 @@ public final class MineTunerDataHolder {
     }
 
     /** O(1) running-aggregate update, called once per rendered frame from
-     *  recordFrametime() right after smoothedFps is computed for that frame — the same
-     *  per-frame sampling point Feature 1 (true per-frame frametime tracking) established,
-     *  reused here rather than adding a second per-frame hook. */
+     *  recordFrametime() right after smoothedFps is computed for that frame, reusing that
+     *  per-frame hook rather than adding a second one. */
     private static void recordSessionFpsSample(float fpsValue) {
         fpsSum += fpsValue;
         fpsSampleCount++;

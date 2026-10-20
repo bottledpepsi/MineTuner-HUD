@@ -14,7 +14,7 @@ public class ListTheme {
      *  themes cannot be deleted, renamed, or overwritten by "re-save." */
     public boolean builtin = false;
 
-    // --- Appearance fields (see class doc for what is/isn't included). ---
+    // --- Appearance fields: everything a theme captures; stats, order, name and position are not part of a theme. ---
     public boolean showBackground = true;
     public boolean textShadow = false;
     public boolean useCustomColor = false;

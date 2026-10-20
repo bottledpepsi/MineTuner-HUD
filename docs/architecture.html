@@ -240,11 +240,8 @@ private void minetuner$onTickingState(ClientboundTickingStatePacket packet, Call
 <p>
 This is why TPS works correctly on remote multiplayer without polling anything server-side —
 the vanilla client already receives this packet whenever tick rate changes, minetuner just also
-grabs it. <code>minetuner.mixins.json</code> has <code>"required": false</code> and an empty
-top-level <code>mixins</code> array (the actual mixin is registered in the client-only config,
-<code>minetuner.client.mixins.json</code>, loaded conditionally per <code>fabric.mod.json</code>'s
-<code>"environment": "client"</code> mixin entry) — consistent with this being a client-only mod
-where a mixin failing to apply on a dedicated server should never be fatal.
+    grabs it. The mixin is registered in <code>minetuner.client.mixins.json</code>, loaded only for the client
+    environment per <code>fabric.mod.json</code>.
 </p>
 
 <h2 id="adding-a-stat">adding a stat, mechanically</h2>

@@ -7,8 +7,8 @@
 **Customisable performance and stats HUD for Fabric.**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Minecraft](https://img.shields.io/badge/Minecraft-26.2%2B-brightgreen.svg)](#requirements)
-[![Fabric Loader](https://img.shields.io/badge/Fabric%20Loader-0.19.3%2B-lightgrey.svg)](https://fabricmc.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-26.3%2B-brightgreen.svg)](#requirements)
+[![Fabric Loader](https://img.shields.io/badge/Fabric%20Loader-0.19.5%2B-lightgrey.svg)](https://fabricmc.net/)
 [![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](#requirements)
 
 </div>
@@ -40,14 +40,14 @@ MineTuner is a **client-side-only** Fabric mod. It works on any server and insta
 
 ## Requirements
 
-| Component | Version |
-|---|---|
-| Minecraft | ≥ 26.2 |
-| Fabric Loader | ≥ 0.19.3 |
-| Fabric API | required |
-| Java | ≥ 25 |
-| [Cloth Config API](https://www.curseforge.com/minecraft/mc-mods/cloth-config) | ≥ 26.2.155 (hard dependency) |
-| [ModMenu](https://modrinth.com/mod/modmenu) | optional |
+| Component                                                                     | Version                      |
+|-------------------------------------------------------------------------------|------------------------------|
+| Minecraft                                                                     | ≥ 26.3                       |
+| Fabric Loader                                                                 | ≥ 0.19.5                     |
+| Fabric API                                                                    | required                     |
+| Java                                                                          | ≥ 25                         |
+| [Cloth Config API](https://www.curseforge.com/minecraft/mc-mods/cloth-config) | ≥ 26.3.158 (hard dependency) |
+| [ModMenu](https://modrinth.com/mod/modmenu)                                   | optional                     |
 
 > MineTuner is **client-side only**. Nothing needs to be installed on the server.
 
