@@ -117,6 +117,15 @@ Run `/minetuner config`, open MineTuner from ModMenu's mod list (if installed), 
 
 ---
 
+### How sampling works
+
+Stats are sampled once per client tick (the ping and CPU/GC/percentile-low readings at most every 500 ms), independent
+of whether the overlay is visible, so graphs and benchmark CPU data keep updating with the overlay hidden, F3 open, or
+the editor open. A stat is only sampled while something needs it: it is visible in a list (including template tokens) or
+a benchmark is recording.
+
+---
+
 ## Benchmark Mode
 
 Benchmark Mode is a start/stop performance run, independent from the live overlay's own rolling stats: press Start, play through whatever you want to measure, then press Stop to freeze the result. Unlike the overlay's session Avg/Min/Max FPS (which resets on every world join/disconnect and keeps rolling for as long as you're connected), a benchmark result stays frozen exactly as it was the moment you stopped it, until you start another run.
