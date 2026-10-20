@@ -1,6 +1,7 @@
 package bottled.minetuner.config.cloth;
 
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.LangKeys;
 import bottled.minetuner.sample.HardwareSensorPoller;
 import bottled.minetuner.stat.StatDefinition;
 import bottled.minetuner.stat.StatRegistry;
@@ -210,7 +211,7 @@ public final class MineTunerClothConfigScreen {
 
         cat.add(eb.startEnumSelector(Component.translatable("gui.minetuner.cloth.anchor_corner"), MineTunerConfig.Corner.class, lc.anchorCorner)
                 .setDefaultValue(MineTunerConfig.Corner.TOP_LEFT)
-                .setEnumNameProvider(v -> Component.translatable("gui.minetuner.corner." + v.name().toLowerCase()))
+                .setEnumNameProvider(v -> Component.translatable(LangKeys.enumValue("gui.minetuner.corner.", v)))
                 .setSaveConsumer(v -> lc.anchorCorner = v)
                 .build());
 
@@ -230,13 +231,13 @@ public final class MineTunerClothConfigScreen {
 
         cat.add(eb.startEnumSelector(Component.translatable("gui.minetuner.cloth.snap_x"), MineTunerConfig.SnapX.class, lc.snapX)
                 .setDefaultValue(MineTunerConfig.SnapX.NONE)
-                .setEnumNameProvider(v -> Component.translatable("gui.minetuner.snap_x." + v.name().toLowerCase()))
+                .setEnumNameProvider(v -> Component.translatable(LangKeys.enumValue("gui.minetuner.snap_x.", v)))
                 .setSaveConsumer(v -> lc.snapX = v)
                 .build());
 
         cat.add(eb.startEnumSelector(Component.translatable("gui.minetuner.cloth.snap_y"), MineTunerConfig.SnapY.class, lc.snapY)
                 .setDefaultValue(MineTunerConfig.SnapY.NONE)
-                .setEnumNameProvider(v -> Component.translatable("gui.minetuner.snap_y." + v.name().toLowerCase()))
+                .setEnumNameProvider(v -> Component.translatable(LangKeys.enumValue("gui.minetuner.snap_y.", v)))
                 .setSaveConsumer(v -> lc.snapY = v)
                 .build());
 
@@ -300,7 +301,7 @@ public final class MineTunerClothConfigScreen {
     }
 
     private static SubCategoryBuilder buildStatSubCategory(ConfigEntryBuilder eb, MineTunerConfig.StatListConfig lc, MineTunerConfig.Stat stat) {
-        String statName = I18n.get("stat.minetuner." + stat.name().toLowerCase());
+        String statName = I18n.get(LangKeys.stat(stat));
         SubCategoryBuilder statCat = eb.startSubCategory(Component.literal(statName));
 
         boolean enabledNow = lc.isEnabled(stat);
@@ -361,7 +362,7 @@ public final class MineTunerClothConfigScreen {
 
         graphCat.add(eb.startEnumSelector(Component.translatable("gui.minetuner.cloth.graph_value_display"), MineTunerConfig.GraphValueDisplay.class, style.valueDisplay)
                 .setDefaultValue(MineTunerConfig.GraphValueDisplay.CURRENT)
-                .setEnumNameProvider(v -> Component.translatable("gui.minetuner.graph_value_display." + v.name().toLowerCase()))
+                .setEnumNameProvider(v -> Component.translatable(LangKeys.enumValue("gui.minetuner.graph_value_display.", v)))
                 .setSaveConsumer(v -> lc.getStatSettings(stat).graphStyle.valueDisplay = v)
                 .build());
 
@@ -398,7 +399,7 @@ public final class MineTunerClothConfigScreen {
 
         graphCat.add(eb.startEnumSelector(Component.translatable("gui.minetuner.cloth.graph_color_mode"), MineTunerConfig.GraphColorMode.class, style.colorMode)
                 .setDefaultValue(MineTunerConfig.GraphColorMode.CURRENT_THRESHOLD)
-                .setEnumNameProvider(v -> Component.translatable("gui.minetuner.graph_color_mode." + v.name().toLowerCase()))
+                .setEnumNameProvider(v -> Component.translatable(LangKeys.enumValue("gui.minetuner.graph_color_mode.", v)))
                 .setSaveConsumer(v -> lc.getStatSettings(stat).graphStyle.colorMode = v)
                 .build());
 

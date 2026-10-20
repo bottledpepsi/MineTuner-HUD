@@ -1,6 +1,7 @@
 package bottled.minetuner.gui.panel;
 
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.LangKeys;
 import bottled.minetuner.gui.render.PanelChrome;
 import bottled.minetuner.stat.StatRegistry;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -54,7 +55,7 @@ public final class ThresholdPanel {
                               MineTunerConfig.StatListConfig lc, MineTunerConfig.Stat statSettingsStat,
                               MineTunerConfig.ThresholdSettings ts) {
         boolean higherBetter = isHigherBetter(statSettingsStat);
-        String statLabel = I18n.get("stat.minetuner." + statSettingsStat.name().toLowerCase());
+        String statLabel = I18n.get(LangKeys.stat(statSettingsStat));
 
         int panelH = panelHeight(font);
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);

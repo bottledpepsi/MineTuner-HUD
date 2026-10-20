@@ -1,6 +1,7 @@
 package bottled.minetuner.gui.panel;
 
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.LangKeys;
 import bottled.minetuner.gui.render.PanelChrome;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.language.I18n;
@@ -261,7 +262,7 @@ public final class ReorderPanel {
         PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
         boolean expanded = ui.isExpanded(header.category());
         String arrow = expanded ? "§f▾" : "§f▸";
-        String catName = I18n.get("gui.minetuner.category." + header.category().name().toLowerCase());
+        String catName = I18n.get(LangKeys.category(header.category()));
         String count = "§7(" + header.enabledCount() + "/" + header.totalCount() + ")";
         g.text(font, arrow + " §e" + catName, px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
         g.text(font, count, px + PANEL_W - PANEL_PAD - font.width(count), ry + 2, 0xFFFFFFFF, false);
@@ -275,7 +276,7 @@ public final class ReorderPanel {
 
         if (allowHover) PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
 
-        String statName = I18n.get("stat.minetuner." + stat.name().toLowerCase());
+        String statName = I18n.get(LangKeys.stat(stat));
         String label = (enabled ? "§a✔ " : "§c✘ ") + statName;
         // Indented under its category header, and narrower than the full
         // width to leave room for the ⚙/▲/▼ cluster on the right without

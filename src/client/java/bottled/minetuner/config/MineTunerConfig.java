@@ -650,7 +650,7 @@ public class MineTunerConfig {
             List<Stat> result = new ArrayList<>();
             for (String n : statOrder) {
                 try {
-                    Stat s = Stat.valueOf(n.toUpperCase());
+                    Stat s = Stat.valueOf(n.toUpperCase(Locale.ROOT));
                     if (isEnabled(s) && !result.contains(s)) result.add(s);
                 } catch (IllegalArgumentException ignored) {
                 }
