@@ -63,17 +63,25 @@ public class ListTheme {
         t.textShadow = lc.textShadow;
         t.useCustomColor = lc.useCustomColor;
         t.overrideColor = lc.overrideColor;
-        t.overrideFillColor =lc.overrideFillColor;
-        t.overrideOutlineColor =lc.overrideOutlineColor;
+        t.overrideFillColor = lc.overrideFillColor;
+        t.overrideOutlineColor = lc.overrideOutlineColor;
         t.textScale = lc.textScale;
         t.paddingX = lc.paddingX;
         t.paddingY = lc.paddingY;
-        t.graphStyles = new LinkedHashMap<>();
+        t.graphStyles = captureGraphStyles(lc);
+        return t;
+    }
+
+    /**
+     * Deep copy of every stat's current GraphStyle (a missing one captures as defaults).
+     */
+    private static Map<String, MineTunerConfig.GraphStyle> captureGraphStyles(MineTunerConfig.StatListConfig lc) {
+        Map<String, MineTunerConfig.GraphStyle> out = new LinkedHashMap<>();
         lc.statSettings.forEach((key, settings) -> {
             MineTunerConfig.GraphStyle style = settings.graphStyle;
-            t.graphStyles.put(key, (style != null ? style : new MineTunerConfig.GraphStyle()).copy());
+            out.put(key, (style != null ? style : new MineTunerConfig.GraphStyle()).copy());
         });
-        return t;
+        return out;
     }
 
     /** Re-captures this EXISTING theme's fields from {@code lc}'s current appearance
@@ -89,11 +97,7 @@ public class ListTheme {
         textScale = lc.textScale;
         paddingX = lc.paddingX;
         paddingY = lc.paddingY;
-        graphStyles = new LinkedHashMap<>();
-        lc.statSettings.forEach((key, settings) -> {
-            MineTunerConfig.GraphStyle style = settings.graphStyle;
-            graphStyles.put(key, (style != null ? style : new MineTunerConfig.GraphStyle()).copy());
-        });
+        graphStyles = captureGraphStyles(lc);
     }
 
     /** Overwrites only {@code lc}'s appearance fields with this theme's, leaving

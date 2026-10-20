@@ -726,37 +726,22 @@ public class MineTunerConfig {
         }
 
         /** Deep-copies this list's settings into a brand-new list with the given id,
-         *  nested mutable maps included, so editing the copy can never affect the original. */
+         *  nested mutable maps included, so editing the copy can never affect the original.
+         *  Implemented as a Gson round-trip (the config's own persistence format) so a field
+         *  added in the future is copied automatically instead of being silently dropped. */
         public StatListConfig duplicate(int newId) {
-            StatListConfig copy = new StatListConfig(newId);
+            StatListConfig copy = GSON.fromJson(GSON.toJson(this), StatListConfig.class);
+            copy.id = newId;
             copy.name = displayName() + " (copy)";
-            copy.statEnabled = new LinkedHashMap<>(statEnabled);
-            copy.statOrder = new ArrayList<>(statOrder);
-
-            copy.statSettings = new LinkedHashMap<>();
-            statSettings.forEach((key, src) -> copy.statSettings.put(key, src.copy()));
-
-            copy.statThresholds = new LinkedHashMap<>();
-            statThresholds.forEach((key, src) -> copy.statThresholds.put(key, src.copy()));
-
-            copy.anchorCorner = anchorCorner;
             // Nudge the copy so it doesn't sit exactly on top of the original;
             // 0.02 of screen size lands close to the old 12px-at-reference-size
             // nudge without hardcoding a pixel amount that would drift when
             // rendered at a different GUI scale than duplication happened at.
             copy.anchorFracX = anchorFracX + 0.02;
             copy.anchorFracY = anchorFracY + 0.02;
-            copy.showBackground = showBackground;
-            copy.textShadow = textShadow;
-            copy.useCustomColor = useCustomColor;
-            copy.overrideColor = overrideColor;
-            copy.textScale = textScale;
-            copy.paddingX = paddingX;
-            copy.paddingY = paddingY;
-            copy.snapX = snapX;
-            copy.snapY = snapY;
-            copy.useTemplate = useTemplate;
-            copy.templateLines = new ArrayList<>(templateLines);
+            // Legacy raw-pixel offsets are never carried over to a copy.
+            copy.anchorDx = null;
+            copy.anchorDy = null;
             return copy;
         }
     }
