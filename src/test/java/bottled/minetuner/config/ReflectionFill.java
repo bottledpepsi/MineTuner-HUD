@@ -26,11 +26,13 @@ final class ReflectionFill {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object value(Type type, String name, Object current) throws Exception {
         Class<?> raw = type instanceof ParameterizedType p ? (Class<?>) p.getRawType() : (Class<?>) type;
+        // Boxed types matter: they appear as generic arguments (e.g. Map<String, Boolean>),
+        // where falling through to the no-arg-constructor path below throws NoSuchMethodException.
         if (raw == int.class || raw == Integer.class) return 7 + name.length();
-        if (raw == long.class) return 11L + name.length();
-        if (raw == float.class) return 0.25f + name.length() / 100f;
-        if (raw == double.class) return 0.125 + name.length() / 1000.0;
-        if (raw == boolean.class) return current instanceof Boolean b ? !b : true;
+        if (raw == long.class || raw == Long.class) return 11L + name.length();
+        if (raw == float.class || raw == Float.class) return 0.25f + name.length() / 100f;
+        if (raw == double.class || raw == Double.class) return 0.125 + name.length() / 1000.0;
+        if (raw == boolean.class || raw == Boolean.class) return current instanceof Boolean b ? !b : true;
         if (raw == String.class) return "x-" + name;
         if (raw.isEnum()) {
             Object[] all = raw.getEnumConstants();
