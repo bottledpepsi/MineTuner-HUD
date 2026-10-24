@@ -8,10 +8,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -68,9 +72,20 @@ public final class HardwareSensorPoller {
     /** Stops the background thread, if running. */
     public static synchronized void stop() {
         if (RUNNING == null) return;
-        RUNNING.stopRequested = true;
-        RUNNING.thread.interrupt();
+        HardwareSensorPoller stopping = RUNNING;
         RUNNING = null;
+        stopping.stopRequested = true;
+        stopping.thread.interrupt();
+        try {
+            // Join so reconcileWithConfig can't start a fresh poller while the old
+            // one is still mid-poll (two writers on the published volatile fields).
+            // Bounded so a send() wedged in a long request can't block the caller —
+            // this runs on the render thread — and far above the ~300ms request
+            // timeout, so in practice the thread is already dead by the time we wait.
+            stopping.thread.join(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** Call after saving a config change to {@code hardwareSensorsEnabled},
@@ -84,10 +99,17 @@ public final class HardwareSensorPoller {
             return;
         }
         String normalized = normalizeBaseUrl(cfg.hardwareSensorBaseUrl);
+        // Compare against the SAME normalization startIfEnabled() applies (a
+        // non-positive config value becomes REQUEST_TIMEOUT_DEFAULT), otherwise a
+        // raw 0 in config would compare unequal to the running poller's effective
+        // 300ms and restart the poller on every reconcile.
+        Duration expectedTimeout = cfg.hardwareSensorRequestTimeoutMs > 0
+                ? Duration.ofMillis(cfg.hardwareSensorRequestTimeoutMs)
+                : REQUEST_TIMEOUT_DEFAULT;
         if (RUNNING == null) {
             startIfEnabled();
         } else if (!RUNNING.baseUrl.equals(normalized)
-                || RUNNING.client.connectTimeout().map(t -> t.toMillis() != cfg.hardwareSensorRequestTimeoutMs).orElse(true)) {
+                || RUNNING.client.connectTimeout().map(t -> !t.equals(expectedTimeout)).orElse(true)) {
             // Either the base URL moved, or the connect timeout baked into
             // the running poller's HttpClient no longer matches config. The
             // simplest correct fix for the latter is a clean restart rather
@@ -102,7 +124,9 @@ public final class HardwareSensorPoller {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
-    /** Resets every published sensor field back to "unavailable". */
+    /** Resets every published sensor field back to "unavailable". Also used as
+     *  pollOnce's outage path (previously a byte-identical duplicate named
+     *  markUnavailable). */
     private static void resetPublishedValues() {
         MineTunerDataHolder.gpuTempC = -1.0;
         MineTunerDataHolder.gpuClockMhz = -1.0;
@@ -158,6 +182,25 @@ public final class HardwareSensorPoller {
         }
     }
 
+    /** Hard ceiling on how much of a /data.json response body will be buffered.
+     *  LHM's real tree is a few hundred KB at worst; the cap only exists to bound
+     *  the damage of pointing hardwareSensorBaseUrl at something huge. */
+    static final int MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+    /** Reads the stream fully as UTF-8, but returns null once more than {@code maxBytes}
+     *  have been received — bounds the memory a misconfigured base URL can make the
+     *  poller buffer. Package-private for HardwareSensorPollerLiveTest. */
+    static String readCapped(InputStream in, int maxBytes) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = in.read(chunk)) >= 0) {
+            if (out.size() + read > maxBytes) return null;
+            out.write(chunk, 0, read);
+        }
+        return out.toString(StandardCharsets.UTF_8);
+    }
+
     private void runLoop() {
         while (!stopRequested) {
             try {
@@ -170,7 +213,7 @@ public final class HardwareSensorPoller {
                 // never silently kills the thread and leaves stats stuck at their
                 // last value forever.
                 logOutageOnce("unexpected error: " + t);
-                markUnavailable();
+                resetPublishedValues();
             }
             try {
                 // Read live every cycle (not cached at thread-start) so a
@@ -204,37 +247,62 @@ public final class HardwareSensorPoller {
             // vague "could not reach" one, even though the end result — logging
             // the outage once and marking sensors unavailable — is the same either way.
             logOutageOnce("invalid base URL \"" + baseUrl + "\": " + badUrl.getMessage());
-            markUnavailable();
+            resetPublishedValues();
             return;
         }
 
-        HttpResponse<String> response;
+        HttpResponse<InputStream> response;
         try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (Exception networkFailure) {
+            // ofInputStream (not ofString) so the body size can be capped below —
+            // ofString would buffer the entire response in memory before any
+            // check, letting a misconfigured base URL pointing at a large
+            // file/endpoint balloon the poller's heap.
+            response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (InterruptedException interrupted) {
+            // stop() interrupts us to exit promptly. Restore the flag and unwind
+            // WITHOUT treating this as an outage — swallowing it here (the old
+            // catch (Exception) did) delayed shutdown by a full poll interval and
+            // logged a bogus "could not reach" line.
+            Thread.currentThread().interrupt();
+            return;
+        } catch (IOException networkFailure) {
             // Covers connection refused (LHM not running / remote web server
             // off), timeout (hung/slow), unknown host, and anything else
             // java.net.http can throw for a failed request.
             logOutageOnce("could not reach " + baseUrl + ": " + networkFailure);
-            markUnavailable();
+            resetPublishedValues();
             return;
         }
 
-        if (response.statusCode() != 200) {
-            logOutageOnce("unexpected HTTP " + response.statusCode() + " from " + baseUrl);
-            markUnavailable();
+        String body;
+        try (InputStream in = response.body()) {
+            if (response.statusCode() != 200) {
+                logOutageOnce("unexpected HTTP " + response.statusCode() + " from " + baseUrl);
+                resetPublishedValues();
+                return;
+            }
+            body = readCapped(in, MAX_RESPONSE_BYTES);
+        } catch (IOException readFailure) {
+            logOutageOnce("could not read data.json body: " + readFailure);
+            resetPublishedValues();
+            return;
+        }
+        if (body == null) {
+            logOutageOnce("data.json from " + baseUrl + " exceeded " + MAX_RESPONSE_BYTES
+                    + " bytes; ignoring it (check hardwareSensorBaseUrl)");
+            resetPublishedValues();
             return;
         }
 
         JsonObject root;
         try {
-            root = JsonParser.parseString(response.body()).getAsJsonObject();
+            root = JsonParser.parseString(body).getAsJsonObject();
         } catch (Exception parseFailure) {
             // Malformed/unexpected JSON shape — e.g. LHM returned an HTML error
             // page instead of JSON, or a future LHM version has since
             // changed the tree format.
             logOutageOnce("could not parse data.json: " + parseFailure);
-            markUnavailable();
+            resetPublishedValues();
             return;
         }
 
@@ -246,15 +314,6 @@ public final class HardwareSensorPoller {
         MineTunerDataHolder.vramMaxMb = readings.vramMaxMb;
         MineTunerDataHolder.hardwareSensorsReachable = true;
         warnedThisOutage = false; // recovered.
-    }
-
-    private void markUnavailable() {
-        MineTunerDataHolder.gpuTempC = -1.0;
-        MineTunerDataHolder.gpuClockMhz = -1.0;
-        MineTunerDataHolder.gpuUsagePercent = -1.0;
-        MineTunerDataHolder.vramUsedMb = -1.0;
-        MineTunerDataHolder.vramMaxMb = -1.0;
-        MineTunerDataHolder.hardwareSensorsReachable = false;
     }
 
     /** Logs only the first failure of a new outage, not every 1.5s. */

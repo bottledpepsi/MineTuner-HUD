@@ -71,8 +71,13 @@ public class MineTunerConfig {
 
     public boolean hardwareSensorsEnabled = false;
     public String hardwareSensorBaseUrl = "http://localhost:8085";
-    public int hardwareSensorPollIntervalMs = 1500;
-    public int hardwareSensorRequestTimeoutMs = 300;
+    /** Volatile: read from HardwareSensorPoller's background thread while written
+     *  from the render thread (Cloth Config save / editor panels) — guarantees the
+     *  poller sees fresh values instead of relying on incidental synchronization
+     *  inside java.net.http internals. */
+    public volatile int hardwareSensorPollIntervalMs = 1500;
+    /** Volatile: same cross-thread handoff as {@link #hardwareSensorPollIntervalMs}. */
+    public volatile int hardwareSensorRequestTimeoutMs = 300;
 
     public int reorderPanelMaxVisibleRows = 16;
     /** Height, in pixels, of one row in every editor panel (stat rows, menu rows, etc). */
