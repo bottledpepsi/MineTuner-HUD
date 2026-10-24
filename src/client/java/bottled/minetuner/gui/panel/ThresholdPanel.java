@@ -28,17 +28,23 @@ public final class ThresholdPanel {
         return StatRegistry.get(stat).thresholdStep();
     }
 
-    /** Total panel height for the threshold sub-panel (fixed row count, no
-     *  scrolling needed since TH_COUNT never changes) plus one title-row's worth
-     *  of extra height (font.lineHeight + 2) for the stat-name header above the rows. */
+    /** Total panel height: padding, the title line, the direction-subtitle line, one
+     *  ROW_H of breathing room between subtitle and first row, then the rows. */
     public static int panelHeight(net.minecraft.client.gui.Font font) {
-        return PANEL_PAD * 2 + ROW_H * TH_COUNT + font.lineHeight + 2;
+        return panelHeight(font.lineHeight);
+    }
+
+    /** LineHeight-parameterized variant so the layout math is unit-testable. */
+    static int panelHeight(int lineHeight) {
+        return PANEL_PAD * 2 + ROW_H * (TH_COUNT + 1) + lineHeight + 2;
     }
 
     /** Y-offsets (relative to the panel's top-left) for each of the threshold
-     *  panel's rows, below the title-row space {@link #panelHeight} accounts for. */
-    private static int[] rowOffsets(int py, net.minecraft.client.gui.Font font) {
-        int rowTop = py + PANEL_PAD + font.lineHeight + 2;
+     *  panel's rows, below the title + direction-subtitle lines that
+     *  {@link #panelHeight} accounts for. Rows used to start just 2px below the
+     *  subtitle's baseline, overlapping its text. */
+    static int[] rowOffsets(int py, int lineHeight) {
+        int rowTop = py + PANEL_PAD + ROW_H + lineHeight + 2;
         int[] rowY = new int[TH_COUNT];
         for (int i = 0; i < TH_COUNT; i++) rowY[i] = rowTop + ROW_H * i;
         return rowY;
@@ -70,7 +76,7 @@ public final class ThresholdPanel {
                 : I18n.get("gui.minetuner.threshold.lower_is_better");
         g.text(font, "§7" + dirLabel, px + PANEL_PAD, py + PANEL_PAD + font.lineHeight, 0xFF999999, false);
 
-        int[] rowY = rowOffsets(py, font);
+        int[] rowY = rowOffsets(py, font.lineHeight);
 
         // Row 0.
         int ry0 = rowY[TH_USE_CUSTOM];
@@ -152,7 +158,7 @@ public final class ThresholdPanel {
         int panelH = panelHeight(font);
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         int py = PanelChrome.clampY(menuY, panelH, screenH);
-        int[] rowY = rowOffsets(py, font);
+        int[] rowY = rowOffsets(py, font.lineHeight);
 
         int ry0 = rowY[TH_USE_CUSTOM];
         int ry1 = rowY[TH_GOOD];
