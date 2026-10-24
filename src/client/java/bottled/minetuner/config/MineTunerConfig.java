@@ -757,6 +757,18 @@ public class MineTunerConfig {
             statEnabled.put(stat.name(), value);
         }
 
+        /** Adds this list's visible stats into {@code out} (enabled, no duplicates)
+         *  WITHOUT allocating — the per-tick demand-sampling path. Membership mirrors
+         *  {@link #getVisibleStats()} exactly; iteration order does not (an EnumSet
+         *  walks enum-declaration order), which is fine because demand is a membership
+         *  test. Rendering order keeps going through getVisibleStats(). */
+        public void collectVisibleStats(java.util.EnumSet<Stat> out) {
+            for (String n : statOrder) {
+                Stat s = Stat.byName(n);
+                if (s != null && isEnabled(s)) out.add(s);
+            }
+        }
+
         /** Returns stats in statOrder order, enabled only, no duplicates. */
         public List<Stat> getVisibleStats() {
             List<Stat> result = new ArrayList<>();

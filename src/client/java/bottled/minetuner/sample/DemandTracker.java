@@ -14,40 +14,57 @@ import java.util.Set;
  */
 public final class DemandTracker {
 
+    /** Scratch set reused between ticks: {@code currentDemand} is consumed within a
+     *  single SamplingDriver tick (its result is never retained), so one shared
+     *  EnumSet removes the per-tick EnumSet + per-list ArrayList churn. EnumSet
+     *  iterates in enum-declaration order, which is fine — demand is a membership
+     *  test, not an ordering. Tick-thread only. */
+    private static final EnumSet<MineTunerConfig.Stat> SCRATCH =
+            EnumSet.noneOf(MineTunerConfig.Stat.class);
+
     private DemandTracker() {
     }
 
     /**
-     * Live demand from the current config and benchmark state.
+     * Live demand from the current config and benchmark state. The returned set is a
+     * shared scratch view valid until the next call — read it, don't retain it (tests
+     * and other long-lived consumers use the pure {@link #compute} instead).
      */
     public static Set<MineTunerConfig.Stat> currentDemand() {
-        return compute(MineTunerConfig.getInstance(), BenchmarkSession.isRecording());
+        SCRATCH.clear();
+        fill(SCRATCH, MineTunerConfig.getInstance(), BenchmarkSession.isRecording());
+        return SCRATCH;
     }
 
     /**
-     * Pure function of its inputs, for tests.
+     * Pure function of its inputs (fresh set, safe to retain), for tests.
      */
     public static Set<MineTunerConfig.Stat> compute(MineTunerConfig cfg, boolean benchmarkRecording) {
-        Set<MineTunerConfig.Stat> needed = EnumSet.noneOf(MineTunerConfig.Stat.class);
-        // Lists count even while the overlay is hidden: graphs keep their history, and the
-        // editor preview renders from the same data.
-        for (MineTunerConfig.StatListConfig list : cfg.lists) addList(needed, list);
-        if (benchmarkRecording) {
-            needed.add(MineTunerConfig.Stat.CPU);
-            needed.add(MineTunerConfig.Stat.GPU_USAGE);
-        }
+        EnumSet<MineTunerConfig.Stat> needed = EnumSet.noneOf(MineTunerConfig.Stat.class);
+        fill(needed, cfg, benchmarkRecording);
         return needed;
     }
 
-    private static void addList(Set<MineTunerConfig.Stat> needed, MineTunerConfig.StatListConfig list) {
+    private static void fill(EnumSet<MineTunerConfig.Stat> out, MineTunerConfig cfg, boolean benchmarkRecording) {
+        // Lists count even while the overlay is hidden: graphs keep their history, and the
+        // editor preview renders from the same data.
+        for (MineTunerConfig.StatListConfig list : cfg.lists) addList(out, list);
+        if (benchmarkRecording) {
+            out.add(MineTunerConfig.Stat.CPU);
+            out.add(MineTunerConfig.Stat.GPU_USAGE);
+        }
+    }
+
+    private static void addList(EnumSet<MineTunerConfig.Stat> out, MineTunerConfig.StatListConfig list) {
         if (list.useTemplate) {
             for (var line : TemplateEngine.getParsedLines(list)) {
                 for (TemplateEngine.Token token : line) {
-                    if (token instanceof TemplateEngine.StatToken st) needed.add(st.stat());
+                    if (token instanceof TemplateEngine.StatToken st) out.add(st.stat());
                 }
             }
         } else {
-            needed.addAll(list.getVisibleStats());
+            // Order-free, allocation-free collector — see StatListConfig's doc.
+            list.collectVisibleStats(out);
         }
     }
 }
