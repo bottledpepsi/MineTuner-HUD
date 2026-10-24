@@ -126,8 +126,11 @@ final class BenchmarkResultWriter {
     /** Immutable snapshot of exactly the fields a completed run needs to write out —
      *  passed in by {@link BenchmarkSession#saveToFolderAsync()} rather than this class reading
      *  BenchmarkSession's static state directly, so this writer stays independently
-     *  testable/reusable and has no dependency on BenchmarkSession's own lifecycle/locking. */
-    record Result(long startNanos, long stopNanos, long durationNanos, int sampleCount,
+     *  testable/reusable and has no dependency on BenchmarkSession's own lifecycle/locking.
+     *  (The monotonic startNanos/stopNanos the record used to carry were never read by
+     *  the writer — the summary's "Started" line comes from startedAt — so they're
+     *  dropped rather than carried dead.) */
+    record Result(long durationNanos, int sampleCount,
                   float avgFps, float low1Fps, float low01Fps, double avgCpuPercent,
                   float[] frametimesMs, float[] cpuPercentSeries, float[] gpuPercentSeries,
                   Instant startedAt, Instant stoppedAt) {

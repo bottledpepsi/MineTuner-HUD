@@ -69,17 +69,11 @@ public final class BenchmarkReport {
                 ? String.format(Locale.ROOT, "%.1f%%", avgCpuPercent) + " (JVM process load)" : "N/A") + nl);
 
         // Avg GPU is derived from the per-sample series, skipping unavailable samples so they
-        // cannot drag the average toward 0.
-        double gpuSum = 0.0;
-        int gpuCount = 0;
-        for (float v : gpuPercent) {
-            if (v >= 0f) {
-                gpuSum += v;
-                gpuCount++;
-            }
-        }
-        w.write("Avg GPU:     " + (gpuCount > 0
-                ? String.format(Locale.ROOT, "%.1f%%", gpuSum / gpuCount) : "N/A") + nl);
+        // cannot drag the average toward 0 (same math as the golden-reference inline loop,
+        // now shared via Averages.averageAvailable).
+        double avgGpu = Averages.averageAvailable(gpuPercent);
+        w.write("Avg GPU:     " + (avgGpu >= 0
+                ? String.format(Locale.ROOT, "%.1f%%", avgGpu) : "N/A") + nl);
     }
 
     public static String formatDuration(long nanos) {

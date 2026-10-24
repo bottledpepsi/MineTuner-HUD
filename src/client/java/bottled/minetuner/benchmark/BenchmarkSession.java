@@ -430,7 +430,7 @@ public final class BenchmarkSession {
     public static void saveToFolderAsync() {
         if (state != State.STOPPED || saveState == SaveState.SAVING) return;
         final BenchmarkResultWriter.Result result = new BenchmarkResultWriter.Result(
-                startNanos, stopNanos, finalDurationNanos, finalSampleCount,
+                finalDurationNanos, finalSampleCount,
                 finalAvgFps, final1LowFps, final01LowFps, finalAvgCpuPercent,
                 finalFrametimes, finalCpuSeries, finalGpuSeries, startedAt, stoppedAt);
         final int savingRun = runId;
