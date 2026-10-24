@@ -15,6 +15,9 @@ public final class TemplateListPanel {
 
     private static final long ADD_ROLLOUT_NANOS = 210_000_000L;
     private static final Map<Integer, AddedLine> ADDED_LINES = new HashMap<>();
+    /** Per-list line index awaiting a second ✕ click to confirm deletion — template
+     *  line deletes used to be instant and unconfirmed. */
+    private static final Map<Integer, Integer> PENDING_DELETE = new HashMap<>();
 
     private TemplateListPanel() {
     }
@@ -88,7 +91,9 @@ public final class TemplateListPanel {
                 px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
 
         boolean removeHovered = allowHover && PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 12, ry, 10, ROW_H);
-        g.text(font, removeHovered ? "§c✕" : "§7✕", px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
+        boolean awaitingConfirm = PENDING_DELETE.getOrDefault(lc.id, -1) == index;
+        g.text(font, awaitingConfirm ? "§c✕?" : removeHovered ? "§c✕" : "§7✕",
+                px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
     }
 
     /** Truncates a template line preview to fit the panel row, appending an ellipsis. */
@@ -123,8 +128,12 @@ public final class TemplateListPanel {
         int addY = rowTop + lc.templateLines.size() * ROW_H;
         int backY = addY + ROW_H;
 
-        if (PanelChrome.isHoveringRow(mx, my, px, backY, PANEL_W, ROW_H)) return ClickResult.CLOSED_RESULT;
+        if (PanelChrome.isHoveringRow(mx, my, px, backY, PANEL_W, ROW_H)) {
+            PENDING_DELETE.remove(lc.id);
+            return ClickResult.CLOSED_RESULT;
+        }
         if (PanelChrome.isHoveringRow(mx, my, px, addY, PANEL_W, ROW_H)) {
+            PENDING_DELETE.remove(lc.id);
             lc.templateLines.add("");
             ADDED_LINES.put(lc.id, new AddedLine(lc.templateLines.size() - 1, System.nanoTime()));
             MineTunerConfig.getInstance().save();
@@ -136,16 +145,34 @@ public final class TemplateListPanel {
             int ry = rowTop + i * ROW_H;
             if (my < ry || my >= ry + ROW_H) continue;
             if (mx >= px + PANEL_W - 12) {
-                lc.templateLines.remove(i);
-                ADDED_LINES.remove(lc.id);
-                MineTunerConfig.getInstance().save();
-                TemplateEngine.invalidate(lc.id);
+                // Two-step delete: the first ✕ arms the row (drawn as "✕?"), the
+                // second click on the SAME row commits. Line deletes were previously
+                // instant and unconfirmed — one stray click dropped a (possibly
+                // 200-codepoint) template line for good.
+                Integer pending = PENDING_DELETE.get(lc.id);
+                if (pending != null && pending == i) {
+                    PENDING_DELETE.remove(lc.id);
+                    lc.templateLines.remove(i);
+                    ADDED_LINES.remove(lc.id);
+                    MineTunerConfig.getInstance().save();
+                    TemplateEngine.invalidate(lc.id);
+                } else {
+                    PENDING_DELETE.put(lc.id, i);
+                }
             } else {
+                PENDING_DELETE.remove(lc.id);
                 return new ClickResult(Kind.EDIT_LINE, i);
             }
             return ClickResult.NONE_RESULT;
         }
         return ClickResult.NONE_RESULT;
+    }
+
+    /** Evicts the per-list confirm/rollout state for a deleted list (ids are never
+     *  reused, so entries would otherwise accumulate forever). */
+    public static void clear(int listId) {
+        ADDED_LINES.remove(listId);
+        PENDING_DELETE.remove(listId);
     }
 
     /** Text-entry box for one templateLines entry. */

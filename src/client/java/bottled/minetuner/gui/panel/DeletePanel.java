@@ -12,13 +12,16 @@ public final class DeletePanel {
     public static final int LM_CANCELBUTTON = 1;
     public static final int LM_COUNT = 2;
 
-    private static final int TITLE_ROWS = 1;
+    /** Title line + the list-name line, both above the two action rows. The name
+     *  line was previously computed and then never drawn, leaving a confirmation
+     *  dialog that couldn't say what it was confirming. */
+    private static final int TITLE_ROWS = 2;
 
     private DeletePanel() {
     }
 
     public static int panelHeight() {
-        // Title/confirmation text + the two action rows.
+        // Title + list name + the two action rows.
         return PANEL_PAD * 2 + ROW_H * (TITLE_ROWS + LM_COUNT);
     }
 
@@ -34,10 +37,11 @@ public final class DeletePanel {
         String name = lc == null ? "" : lc.displayName();
         String title = "§e" + I18n.get("gui.minetuner.delete.title");
 
-        // Keep the confirmation text inside the narrow standard panel. The
-        // second line is truncated rather than letting a long user-created
-        // list name escape the panel like a badly behaved UI gremlin.
+        // The list being deleted, truncated so a long user-created name can't
+        // escape the narrow standard panel.
         g.text(font, title, px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+        g.text(font, "§f" + truncate(font, name, PANEL_W - PANEL_PAD * 2),
+                px + PANEL_PAD, py + PANEL_PAD + ROW_H, 0xFFFFFFFF, false);
 
         int rowTop = py + PANEL_PAD + ROW_H * TITLE_ROWS;
 
@@ -65,6 +69,7 @@ public final class DeletePanel {
         }
         return s.substring(0, lo) + ellipsis;
     }
+    // (truncate is live again: it renders the list-name line above.)
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         int panelH = panelHeight();

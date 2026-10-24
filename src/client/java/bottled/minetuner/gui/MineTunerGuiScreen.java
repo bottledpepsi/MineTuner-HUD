@@ -54,6 +54,9 @@ public class MineTunerGuiScreen extends Screen {
      */
     private static final int TEMPLATE_LINE_MAX_CODE_POINTS = 200;
     private EditBuffer renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS);
+    /** Inline error shown inside the rename box (e.g. a rejected theme name);
+     *  null = no error. Cleared whenever the box is opened or successfully closed. */
+    private String renameErrorHint = null;
 
     /**
      * Whether the template line list (one row per templateLines entry, plus an
@@ -151,7 +154,7 @@ public class MineTunerGuiScreen extends Screen {
         } else if (menuKind == MenuKind.EMPTY_SPACE) {
             EmptySpaceMenuPanel.render(g, font, mx, my, menuX, menuY, width, height);
         } else if (menuKind == MenuKind.RENAME) {
-            RenameBoxPanel.render(g, font, menuX, menuY, width, height, renameBuffer.toString());
+            RenameBoxPanel.render(g, font, menuX, menuY, width, height, renameBuffer.toString(), renameErrorHint);
         } else if (menuKind == MenuKind.TEMPLATE_EDIT) {
             TemplateListPanel.renderEditBox(g, font, menuX, menuY, width, height,
                     templateEditIndex, templateEditBuffer.toString());
@@ -222,6 +225,7 @@ public class MineTunerGuiScreen extends Screen {
 
         if (menuKind == MenuKind.RENAME) {
             menuKind = MenuKind.NONE;
+            renameErrorHint = null;
             if (namingNewTheme) {
                 namingNewTheme = false;
                 themeOpen = true; // click-outside cancels back to the Theme panel, not the raw canvas.
@@ -408,6 +412,7 @@ public class MineTunerGuiScreen extends Screen {
         if (menuKind == MenuKind.RENAME) {
             if (keyCode == Keys.ESCAPE) {
                 menuKind = MenuKind.NONE;
+                renameErrorHint = null;
                 if (namingNewTheme) {
                     namingNewTheme = false;
                     themeOpen = true; // Esc cancels back to the Theme panel, not the raw canvas.
@@ -419,19 +424,31 @@ public class MineTunerGuiScreen extends Screen {
                 if (lc != null) {
                     if (namingNewTheme) {
                         String trimmed = renameBuffer.toString().trim();
-                        if (!trimmed.isEmpty()) {
-                            MineTunerConfig.getInstance().saveTheme(trimmed, lc);
+                        boolean saved = !trimmed.isEmpty()
+                                && MineTunerConfig.getInstance().saveTheme(trimmed, lc);
+                        if (saved) {
                             MineTunerConfig.getInstance().save();
+                        } else {
+                            // Stay in the box and show WHY the name was rejected,
+                            // instead of closing silently as if it had worked.
+                            renameErrorHint = I18n.get(trimmed.isEmpty()
+                                    ? "gui.minetuner.rename.empty"
+                                    : "gui.minetuner.theme.save_name_taken", trimmed);
+                            return true;
                         }
                     } else {
                         String trimmed = renameBuffer.toString().trim();
-                        lc.name = trimmed.isEmpty() ? "List " + lc.id : trimmed;
+                        // An empty name keeps the current one rather than silently
+                        // resetting it to "List N" — an accidental Enter with an
+                        // empty box should never be a destructive action.
+                        if (!trimmed.isEmpty()) lc.name = trimmed;
                         MineTunerConfig.getInstance().save();
                     }
                 }
                 boolean wasNamingTheme = namingNewTheme;
                 namingNewTheme = false;
                 menuKind = MenuKind.NONE;
+                renameErrorHint = null;
                 if (wasNamingTheme) themeOpen = true; // return to the Theme panel to see the new entry.
                 return true;
             }
@@ -565,6 +582,7 @@ public class MineTunerGuiScreen extends Screen {
             case AppearancePanel.AP_RENAME -> {
                 appearanceOpen = false;
                 menuKind = MenuKind.RENAME;
+                renameErrorHint = null;
                 renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS, lc.displayName());
             }
             case AppearancePanel.AP_BG -> {
@@ -605,6 +623,7 @@ public class MineTunerGuiScreen extends Screen {
                 themeOpen = false;
                 namingNewTheme = true;
                 menuKind = MenuKind.RENAME;
+                renameErrorHint = null;
                 renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS);
             }
             case NONE -> { /** apply/delete already applied inside handleClick. */ }
