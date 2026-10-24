@@ -1,5 +1,6 @@
 package bottled.minetuner;
 
+import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.config.MineTunerConfig.ThresholdSettings;
 import bottled.minetuner.core.RingBuffer;
 import bottled.minetuner.core.RingBuffer;
@@ -386,6 +387,33 @@ public final class MineTunerDataHolder {
 
     public static float[] getVramUsedHistory() {
         return vramUsedHistory.snapshot();
+    }
+
+    /** Monotonic change counter for a graphable stat's history buffer — lets the
+     *  HUD cache history snapshots/smoothing keyed on it instead of re-copying up
+     *  to 2000 floats per graph per frame. Returns -1 for stats without a versioned
+     *  buffer (callers must treat -1 as "never cache"). */
+    public static long historyVersion(MineTunerConfig.Stat stat) {
+        return switch (stat) {
+            case TPS -> tpsHistory.version();
+            case MSPT -> msptHistory.version();
+            case FPS -> fpsHistory.version();
+            case FRAMETIME -> frametimeHistory.version();
+            case CPU -> cpuHistory.version();
+            case MEMORY -> memHistory.version();
+            case PING -> pingHistory.version();
+            case HEALTH -> healthHistory.version();
+            case HUNGER -> hungerHistory.version();
+            case ARMOR -> armorHistory.version();
+            case SPEED -> speedHistory.version();
+            case GPU_TEMP -> gpuTempHistory.version();
+            case GPU_CLOCK -> gpuClockHistory.version();
+            case GPU_USAGE -> gpuUsageHistory.version();
+            case VRAM_USED -> vramUsedHistory.version();
+            case FPS_1PCT_LOW -> fps1LowGraphHistory.version();
+            case FPS_01PCT_LOW -> fps01LowGraphHistory.version();
+            default -> -1L;
+        };
     }
 
     public static float getTps() {

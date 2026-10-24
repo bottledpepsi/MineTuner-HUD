@@ -1,5 +1,6 @@
 package bottled.minetuner.hud;
 
+import bottled.minetuner.MineTunerDataHolder;
 import bottled.minetuner.config.MineTunerConfig;
 import bottled.minetuner.hud.LineCache.GraphEntry;
 import bottled.minetuner.hud.LineCache.RowKind;
@@ -7,11 +8,49 @@ import bottled.minetuner.stat.StatDefinition;
 import bottled.minetuner.stat.StatRegistry;
 
 import java.util.List;
+import java.util.Map;
 
 
 final class LineBuilder {
 
     private LineBuilder() {
+    }
+
+    /** One (snapshot + smoothed series) pair, valid while the stat's ring buffer
+     *  version is unchanged. */
+    private record CachedGraph(long version, float[] raw, float[] smoothed) {
+    }
+
+    /** Per-(stat, smoothing) cache of graph series. Replaces the old behavior of
+     *  copying up to 2000 floats + allocating a same-size smoothing array for
+     *  every graph row every frame: a push only happens once per tick (or rarer),
+     *  so at 60fps the same version is hit dozens of frames in a row and the
+     *  arrays are reused read-only. Version -1 (stat without a versioned buffer)
+     *  never caches. Render-thread only. */
+    private static final Map<MineTunerConfig.Stat, Map<Integer, CachedGraph>> GRAPH_HISTORY_CACHE =
+            new java.util.EnumMap<>(MineTunerConfig.Stat.class);
+
+    /** Snapshot + smoothing, cached on (stat, smoothing, buffer version). Returns
+     *  null when the stat has no history yet. The returned arrays are shared and
+     *  MUST NOT be mutated by callers (the renderer only reads them). */
+    private static CachedGraph graphSeries(StatDefinition def, MineTunerConfig.Stat stat, int smoothing) {
+        long version = MineTunerDataHolder.historyVersion(stat);
+        Map<Integer, CachedGraph> perStat = version >= 0 ? GRAPH_HISTORY_CACHE.get(stat) : null;
+        CachedGraph cached = perStat != null ? perStat.get(smoothing) : null;
+        if (cached != null && cached.version() == version) return cached;
+
+        float[] raw = def.history();
+        if (raw.length == 0) return null;
+        float[] smoothed = applySmoothing(raw, smoothing);
+        CachedGraph entry = new CachedGraph(version, raw, smoothed);
+        if (version >= 0) {
+            if (perStat == null) {
+                perStat = new java.util.HashMap<>();
+                GRAPH_HISTORY_CACHE.put(stat, perStat);
+            }
+            perStat.put(smoothing, entry);
+        }
+        return entry;
     }
 
     public static void buildLines(MineTunerConfig.StatListConfig cfg,
@@ -121,12 +160,13 @@ final class LineBuilder {
         int decimals = statSettings.decimals;
         MineTunerConfig.GraphStyle style = statSettings.graphStyle;
 
-        float[] rawHistory = def.history();
-        if (rawHistory.length == 0) return null;
-
-        // Smoothed into a separate array each frame; rawHistory itself is never mutated,
-        // since GraphEntry keeps both the raw and smoothed series for the renderer.
-        float[] displayHistory = applySmoothing(rawHistory, style.smoothing);
+        // Snapshot + smoothing come from the version-keyed cache when the buffer
+        // hasn't changed since the last frame; neither array is ever mutated,
+        // since GraphEntry only reads them (as does the renderer).
+        CachedGraph series = graphSeries(def, stat, style.smoothing);
+        if (series == null) return null;
+        float[] rawHistory = series.raw();
+        float[] displayHistory = series.smoothed();
 
         // Current-value color, also used for CURRENT_THRESHOLD mode and the label color.
         // Stats with no threshold of their own (MSPT/Speed) ignore the custom argument
