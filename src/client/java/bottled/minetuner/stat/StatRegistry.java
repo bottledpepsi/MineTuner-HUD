@@ -84,7 +84,19 @@ public final class StatRegistry {
     private StatRegistry() {
     }
 
-    private static void register(StatDefinition def) {
+    /** Registers a definition. Package-private so StatThresholdConsistencyTest can
+     *  verify the duplicate guard. A duplicate key or token throws rather than
+     *  silently overwriting — a copy-pasted stat class must fail loudly here, not
+     *  shadow the original definition everywhere it's looked up. */
+    static void register(StatDefinition def) {
+        StatDefinition existingByKey = BY_KEY.get(def.key());
+        if (existingByKey != null) throw new IllegalStateException(
+                "Duplicate StatDefinition for " + def.key() + ": "
+                        + existingByKey.getClass().getName() + " already registered");
+        StatDefinition existingByToken = BY_TOKEN.get(def.token());
+        if (existingByToken != null) throw new IllegalStateException(
+                "Duplicate template token \"" + def.token() + "\": "
+                        + existingByToken.getClass().getName() + " already registered");
         BY_KEY.put(def.key(), def);
         BY_TOKEN.put(def.token(), def);
     }

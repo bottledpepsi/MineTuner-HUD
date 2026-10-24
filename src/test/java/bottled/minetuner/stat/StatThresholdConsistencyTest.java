@@ -93,4 +93,33 @@ class StatThresholdConsistencyTest {
             assertEquals(stat, def.key(), "definition registered under the wrong key");
         }
     }
+
+    // --- Registration guard ---
+
+    /** A stub definition sharing TPS's key, to prove duplicate keys throw. */
+    private static final class DuplicateKeyStub implements StatDefinition {
+        @Override public MineTunerConfig.Stat key() { return MineTunerConfig.Stat.TPS; }
+        @Override public String token() { return "tps_stub"; }
+        @Override public String format(int decimals) { return "stub"; }
+    }
+
+    /** A stub definition sharing FPS's token, to prove duplicate tokens throw. */
+    private static final class DuplicateTokenStub implements StatDefinition {
+        @Override public MineTunerConfig.Stat key() { return MineTunerConfig.Stat.HEALTH; }
+        @Override public String token() { return "fps"; }
+        @Override public String format(int decimals) { return "stub"; }
+    }
+
+    @Test
+    void duplicateRegistrationFailsLoudlyInsteadOfShadowing() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> StatRegistry.register(new DuplicateKeyStub()),
+                "a second definition for the same key must throw, not silently replace");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> StatRegistry.register(new DuplicateTokenStub()),
+                "a second definition for the same template token must throw");
+        // The failed registrations must not have disturbed the real definitions.
+        assertEquals(MineTunerConfig.Stat.TPS, StatRegistry.get(MineTunerConfig.Stat.TPS).key());
+        assertEquals("fps", StatRegistry.get(MineTunerConfig.Stat.FPS).token());
+    }
 }
