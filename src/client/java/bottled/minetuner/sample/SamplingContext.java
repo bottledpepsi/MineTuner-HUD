@@ -5,7 +5,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 
-/** Immutable per-frame snapshot of the handles a {@link StatSource} might need. */
+/** Immutable per-tick snapshot of the handles a {@link StatSource} might need. */
 public record SamplingContext(
         Minecraft mc,
         LocalPlayer player,        // null if not in a world.

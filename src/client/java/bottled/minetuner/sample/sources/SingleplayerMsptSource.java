@@ -8,7 +8,8 @@ import bottled.minetuner.sample.StatSource;
 
 import java.util.Set;
 
-/** Server-side milliseconds-per-tick, only observable on a hosted. */
+/** Server-side milliseconds-per-tick, only observable on an integrated
+ *  (singleplayer/LAN-hosted) server. */
 public final class SingleplayerMsptSource implements StatSource {
     @Override
     public String id() {

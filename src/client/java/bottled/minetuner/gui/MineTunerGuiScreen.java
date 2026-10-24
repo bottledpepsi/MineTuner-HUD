@@ -498,10 +498,10 @@ public class MineTunerGuiScreen extends Screen {
             return handleTextEditKeys(templateEditBuffer, event) || true;
         }
         if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
-            // Search field lives inside ReorderPanel's own row layout rather.
-            // than a MenuKind case ( ReorderPanel's UiState doc).
-            // Escape-to-unfocus / Enter-to-confirm / Backspace pattern as.
-            // RENAME and TEMPLATE_EDIT above, just against reorderUiState.
+            // The search field lives inside ReorderPanel's own row layout rather
+            // than a MenuKind case (see ReorderPanel.UiState's doc). Same
+            // Escape-to-unfocus / Enter-to-confirm / Backspace pattern as
+            // RENAME and TEMPLATE_EDIT above, just against reorderUiState
             // instead of a local StringBuilder field.
             if (keyCode == Keys.ESCAPE || Keys.isEnter(keyCode)) {
                 reorderUiState.toggleSearchFocus();

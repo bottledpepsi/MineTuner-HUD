@@ -426,7 +426,7 @@ public final class MineTunerDataHolder {
     // classic text mode — getXColor() is just xColorFor(currentValue), and both
     // accept an optional per-list custom ThresholdSettings override (null = use
     // this stat's own built-in default thresholds instead).
-    // for the default hardcoded bands.
+    // (See each xColorFor() for its own default hardcoded bands.)
 
     public static int getTpsColor() {
         return getTpsColor(null);
@@ -594,8 +594,9 @@ public final class MineTunerDataHolder {
         return 0xFFFF5555;
     }
 
-    // Speed isn't part of the ThresholdSettings system.
-    // logic isn't a good/warn/bad scale, so there's no threshold override here.
+    // Speed isn't part of the ThresholdSettings system: its coloring logic isn't a
+    // good/warn/bad scale (dim when parked, yellow when unusually fast), so there's
+    // no threshold override here.
     public static int getSpeedColor() {
         return speedColorFor(speedBps);
     }
@@ -710,8 +711,8 @@ public final class MineTunerDataHolder {
         return 0xFFFF5555;
     }
 
-    // Air isn't a ThresholdSettings stat.
-    // time (not underwater) and only becomes meaningful near zero, so a.
+    // Air isn't a ThresholdSettings stat: it's full almost all of the
+    // time (not underwater) and only becomes meaningful near zero, so a
     // fixed "danger below 20%" rule reads better than a tunable good/warn band.
     public static int getAirColor() {
         return airColorFor(air, maxAir);

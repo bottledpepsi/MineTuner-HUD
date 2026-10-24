@@ -264,11 +264,11 @@ public final class BenchmarkSession {
      *  restarts cleanly rather than corrupting/appending to the in-progress capture. */
     public static void start() {
         autoStopped = false;
-        captureSize = 0; // Retains the backing arrays (no reallocation) — see clear()'s
-        // reasoning below in MineTunerDataHolder.RingBuffer for the same "just reset the
-        // count" approach; stale float values beyond captureSize are never read by
-        // anything that inspects capture/cpuCapture/gpuCapture, since every reader is
-        // bounded by captureSize.
+        captureSize = 0; // Retains the backing arrays (no reallocation) — the same
+        // "just reset the count" reasoning MineTunerDataHolder's ring buffers use on
+        // clear(): stale float values beyond captureSize are never read by anything
+        // that inspects capture/cpuCapture/gpuCapture, since every reader is bounded
+        // by captureSize.
         startNanos = System.nanoTime();
         stopNanos = 0L;
         startedAt = Instant.now();

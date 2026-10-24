@@ -8,7 +8,8 @@ import bottled.minetuner.sample.StatSource;
 
 import java.util.Set;
 
-/** Heap memory (used/max) plus the once-per-frame ring-buffer history push for. */
+/** Heap memory (used/max) plus the once-per-frame ring-buffer history pushes for
+ *  every graphable stat (see MineTunerDataHolder#updateFastMetrics). */
 public final class FastMetricsSource implements StatSource {
     @Override
     public String id() {

@@ -17,7 +17,9 @@ public final class PanelChrome {
     private PanelChrome() {
     }
 
-    /** Re-reads ROW_H/PANEL_W/PANEL_PAD/WIDE_PANEL_W from the given config's. */
+    /** Re-reads ROW_H/PANEL_W/PANEL_PAD/WIDE_PANEL_W from the given config's
+     *  GUI-tuning fields (see MineTunerConfig#clampGuiTuning, which calls this on
+     *  every save/load so Cloth edits take effect without a restart). */
     public static void syncFromConfig(bottled.minetuner.config.MineTunerConfig cfg) {
         ROW_H = cfg.panelRowHeight;
         PANEL_W = cfg.panelWidth;

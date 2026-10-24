@@ -86,10 +86,10 @@ public class MineTunerClient implements ClientModInitializer {
     public void onInitializeClient() {
         MineTunerConfig.getInstance();
 
-        // Opt-in only.
-        // and is a no-op (doesn't even create the thread) when it's false,.
-        // so a user who hasn't turned this on sees zero behavior change.
-        // no thread, no startup cost, no network activity.
+        // Opt-in only: startIfEnabled() is a no-op (it doesn't even create the
+        // thread) when hardware sensors are disabled, so a user who hasn't turned
+        // this on sees zero behavior change — no thread, no startup cost, no
+        // network activity.
         HardwareSensorPoller.startIfEnabled();
 
         HudElementRegistry.attachElementBefore(

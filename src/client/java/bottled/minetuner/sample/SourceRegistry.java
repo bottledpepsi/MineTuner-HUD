@@ -38,7 +38,8 @@ public final class SourceRegistry {
     /**
      * Immutable snapshot of every registered source, built lazily on first use.
      * Registration only ever happens once, in the static initializer above, so a single
-     * cached copy is safe: {@link #all()} can be called every render frame without a
+     * cached copy is safe: {@link #all()} is sampled once by SamplingDriver's
+     * constructor and can be called again without a
      * fresh {@code List} allocation each time. This must be computed lazily (not as a
      * field initializer declared alongside {@link #ALL}) since field initializers run
      * in declaration order — capturing a copy of {@code ALL} above the static block

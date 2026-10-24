@@ -38,7 +38,7 @@ public final class EmptySpaceMenuPanel {
         return PanelChrome.isInsidePanel(mx, my, px, py, PANEL_W, panelH);
     }
 
-    /** Returns which row was clicked ({@link #ROW_CREATE_LIST}/{@link #ROW_OPEN_CONFIG}),
+    /** Returns which row was clicked ({@link #ROW_CREATE_LIST}),
      *  or {@link #ROW_NONE} if the click missed every row. */
     public static int rowAt(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
