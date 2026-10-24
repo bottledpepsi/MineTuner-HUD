@@ -362,5 +362,7 @@
   "minetuner.label.slot": "Slot",
   "minetuner.label.vspeed": "V-Speed",
   "minetuner.label.xplevel": "XP Level",
-  "minetuner.label.xpprogress": "XP Progress"
+  "minetuner.label.xpprogress": "XP Progress",
+  "minetuner.cmd.help": "MineTuner: /minetuner gui, /minetuner config, /minetuner benchmark [start|stop|save]",
+  "minetuner.cmd.benchmark.nothing_to_save": "No completed benchmark to save — run one first"
 }
