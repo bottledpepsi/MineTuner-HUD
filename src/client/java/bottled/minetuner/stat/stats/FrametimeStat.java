@@ -36,19 +36,29 @@ public final class FrametimeStat implements StatDefinition {
         return true;
     }
 
+    /** Frametime is lower-is-better, same direction as CPU/ping/GPU temp: fewer
+     *  milliseconds per frame is better. This must match frametimeColorFor's own
+     *  {@code <=} comparisons (see MineTunerDataHolder) — an inverted value here
+     *  makes ThresholdBands.normalize collapse the warn band onto the good band on
+     *  every config load, leaving custom thresholds with no reachable yellow band. */
     @Override
     public boolean higherIsBetter() {
-        return true;
+        return false;
     }
 
+    /** Frame-time equivalents of FpsStat's 60/30 defaults (1000/60 ≈ 16.7 ms,
+     *  1000/30 ≈ 33.3 ms), matching the hardcoded bands in
+     *  MineTunerDataHolder#frametimeColorFor so the Cloth "default value" display,
+     *  freshly-seeded custom thresholds, and built-in coloring all describe the
+     *  same real-world performance bands. */
     @Override
     public float defaultGoodMin() {
-        return 8.33f;
+        return 16.7f;
     }
 
     @Override
     public float defaultWarnMin() {
-        return 16.67f;
+        return 33.3f;
     }
 
     @Override
