@@ -281,6 +281,7 @@ public class MineTunerConfig {
     public void removeList(int id) {
         lists.removeIf(l -> l.id == id);
         TemplateEngine.invalidate(id); // drop any cached template parse/warn state for the deleted list.
+        bottled.minetuner.hud.HudMotion.clear(id); // evict pulse state — ids are never reused, so it would leak otherwise.
     }
 
     /** Duplicates the given list (by id) and appends the copy. Deliberately does NOT
