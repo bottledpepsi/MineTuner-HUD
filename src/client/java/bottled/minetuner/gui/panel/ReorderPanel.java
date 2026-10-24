@@ -116,13 +116,19 @@ public final class ReorderPanel {
     }
 
     public static int panelHeight(MineTunerConfig.StatListConfig lc, UiState ui) {
-        int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRowCount(lc, ui));
-        return PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows - 1;
+        return layout(lc, ui).panelH;
     }
 
-    public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
-                              int mx, int my, int menuX, int menuY, int screenW, int screenH,
-                              MineTunerConfig.StatListConfig lc, UiState ui) {
+    /** Everything render/isInside/handleClick need, computed once from the same
+     *  inputs so hit-testing can never disagree with what the eye sees — the
+     *  previous handleClick recomputed its own full-height, unsmoothed, uncompressed
+     *  layout and clicked the wrong rows during smooth scrolling and rollout
+     *  animations. */
+    private record Layout(List<Row> rows, int totalRows, int fullVisibleRows, int visibleRows,
+                          boolean paged, int rowsToRender, int panelH, int fullPanelH) {
+    }
+
+    private static Layout layout(MineTunerConfig.StatListConfig lc, UiState ui) {
         List<Row> rows = buildRows(lc, ui);
         int totalRows = rows.size() + 1; // + Close.
         int fullVisibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
@@ -131,28 +137,88 @@ public final class ReorderPanel {
         // With no paging, render the whole logical list while the panel grows:
         // category headers below the unfolding section then move smoothly too.
         int rowsToRender = paged ? visibleRows : totalRows;
+        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows - 1;
+        int fullPanelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * fullVisibleRows;
+        return new Layout(rows, totalRows, fullVisibleRows, visibleRows, paged, rowsToRender, panelH, fullPanelH);
+    }
+
+    /** Precomputed per-row rollout-compression data for one layout pass — replaces
+     *  the old compressedPixelsBefore() rescan per row, which was O(rows²) per frame. */
+    private static final class Compression {
+        /** Compressed pixels above row i from ALL earlier stat rows. */
+        private final float[] prefixBefore;
+        /** For a StatRow at index i: how many same-category stat rows sit above it. */
+        private final int[] ownCategoryRowsBefore;
+
+        private Compression(float[] prefixBefore, int[] ownCategoryRowsBefore) {
+            this.prefixBefore = prefixBefore;
+            this.ownCategoryRowsBefore = ownCategoryRowsBefore;
+        }
+
+        private static Compression compute(List<Row> rows, UiState ui) {
+            float[] prefix = new float[rows.size() + 1];
+            int[] ownBefore = new int[rows.size()];
+            Map<MineTunerConfig.StatCategory, Integer> counts = new EnumMap<>(MineTunerConfig.StatCategory.class);
+            float running = 0f;
+            for (int i = 0; i < rows.size(); i++) {
+                prefix[i] = running;
+                if (rows.get(i) instanceof StatRow statRow) {
+                    ownBefore[i] = counts.getOrDefault(statRow.category(), 0);
+                    counts.merge(statRow.category(), 1, Integer::sum);
+                    running += ROW_H * (1f - ui.rolloutProgress(statRow.category()));
+                }
+            }
+            prefix[rows.size()] = running;
+            return new Compression(prefix, ownBefore);
+        }
+
+        /** Space hidden by earlier, partially opened category children (all of them). */
+        private float before(int exclusiveRow) {
+            return prefixBefore[exclusiveRow];
+        }
+
+        /** Same, but excluding the given stat row's own category (the row's own
+         *  group compresses around it rather than shifting it). */
+        private float beforeExcludingOwnCategory(int rowIdx, float ownCategoryCompression) {
+            return prefixBefore[rowIdx] - ownCategoryRowsBefore[rowIdx] * ownCategoryCompression;
+        }
+    }
+
+    public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
+                              int mx, int my, int menuX, int menuY, int screenW, int screenH,
+                              MineTunerConfig.StatListConfig lc, UiState ui) {
+        Layout layout = layout(lc, ui);
+        List<Row> rows = layout.rows;
+        int totalRows = layout.totalRows;
+        int rowsToRender = layout.rowsToRender;
 
         int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
         ui.clampAndAnimateScroll(maxOffset);
         int renderOffset = ui.renderOffset();
         float scrollPixels = ui.scrollFraction() * ROW_H;
 
-        int fullPanelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * fullVisibleRows;
-        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows - 1;
+        int panelH = layout.panelH;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
         // Clamp against the final height so a menu opened near the lower edge
         // grows down from one stable anchor instead of sliding while unfolding.
-        int py = PanelChrome.clampY(menuY, fullPanelH, screenH);
+        int py = PanelChrome.clampY(menuY, layout.fullPanelH, screenH);
 
         PanelChrome.drawBackground(g, px, py, PANEL_W, panelH);
 
         g.enableScissor(px, py, px + PANEL_W, py + panelH - 1);
 
-        // Title, with a paging hint so it's clear more rows exist off-screen.
+        // Title, with a paging hint so it's clear more rows exist off-screen. The
+        // ◀/▶ glyphs mark the invisible left/right half-click paging zones.
         String title = "§e" + I18n.get("gui.minetuner.reorder.title");
-        if (paged)
-            title += "  §7(" + (ui.scrollOffset + 1) + "-" + Math.min(ui.scrollOffset + visibleRows, totalRows) + "/" + totalRows + ")";
+        if (layout.paged)
+            title += "  §7(" + (ui.scrollOffset + 1) + "-" + Math.min(ui.scrollOffset + layout.visibleRows, totalRows) + "/" + totalRows + ")";
         g.text(font, title, px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
+        if (layout.paged) {
+            boolean pageBackHover = mx >= px && mx < px + PANEL_W / 2 && my >= py + PANEL_PAD && my < py + PANEL_PAD + ROW_H;
+            boolean pageFwdHover = mx >= px + PANEL_W / 2 && mx < px + PANEL_W && my >= py + PANEL_PAD && my < py + PANEL_PAD + ROW_H;
+            g.text(font, pageBackHover ? "§f◀" : "§7◀", px + PANEL_W - 24, py + PANEL_PAD + (ROW_H - font.lineHeight) / 2, 0xFFFFFFFF, false);
+            g.text(font, pageFwdHover ? "§f▶" : "§7▶", px + PANEL_W - 12, py + PANEL_PAD + (ROW_H - font.lineHeight) / 2, 0xFFFFFFFF, false);
+        }
 
         int searchY = py + PANEL_PAD + ROW_H;
         renderSearchRow(g, font, mx, my, px, searchY, ui);
@@ -165,11 +231,13 @@ public final class ReorderPanel {
 
         int rowTop = listTop;
 
-        int renderCount = paged ? Math.min(rowsToRender + 1, totalRows - renderOffset) : rowsToRender;
+        Compression compression = Compression.compute(rows, ui);
+
+        int renderCount = layout.paged ? Math.min(rowsToRender + 1, totalRows - renderOffset) : rowsToRender;
         for (int visIdx = 0; visIdx < renderCount; visIdx++) {
             int logicalIdx = renderOffset + visIdx;
             int staticY = rowTop + visIdx * ROW_H - Math.round(scrollPixels);
-            int ry = staticY - Math.round(compressedPixelsBefore(rows, logicalIdx, ui, null));
+            int ry = staticY - Math.round(compression.before(logicalIdx));
 
             if (logicalIdx == rows.size()) {
                 // Close row.
@@ -188,7 +256,8 @@ public final class ReorderPanel {
                 // Scale every child around the same category baseline. This
                 // compresses the entire group as one rolling surface, so rows
                 // never pile into a single visible line at animation start.
-                int categoryShift = Math.round(compressedPixelsBefore(rows, logicalIdx, ui, statRow.category()));
+                float ownCompression = ROW_H * (1f - reveal);
+                int categoryShift = Math.round(compression.beforeExcludingOwnCategory(logicalIdx, ownCompression));
                 int unrolledY = staticY - categoryShift;
                 int headerBottom = unrolledY - (statRow.indexInCategory() + 1) * ROW_H + ROW_H;
                 var pose = g.pose();
@@ -202,23 +271,15 @@ public final class ReorderPanel {
         }
 
         g.disableScissor();
+        // Pop the outer (whole-panel) scissor too — previously only the inner one
+        // was popped, leaking the outer clip into everything drawn afterwards
+        // wherever GuiGraphicsExtractor's scissor stacks.
+        g.disableScissor();
 
         // Do this only after every layout calculation above has observed the
         // same state. Retiring a collapse mid-render was the source of the
         // expansion flicker: later rows treated it as fully open again.
         ui.finishCompletedRollouts();
-    }
-
-    /** Space hidden by earlier, partially opened category children. */
-    private static float compressedPixelsBefore(List<Row> rows, int exclusiveRow, UiState ui,
-                                                MineTunerConfig.StatCategory excludedCategory) {
-        float pixels = 0f;
-        for (int i = 0; i < exclusiveRow; i++) {
-            if (rows.get(i) instanceof StatRow statRow && statRow.category() != excludedCategory) {
-                pixels += ROW_H * (1f - ui.rolloutProgress(statRow.category()));
-            }
-        }
-        return pixels;
     }
 
     /** Expands the panel surface with its child rows rather than snapping to final height. */
@@ -283,10 +344,14 @@ public final class ReorderPanel {
 
         boolean cogHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 34, ry, 12, ROW_H);
         g.text(font, cogHovered ? "§e⚙" : "§7⚙", px + PANEL_W - 34, ry + 2, 0xFFFFFFFF, false);
-        if (statRow.indexInCategory() > 0)
-            g.text(font, "§7▲", px + PANEL_W - 22, ry + 2, 0xFFFFFFFF, false);
-        if (statRow.indexInCategory() < statRow.categorySize() - 1)
-            g.text(font, "§7▼", px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
+        if (statRow.indexInCategory() > 0) {
+            boolean upHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 22, ry, 12, ROW_H);
+            g.text(font, upHovered ? "§f▲" : "§7▲", px + PANEL_W - 22, ry + 2, 0xFFFFFFFF, false);
+        }
+        if (statRow.indexInCategory() < statRow.categorySize() - 1) {
+            boolean downHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 12, ry, 10, ROW_H);
+            g.text(font, downHovered ? "§f▼" : "§7▼", px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
+        }
     }
 
     /** Truncates with an ellipsis so a long stat name never collides with the ⚙/▲/▼
@@ -311,22 +376,24 @@ public final class ReorderPanel {
         return PanelChrome.isInsidePanel(mx, my, px, py, PANEL_W, panelH);
     }
 
-    /** Handles a click at (mx, my). */
+    /** Handles a click at (mx, my). Uses the exact same layout math as {@link #render}
+     *  (animated height, smoothed scroll offset, rollout compression) so a click lands
+     *  on the row the user actually sees — previously it recomputed a full-height,
+     *  unsmoothed, uncompressed grid and hit the wrong rows mid-animation/scroll. */
     public static MineTunerConfig.Stat handleClick(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                                    MineTunerConfig.StatListConfig lc, UiState ui, Runnable onClose) {
-        List<Row> rows = buildRows(lc, ui);
-        int totalRows = rows.size() + 1;
-        int visibleRows = Math.min(MAX_VISIBLE_ROWS, totalRows);
-        int panelH = PANEL_PAD * 2 + ROW_H * HEADER_ROWS + ROW_H * visibleRows;
+        Layout layout = layout(lc, ui);
+        List<Row> rows = layout.rows;
+        int totalRows = layout.totalRows;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW);
-        int py = PanelChrome.clampY(menuY, panelH, screenH);
+        // Same anchor clamp as render: against the final height, so the panel the
+        // click math maps onto is the one on screen.
+        int py = PanelChrome.clampY(menuY, layout.fullPanelH, screenH);
 
         // Title-row paging: clicking the left half of the title row pages back,
         // the right half pages forward — no dedicated arrow glyphs needed since
         // the title row already shows the "(X-Y/N)" range as a paging hint.
-        boolean paged = totalRows > MAX_VISIBLE_ROWS;
-        if (paged && PanelChrome.isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
-            int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
+        if (layout.paged && PanelChrome.isHoveringRow(mx, my, px, py + PANEL_PAD, PANEL_W, ROW_H)) {
             if (mx < px + PANEL_W / 2) ui.setScrollOffset(ui.scrollOffset - MAX_VISIBLE_ROWS);
             else ui.setScrollOffset(ui.scrollOffset + MAX_VISIBLE_ROWS);
             return null;
@@ -352,9 +419,20 @@ public final class ReorderPanel {
 
         int rowTop = searchY + ROW_H;
 
-        for (int visIdx = 0; visIdx < visibleRows; visIdx++) {
-            int logicalIdx = ui.scrollOffset + visIdx;
-            int ry = rowTop + visIdx * ROW_H;
+        int maxOffset = Math.max(0, totalRows - MAX_VISIBLE_ROWS);
+        ui.clampAndAnimateScroll(maxOffset);
+        int renderOffset = ui.renderOffset();
+        float scrollPixels = ui.scrollFraction() * ROW_H;
+
+        Compression compression = Compression.compute(rows, ui);
+
+        int renderCount = layout.paged
+                ? Math.min(layout.rowsToRender + 1, totalRows - renderOffset)
+                : layout.rowsToRender;
+        for (int visIdx = 0; visIdx < renderCount; visIdx++) {
+            int logicalIdx = renderOffset + visIdx;
+            int staticY = rowTop + visIdx * ROW_H - Math.round(scrollPixels);
+            int ry = staticY - Math.round(compression.before(logicalIdx));
             if (my < ry || my >= ry + ROW_H) continue;
 
             if (logicalIdx == rows.size()) {
@@ -367,6 +445,16 @@ public final class ReorderPanel {
                 ui.toggle(header.category());
                 return null;
             } else if (row instanceof StatRow statRow) {
+                // A row still mid-rollout (its category opening/closing) isn't
+                // reliably where the hit-test math says it is — skip it, exactly
+                // like render skips drawing interaction for it (reveal < 0.98).
+                if (ui.rolloutProgress(statRow.category()) < 0.98f) return null;
+                // Re-derive the stat row's SETTLED position: its own category's
+                // compression collapses around it instead of shifting it.
+                float ownCompression = ROW_H * (1f - ui.rolloutProgress(statRow.category()));
+                int unrolledRy = staticY - Math.round(
+                        compression.beforeExcludingOwnCategory(logicalIdx, ownCompression));
+                if (my < unrolledRy || my >= unrolledRy + ROW_H) continue;
                 return handleStatRowClick(mx, px, lc, statRow);
             }
         }
@@ -469,7 +557,10 @@ public final class ReorderPanel {
             // Store the direction in the sign: positive is rolling open,
             // negative is rolling closed. This makes reversal symmetric.
             rolloutStartedAt.put(cat, expanding ? System.nanoTime() : -System.nanoTime());
-            resetScroll(); // expanding/collapsing shifts everything below it.
+            // Deliberately NOT resetting scroll here (the old behavior): a
+            // category toggle no longer yanks the list back to the top —
+            // clampAndAnimateScroll keeps the position valid as the row count
+            // changes, so the list stays anchored where the user was looking.
         }
 
         boolean isAnimating(MineTunerConfig.StatCategory category) {
