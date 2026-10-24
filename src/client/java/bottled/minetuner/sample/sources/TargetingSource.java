@@ -14,7 +14,8 @@ import java.util.Set;
 
 /** What's under the crosshair (block or entity), plus whether the player is. */
 public final class TargetingSource implements StatSource {
-    /** Below this speed, floating-point jitter from slope/edge physics can make a. */
+    /** Below this speed (in bps), floating-point jitter from slope/edge physics can
+     *  make a genuinely stationary player flicker "moving" — hence the epsilon. */
     private static final double MOVING_EPSILON = 0.01;
 
     private Object cachedBlockState;
@@ -75,8 +76,9 @@ public final class TargetingSource implements StatSource {
         }
 
         var player = ctx.player();
-        double dx = player.getDeltaMovement().x;
-        double dz = player.getDeltaMovement().z;
+        var motion = SourceMath.effectiveDeltaMovement(player);
+        double dx = motion.x;
+        double dz = motion.z;
         MineTunerDataHolder.isMoving = Math.sqrt(dx * dx + dz * dz) * 20.0 > MOVING_EPSILON;
     }
 }

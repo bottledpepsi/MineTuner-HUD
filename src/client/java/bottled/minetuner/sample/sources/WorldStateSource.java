@@ -61,12 +61,20 @@ public final class WorldStateSource implements StatSource {
             MineTunerDataHolder.canSeeSky = level.canSeeSky(pos);
 
             // Spawn is a RespawnData record ({@link LevelData}), not a bare BlockPos
-            // accessor — respawn.pos() below extracts the position component.
+            // accessor — respawn.pos() below extracts the position component. The
+            // dimension is checked first: from the Nether/End, the straight-line
+            // distance to an overworld spawn point is inter-dimensional nonsense,
+            // so the reading reports the mod's shared -1 "unavailable" sentinel
+            // instead of a huge meaningless number.
             LevelData.RespawnData respawn = level.getRespawnData();
-            BlockPos spawn = respawn.pos();
-            double dx = ctx.player().getX() - spawn.getX();
-            double dz = ctx.player().getZ() - spawn.getZ();
-            MineTunerDataHolder.distanceFromSpawn = Math.sqrt(dx * dx + dz * dz);
+            if (respawn.dimension() != null && respawn.dimension() != level.dimension()) {
+                MineTunerDataHolder.distanceFromSpawn = -1;
+            } else {
+                BlockPos spawn = respawn.pos();
+                double dx = ctx.player().getX() - spawn.getX();
+                double dz = ctx.player().getZ() - spawn.getZ();
+                MineTunerDataHolder.distanceFromSpawn = Math.sqrt(dx * dx + dz * dz);
+            }
         }
     }
 }

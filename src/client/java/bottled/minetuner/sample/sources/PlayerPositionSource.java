@@ -53,9 +53,11 @@ public final class PlayerPositionSource implements StatSource {
         else if (yaw < 337.5f) MineTunerDataHolder.facingName = "SE";
         else MineTunerDataHolder.facingName = "S";
 
-        // Horizontal speed.
-        double dx = player.getDeltaMovement().x;
-        double dz = player.getDeltaMovement().z;
+        // Horizontal speed — vehicle-aware: see SourceMath.effectiveDeltaMovement for
+        // why a rider must read the vehicle's motion, not their own.
+        var motion = SourceMath.effectiveDeltaMovement(player);
+        double dx = motion.x;
+        double dz = motion.z;
         MineTunerDataHolder.speedBps = (float) (Math.sqrt(dx * dx + dz * dz) * 20.0);
     }
 }

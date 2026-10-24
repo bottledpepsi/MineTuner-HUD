@@ -90,6 +90,8 @@ public final class PlayerVitalsSource implements StatSource {
         // Vertical speed lives here (not in PlayerPositionSource, which computes
         // horizontal-only speed from dx/dz) since it's grouped with the other
         // per-frame player-vitals reads rather than the position/facing block.
-        MineTunerDataHolder.verticalSpeedBps = (float) (player.getDeltaMovement().y * 20.0);
+        // Vehicle-aware for the same reason as SPEED — see SourceMath.
+        MineTunerDataHolder.verticalSpeedBps =
+                (float) (SourceMath.effectiveDeltaMovement(player).y * 20.0);
     }
 }

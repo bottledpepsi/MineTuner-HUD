@@ -27,7 +27,11 @@ public final class RenderedSectionsSource implements StatSource {
 
     @Override
     public boolean isAvailable(SamplingContext ctx) {
-        return ctx.mc().levelRenderer != null;
+        // Guard the object sample() actually dereferences — this used to check
+        // levelRenderer while sample() counted sections via levelExtractor, so the
+        // guard protected the wrong lifecycle (an NPE here would only be caught by
+        // SamplingDriver's catch-all and misattributed to a transient failure).
+        return ctx.mc().levelExtractor != null;
     }
 
     @Override
