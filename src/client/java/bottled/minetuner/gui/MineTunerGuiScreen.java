@@ -239,122 +239,172 @@ public class MineTunerGuiScreen extends Screen {
         // one source of truth for which panel is open and its priority. The old
         // hand-maintained if-chain here had a DIFFERENT priority order than
         // rendering (e.g. TEMPLATE_LIST before COLOR_SCALE), a silent divergence.
-        switch (activePanelRoute()) {
-            case RENAME -> {
-                if (isInsideRenameBox(mx, my)) return true; // clicks inside the box keep focus
-                if (!renameConfirmDiscard && hasUncommittedRenameText()) {
-                    // First outside click with uncommitted text: warn, stay open.
-                    renameConfirmDiscard = true;
-                    renameErrorHint = I18n.get("gui.minetuner.rename.discard");
-                    return true;
-                }
-                closeRename(false);
-                return true;
-            }
-            case TEMPLATE_EDIT -> {
-                if (isInsideTemplateEditBox(mx, my)) return true;
-                if (!templateConfirmDiscard && hasUncommittedTemplateText()) {
-                    templateConfirmDiscard = true;
-                    return true;
-                }
-                closeTemplateEdit(false);
-                return true;
-            }
-            case LIST_CONTEXT -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && ListContextMenuPanel.isInside(mx, my, menuX, menuY, width, height))
-                    handleListContextMenuClick(mx, my, lc);
-                else menuKind = MenuKind.NONE;
-                return true;
-            }
-            case EMPTY_SPACE -> {
-                if (EmptySpaceMenuPanel.isInside(mx, my, menuX, menuY, width, height))
-                    handleEmptySpaceMenuClick(mx, my, root);
-                else menuKind = MenuKind.NONE;
-                return true;
-            }
-            case DELETE -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && DeletePanel.isInside(mx, my, menuX, menuY, width, height))
-                    handleDeletePanelClick(mx, my, lc);
-                else deletePanelOpen = false;
-                return true;
-            }
-            case TEMPLATE_LIST -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && TemplateListPanel.isInside(mx, my, menuX, menuY, width, height, lc))
-                    handleTemplateListPanelClick(mx, my, lc);
-                else templateListOpen = false;
-                return true;
-            }
-            case COLOR_SCALE -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && ColorScalePanel.isInside(mx, my, menuX, menuY, width, height)) {
-                    boolean back = ColorScalePanel.handleClick(mx, my, menuX, menuY, width, height, lc, root);
-                    if (back) {
-                        colorScaleOpen = false;
-                        appearanceOpen = true;
-                    }
-                } else {
-                    colorScaleOpen = false;
-                    appearanceOpen = true; // click outside -> back to Appearance, since Color/Scale nests inside it.
-                }
-                return true;
-            }
-            case THEME -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && ThemePanel.isInside(mx, my, menuX, menuY, width, height, root)) {
-                    handleThemePanelClick(mx, my, root, lc);
-                } else {
-                    themeOpen = false;
-                    appearanceOpen = true; // click outside -> back to Appearance, since Theme nests inside it.
-                }
-                return true;
-            }
-            case APPEARANCE -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && AppearancePanel.isInside(mx, my, menuX, menuY, width, height))
-                    handleAppearancePanelClick(mx, my, lc);
-                else appearanceOpen = false;
-                return true;
-            }
-            case THRESHOLDS -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null) {
-                    if (ThresholdPanel.isInside(mx, my, menuX, menuY, width, height, font)) {
-                        handleThresholdPanelClick(mx, my, lc);
-                    } else {
-                        thresholdPanelOpen = false; // click outside -> back to stat settings.
-                    }
-                }
-                return true;
-            }
-            case STAT_SETTINGS -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null) {
-                    if (StatSettingsPanel.isInside(mx, my, menuX, menuY, width, height, statSettingsStat)) {
-                        handleStatSettingsPanelClick(mx, my, lc);
-                    } else {
-                        statSettingsStat = null; // click outside -> back to reorder.
-                    }
-                }
-                return true;
-            }
-            case REORDER -> {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc, reorderUiState)) {
-                    handleReorderPanelClick(mx, my, lc);
-                } else {
-                    reorderOpen = false;
-                    statSettingsStat = null;
-                }
-                return true;
-            }
-            case NONE -> {
-                // fall through to the list/empty-space hit testing below.
-            }
+        if (handleActivePanelRouteClick(mx, my, root)) return true;
+
+        if (handleListAreaPress(mx, my, btn, root)) return true;
+
+        if (btn == InputConstants.MOUSE_BUTTON_RIGHT) {
+            menuKind = MenuKind.EMPTY_SPACE;
+            menuX = mx;
+            menuY = my;
+            return true;
         }
 
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    /**
+     * Handles a click while any editor popup is open, one handler per panel
+     * route. Returns true when the click was consumed — popups swallow every
+     * press, inside or outside them; false when no popup is open and the
+     * caller should fall through to list/empty-space hit testing.
+     */
+    private boolean handleActivePanelRouteClick(int mx, int my, MineTunerConfig root) {
+        return switch (activePanelRoute()) {
+            case RENAME -> handleRenameRouteClick(mx, my);
+            case TEMPLATE_EDIT -> handleTemplateEditRouteClick(mx, my);
+            case LIST_CONTEXT -> handleListContextRouteClick(mx, my);
+            case EMPTY_SPACE -> handleEmptySpaceRouteClick(mx, my, root);
+            case DELETE -> handleDeleteRouteClick(mx, my);
+            case TEMPLATE_LIST -> handleTemplateListRouteClick(mx, my);
+            case COLOR_SCALE -> handleColorScaleRouteClick(mx, my, root);
+            case THEME -> handleThemeRouteClick(mx, my, root);
+            case APPEARANCE -> handleAppearanceRouteClick(mx, my);
+            case THRESHOLDS -> handleThresholdsRouteClick(mx, my);
+            case STAT_SETTINGS -> handleStatSettingsRouteClick(mx, my);
+            case REORDER -> handleReorderRouteClick(mx, my);
+            case NONE -> false; // no popup open: fall through to list/empty-space hit testing.
+        };
+    }
+
+    private boolean handleRenameRouteClick(int mx, int my) {
+        if (isInsideRenameBox(mx, my)) return true; // clicks inside the box keep focus
+        if (!renameConfirmDiscard && hasUncommittedRenameText()) {
+            // First outside click with uncommitted text: warn, stay open.
+            renameConfirmDiscard = true;
+            renameErrorHint = I18n.get("gui.minetuner.rename.discard");
+            return true;
+        }
+        closeRename(false);
+        return true;
+    }
+
+    private boolean handleTemplateEditRouteClick(int mx, int my) {
+        if (isInsideTemplateEditBox(mx, my)) return true;
+        if (!templateConfirmDiscard && hasUncommittedTemplateText()) {
+            templateConfirmDiscard = true;
+            return true;
+        }
+        closeTemplateEdit(false);
+        return true;
+    }
+
+    private boolean handleListContextRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && ListContextMenuPanel.isInside(mx, my, menuX, menuY, width, height))
+            handleListContextMenuClick(mx, my, lc);
+        else menuKind = MenuKind.NONE;
+        return true;
+    }
+
+    private boolean handleEmptySpaceRouteClick(int mx, int my, MineTunerConfig root) {
+        if (EmptySpaceMenuPanel.isInside(mx, my, menuX, menuY, width, height))
+            handleEmptySpaceMenuClick(mx, my, root);
+        else menuKind = MenuKind.NONE;
+        return true;
+    }
+
+    private boolean handleDeleteRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && DeletePanel.isInside(mx, my, menuX, menuY, width, height))
+            handleDeletePanelClick(mx, my, lc);
+        else deletePanelOpen = false;
+        return true;
+    }
+
+    private boolean handleTemplateListRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && TemplateListPanel.isInside(mx, my, menuX, menuY, width, height, lc))
+            handleTemplateListPanelClick(mx, my, lc);
+        else templateListOpen = false;
+        return true;
+    }
+
+    private boolean handleColorScaleRouteClick(int mx, int my, MineTunerConfig root) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && ColorScalePanel.isInside(mx, my, menuX, menuY, width, height)) {
+            boolean back = ColorScalePanel.handleClick(mx, my, menuX, menuY, width, height, lc, root);
+            if (back) {
+                colorScaleOpen = false;
+                appearanceOpen = true;
+            }
+        } else {
+            colorScaleOpen = false;
+            appearanceOpen = true; // click outside -> back to Appearance, since Color/Scale nests inside it.
+        }
+        return true;
+    }
+
+    private boolean handleThemeRouteClick(int mx, int my, MineTunerConfig root) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && ThemePanel.isInside(mx, my, menuX, menuY, width, height, root)) {
+            handleThemePanelClick(mx, my, root, lc);
+        } else {
+            themeOpen = false;
+            appearanceOpen = true; // click outside -> back to Appearance, since Theme nests inside it.
+        }
+        return true;
+    }
+
+    private boolean handleAppearanceRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && AppearancePanel.isInside(mx, my, menuX, menuY, width, height))
+            handleAppearancePanelClick(mx, my, lc);
+        else appearanceOpen = false;
+        return true;
+    }
+
+    private boolean handleThresholdsRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null) {
+            if (ThresholdPanel.isInside(mx, my, menuX, menuY, width, height, font)) {
+                handleThresholdPanelClick(mx, my, lc);
+            } else {
+                thresholdPanelOpen = false; // click outside -> back to stat settings.
+            }
+        }
+        return true;
+    }
+
+    private boolean handleStatSettingsRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null) {
+            if (StatSettingsPanel.isInside(mx, my, menuX, menuY, width, height, statSettingsStat)) {
+                handleStatSettingsPanelClick(mx, my, lc);
+            } else {
+                statSettingsStat = null; // click outside -> back to reorder.
+            }
+        }
+        return true;
+    }
+
+    private boolean handleReorderRouteClick(int mx, int my) {
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc, reorderUiState)) {
+            handleReorderPanelClick(mx, my, lc);
+        } else {
+            reorderOpen = false;
+            statSettingsStat = null;
+        }
+        return true;
+    }
+
+    /**
+     * Topmost-first hit test over the rendered lists: a left-press starts a
+     * drag, a right-press opens the list context menu. Returns false when no
+     * list was under the cursor so the caller can handle empty-space clicks.
+     */
+    private boolean handleListAreaPress(int mx, int my, int btn, MineTunerConfig root) {
         List<MineTunerConfig.StatListConfig> lists = root.lists;
         for (int i = lists.size() - 1; i >= 0; i--) {
             MineTunerConfig.StatListConfig lc = lists.get(i);
@@ -380,15 +430,7 @@ public class MineTunerGuiScreen extends Screen {
                 return true;
             }
         }
-
-        if (btn == InputConstants.MOUSE_BUTTON_RIGHT) {
-            menuKind = MenuKind.EMPTY_SPACE;
-            menuX = mx;
-            menuY = my;
-            return true;
-        }
-
-        return super.mouseClicked(event, doubleClick);
+        return false;
     }
 
     // --- Mouse events ---
