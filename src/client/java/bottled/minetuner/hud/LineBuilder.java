@@ -193,8 +193,9 @@ final class LineBuilder {
     /** Moving average over the last {@code window} samples, into a new array (input is
      *  never mutated). The window ramps up from size 1 at the first sample to full size
      *  once enough samples exist, rather than padding with zeros, so early points aren't
-     *  pulled artificially low. {@code window <= 1} is a no-op that returns {@code raw} itself. */
-    private static float[] applySmoothing(float[] raw, int window) {
+     *  pulled artificially low. {@code window <= 1} is a no-op that returns {@code raw} itself.
+     *  Package-private for LineBuilderSmoothingTest. */
+    static float[] applySmoothing(float[] raw, int window) {
         if (window <= 1 || raw.length < 2) return raw;
         float[] out = new float[raw.length];
         float sum = 0f;

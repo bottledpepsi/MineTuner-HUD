@@ -117,8 +117,8 @@ public final class HardwareSensorPoller {
         return (el != null && el.isJsonPrimitive()) ? el.getAsString() : null;
     }
 
-    /** SensorId looks like { /gpu-nvidia/0/temperature/0}. */
-    private static String sensorTypeFromId(String sensorId) {
+    /** SensorId looks like { /gpu-nvidia/0/temperature/0}. Package-private for HardwareSensorParserTest. */
+    static String sensorTypeFromId(String sensorId) {
         if (sensorId == null || sensorId.isEmpty()) return null;
         String[] parts = sensorId.split("/");
         // Expect at least ./<type>/<index>.
@@ -128,8 +128,9 @@ public final class HardwareSensorPoller {
 
     /** LHM formats Value as e.g. "45.2 °C" or "1234 MHz" — a leading number (optionally
      *  with a comma as the decimal separator, per some locales) followed by a unit
-     *  suffix this method ignores, returning just the numeric part. */
-    private static Double parseLeadingNumber(String raw) {
+     *  suffix this method ignores, returning just the numeric part.
+     *  Package-private for HardwareSensorParserTest. */
+    static Double parseLeadingNumber(String raw) {
         if (raw == null) return null;
         String trimmed = raw.trim();
         int i = 0;
