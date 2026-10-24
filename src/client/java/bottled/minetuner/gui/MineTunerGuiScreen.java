@@ -154,10 +154,10 @@ public class MineTunerGuiScreen extends Screen {
         } else if (menuKind == MenuKind.EMPTY_SPACE) {
             EmptySpaceMenuPanel.render(g, font, mx, my, menuX, menuY, width, height);
         } else if (menuKind == MenuKind.RENAME) {
-            RenameBoxPanel.render(g, font, menuX, menuY, width, height, renameBuffer.toString(), renameErrorHint);
+            RenameBoxPanel.render(g, font, menuX, menuY, width, height, renameBuffer, renameErrorHint);
         } else if (menuKind == MenuKind.TEMPLATE_EDIT) {
             TemplateListPanel.renderEditBox(g, font, menuX, menuY, width, height,
-                    templateEditIndex, templateEditBuffer.toString());
+                    templateEditIndex, templateEditBuffer);
         } else if (deletePanelOpen) {
             MineTunerConfig.StatListConfig lc = getListById(menuListId);
             if (lc == null) {
@@ -456,6 +456,7 @@ public class MineTunerGuiScreen extends Screen {
                 renameBuffer.backspace();
                 return true;
             }
+            if (handleTextEditKeys(renameBuffer, event)) return true;
             return true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
@@ -481,6 +482,7 @@ public class MineTunerGuiScreen extends Screen {
                 templateEditBuffer.backspace();
                 return true;
             }
+            if (handleTextEditKeys(templateEditBuffer, event)) return true;
             return true;
         }
         if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
@@ -497,6 +499,7 @@ public class MineTunerGuiScreen extends Screen {
                 reorderUiState.backspaceSearch();
                 return true;
             }
+            if (handleTextEditKeys(reorderUiState.searchBuffer(), event)) return true;
             return true;
         }
         if (keyCode == Keys.ESCAPE) {
@@ -628,6 +631,53 @@ public class MineTunerGuiScreen extends Screen {
             }
             case NONE -> { /** apply/delete already applied inside handleClick. */ }
         }
+    }
+
+    /** Shared caret/clipboard key handling for every EditBuffer-backed text field
+     *  (rename box, template line editor, reorder search): arrows, Home/End,
+     *  forward-delete and Ctrl+A/C/V/X. Returns false when the key isn't one of
+     *  these, letting each caller fall through to its own Enter/Escape handling. */
+    private boolean handleTextEditKeys(EditBuffer buffer, KeyEvent event) {
+        int keyCode = event.key();
+        int modifiers = event.modifiers();
+        boolean shift = (modifiers & Keys.MOD_SHIFT) != 0;
+        if ((modifiers & Keys.MOD_CONTROL) != 0) {
+            switch (keyCode) {
+                case Keys.A -> buffer.selectAll();
+                case Keys.C -> setClipboard(buffer.copy());
+                case Keys.X -> setClipboard(buffer.cut());
+                case Keys.V -> buffer.paste(getClipboard());
+                default -> {
+                    return false;
+                }
+            }
+            return true;
+        }
+        switch (keyCode) {
+            case Keys.LEFT -> buffer.moveCursor(-1, shift);
+            case Keys.RIGHT -> buffer.moveCursor(1, shift);
+            case Keys.HOME -> {
+                if (shift) buffer.moveCursor(-buffer.cursor(), true);
+                else buffer.home();
+            }
+            case Keys.END -> {
+                if (shift) buffer.moveCursor(buffer.length() - buffer.cursor(), true);
+                else buffer.end();
+            }
+            case Keys.DELETE -> buffer.deleteForward();
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void setClipboard(String value) {
+        minecraft.keyboardHandler.setClipboard(value);
+    }
+
+    private String getClipboard() {
+        return minecraft.keyboardHandler.getClipboard();
     }
 
     private void handleReorderPanelClick(int mx, int my, MineTunerConfig.StatListConfig lc) {

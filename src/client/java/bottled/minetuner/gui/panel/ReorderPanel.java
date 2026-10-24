@@ -298,16 +298,15 @@ public final class ReorderPanel {
 
         boolean hasText = ui.hasSearch();
         String icon = ui.isSearchFocused() ? "§e🔍" : "§7🔍";
-        String text;
-        if (hasText) {
-            text = "§f" + ui.searchText() + (ui.isSearchFocused() ? "§7|" : "");
-        } else if (ui.isSearchFocused()) {
-            text = "§7|"; // empty field, focused.
+        if (hasText || ui.isSearchFocused()) {
+            g.text(font, icon + " ", px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+            int textX = px + PANEL_PAD + font.width(icon + " ");
+            RenameBoxPanel.drawBufferWithCaret(g, font, ui.searchBuffer(), textX, ry + 2,
+                    PANEL_W - (textX - px) - PANEL_PAD - (hasText ? 14 : 0));
         } else {
-            text = "§8" + I18n.get("gui.minetuner.reorder.search_hint");
+            g.text(font, icon + " §8" + I18n.get("gui.minetuner.reorder.search_hint"),
+                    px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
         }
-        g.text(font, icon + " " + truncate(font, text, PANEL_W - 16 - (hasText ? 14 : 0)),
-                px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
 
         if (hasText) {
             boolean clearHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 14, ry, 12, ROW_H);
@@ -594,6 +593,12 @@ public final class ReorderPanel {
 
         public String searchText() {
             return search.toString();
+        }
+
+        /** Direct access for the shared caret/clipboard key handling — the existing
+         *  append/backspace/clear forwarders above remain the common path. */
+        public EditBuffer searchBuffer() {
+            return search;
         }
 
         public boolean hasSearch() {

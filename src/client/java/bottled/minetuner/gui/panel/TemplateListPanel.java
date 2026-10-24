@@ -1,6 +1,7 @@
 package bottled.minetuner.gui.panel;
 
 import bottled.minetuner.config.MineTunerConfig;
+import bottled.minetuner.core.EditBuffer;
 import bottled.minetuner.gui.render.PanelChrome;
 import bottled.minetuner.hud.TemplateEngine;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -178,16 +179,16 @@ public final class TemplateListPanel {
     /** Text-entry box for one templateLines entry. */
     public static void renderEditBox(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                                      int menuX, int menuY, int screenW, int screenH,
-                                     int templateEditIndex, String templateEditBuffer) {
+                                     int templateEditIndex, EditBuffer buffer) {
         String prompt = "§e" + I18n.get("gui.minetuner.template.edit_prompt", templateEditIndex + 1);
-        String display = templateEditBuffer + "§7|";
-        int panelW = Math.max(PANEL_W + 40, Math.min(300, font.width(display) + PANEL_PAD * 2));
+        int panelW = PANEL_W + 40;
         int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2;
         int px = PanelChrome.clampX(menuX, panelW, screenW);
         int py = PanelChrome.clampY(menuY, panelH, screenH);
         PanelChrome.drawBackground(g, px, py, panelW, panelH);
         g.text(font, prompt, px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
-        g.text(font, display, px + PANEL_PAD, py + PANEL_PAD + ROW_H + 2, 0xFFFFFFFF, false);
+        RenameBoxPanel.drawBufferWithCaret(g, font, buffer, px + PANEL_PAD, py + PANEL_PAD + ROW_H + 2,
+                panelW - PANEL_PAD * 2);
     }
 
     public enum Kind {NONE, CLOSED, EDIT_LINE}
