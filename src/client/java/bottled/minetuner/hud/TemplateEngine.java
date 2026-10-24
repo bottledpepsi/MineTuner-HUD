@@ -209,12 +209,11 @@ public final class TemplateEngine {
         // Safety net: rawValue() is supposed to already be label-free (see
         // StatDefinition#rawValue's contract), but a stat implementation could forget to
         // override it, which bakes in a "Label: " prefix from format() instead.
-        // Strip it the same way MineTunerRenderer does for showPrefix=off, so a
-        // stat that forgets to override rawValue() still degrades cleanly to a bare
-        // value in a template line, instead of doubling the label in template mode.
-        int sep = text.indexOf(": ");
-        if (sep >= 0) text = text.substring(sep + 2);
-        return text;
+        // Strip it the same way LineBuilder does for showPrefix=off — via the stat's
+        // declared label when available (translation-order independent), with the
+        // legacy ": " match as the fallback — so a stat that forgets to override
+        // rawValue() still degrades cleanly to a bare value in a template line.
+        return LineBuilder.stripLabelPrefix(def, text);
     }
 
     /** Renders a parsed token list to a sequence of colored runs. */

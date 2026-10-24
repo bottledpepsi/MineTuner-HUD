@@ -27,6 +27,22 @@ public interface StatDefinition {
         return format(decimals);
     }
 
+    /** The stat's localized label, e.g. {@code "TPS"} — WITHOUT the {@code ": "}
+     *  separator. Default resolves the optional {@code minetuner.label.<token>} key
+     *  (shipped for every stat whose format string has a label prefix); returns null
+     *  when absent, and callers then fall back to matching {@code ": "} inside
+     *  format()'s output. Declaring labels as their own keys decouples
+     *  showPrefix=off and template mode from the exact punctuation and word order
+     *  of each translation's format string — a translation that orders its value
+     *  differently no longer breaks prefix stripping. */
+    default String label() {
+        String key = "minetuner.label." + token();
+        // I18n.get falls back to the key itself when the translation is absent, so
+        // "resolved == key" is the absence check (no exists() in these mappings).
+        String resolved = net.minecraft.client.resources.language.I18n.get(key);
+        return key.equals(resolved) ? null : resolved;
+    }
+
     /** Default decimal count used when no per-stat/per-token override is given. */
     default int defaultDecimals() {
         return 1;

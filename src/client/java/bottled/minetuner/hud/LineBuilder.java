@@ -126,10 +126,11 @@ final class LineBuilder {
             String text = def.format(decimals);
             int color = def.color(cfg.getThreshold(stat));
             if (text == null || text.isEmpty()) continue;
-            // Strip the "Label: " prefix when the user has turned it off.
+            // Strip the "Label: " prefix when the user has turned it off — via the
+            // stat's declared label when it has one (translation-order independent),
+            // falling back to the legacy ": " match otherwise.
             if (!cfg.getStatSettings(stat).showPrefix) {
-                int sep = text.indexOf(": ");
-                if (sep >= 0) text = text.substring(sep + 2);
+                text = stripLabelPrefix(def, text);
             }
             // Per-list color override replaces threshold coloring.
             if (cfg.useCustomColor) color = cfg.overrideColor;
@@ -180,8 +181,7 @@ final class LineBuilder {
         // text and graph doesn't change how the number reads.
         String label = def.format(decimals);
         if (!statSettings.showPrefix) {
-            int sep = label.indexOf(": ");
-            if (sep >= 0) label = label.substring(sep + 2);
+            label = stripLabelPrefix(def, label);
         }
         // MSPT can go unavailable mid-session (e.g. leaving a singleplayer world), while
         // its history still has old samples. Falling back to the last sample's formatted
@@ -228,6 +228,21 @@ final class LineBuilder {
 
         return new GraphEntry(stat, rawHistory, displayHistory, currentColor, label,
                 minValueLabel, maxValueLabel, scaleMin, scaleMax, peakMinIdx, peakMaxIdx, style, entryThreshold);
+    }
+
+    /** Strips the "Label: " prefix from a formatted stat line: prefers the stat's
+     *  declared {@link StatDefinition#label() label} (works for translations whose
+     *  format string doesn't order its value after a literal ": "), and falls back
+     *  to the legacy ": " match when no label is declared or the declared label
+     *  doesn't match (e.g. a third-party stat without a label key). */
+    static String stripLabelPrefix(StatDefinition def, String text) {
+        String label = def.label();
+        if (label != null && !label.isEmpty()) {
+            String prefix = label + ": ";
+            if (text.startsWith(prefix)) return text.substring(prefix.length());
+        }
+        int sep = text.indexOf(": ");
+        return sep >= 0 ? text.substring(sep + 2) : text;
     }
 
     /** Moving average over the last {@code window} samples, into a new array (input is
