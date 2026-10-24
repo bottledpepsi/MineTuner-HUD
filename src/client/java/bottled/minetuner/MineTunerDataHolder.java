@@ -1,6 +1,8 @@
 package bottled.minetuner;
 
 import bottled.minetuner.config.MineTunerConfig.ThresholdSettings;
+import bottled.minetuner.core.RingBuffer;
+import bottled.minetuner.core.RingBuffer;
 
 import java.lang.management.*;
 import java.util.ArrayDeque;
@@ -1160,41 +1162,4 @@ public final class MineTunerDataHolder {
                 : "N/A";
     }
 
-    /** Minimal fixed-size float ring buffer with copy-out reads. */
-    private static final class RingBuffer {
-        private final float[] buf;
-        private int count = 0; // number of valid samples, caps at buf.length.
-        private int head = 0; // index the NEXT sample will be written to.
-
-        RingBuffer(int size) {
-            this.buf = new float[size];
-        }
-
-        void push(float value) {
-            buf[head] = value;
-            head = (head + 1) % buf.length;
-            if (count < buf.length) count++;
-        }
-
-        /** Returns a copy of the valid samples in oldest-to-newest order. */
-        float[] snapshot() {
-            float[] out = new float[count];
-            int start = (head - count + buf.length) % buf.length;
-            for (int i = 0; i < count; i++) {
-                out[i] = buf[(start + i) % buf.length];
-            }
-            return out;
-        }
-
-        /** Discards all samples without reallocating the backing array — resetting
-         *  count/head is sufficient since snapshot() only ever reads the [0, count)
-         *  valid range; the stale float values left behind in buf are never visible
-         *  through snapshot() until push() overwrites them again. Added specifically
-         *  for MineTunerDataHolder#resetPercentileLowFps(); no other ring buffer in
-         *  this class needed a mid-session reset before this feature. */
-        void clear() {
-            count = 0;
-            head = 0;
-        }
-    }
 }
