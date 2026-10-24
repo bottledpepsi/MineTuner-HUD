@@ -211,6 +211,13 @@ public class MineTunerGuiScreen extends Screen {
         int my = (int) event.y();
         int btn = event.button();
 
+        // A list drag is in progress: swallow every press (including a stray
+        // right-click) until mouseReleased resolves the move. Previously a
+        // right-click here opened a context menu mid-drag, leaving the drag
+        // ghost + snap lines alive under the open menu and the pending release
+        // still snapping+saving the move underneath it.
+        if (dragging) return true;
+
         MineTunerConfig root = MineTunerConfig.getInstance();
 
         if (menuKind == MenuKind.RENAME) {
