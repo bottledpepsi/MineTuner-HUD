@@ -324,36 +324,19 @@ public final class HardwareSensorPoller {
                 + "until this recovers.", message);
     }
 
-    /** LHM's tree is a node with a "Children" array, recursively, down to leaf. */
+    /** LHM's tree is a node with a "Children" array, recursively, down to leaf. One
+     *  breadth-first walk collects ALL five sensor kinds instead of five separate
+     *  BFS passes over the same tree — same first-match-in-BFS-order semantics per
+     *  sensor, one queue, one pass. The walk is iterative (not recursive — LHM's
+     *  node tree depth isn't bounded by anything MineTuner controls, so recursion
+     *  could risk a stack overflow on a deep tree) and capped at MAX_NODES so a
+     *  pathological/huge tree can't turn a single poll into an unbounded scan. */
     private SensorReadings extractReadings(JsonObject root) {
-        LeafSensor temp = findFirstSensor(root, "temperature", "gpu core");
-        LeafSensor clock = findFirstSensor(root, "clock", "gpu core");
-        LeafSensor usage = findFirstSensor(root, "load", "gpu core");
-        LeafSensor vramUsed = findFirstSensor(root, "smalldata", "gpu memory used");
-        LeafSensor vramMax = findFirstSensor(root, "smalldata", "gpu memory total");
-
-        return new SensorReadings(
-                temp != null ? temp.value : -1,
-                clock != null ? clock.value : -1,
-                usage != null ? usage.value : -1,
-                vramUsed != null ? vramUsed.value : -1,
-                vramMax != null ? vramMax.value : -1
-        );
-    }
-
-    /** Breadth-first walk of the tree (iterative, not recursive — LHM's node tree
-     *  depth isn't bounded by anything MineTuner controls, so recursion here could risk a
-     *  stack overflow on a deep tree; the explicit ArrayDeque queue below has no such
-     *  limit, and MAX_NODES caps total work either way). Returns the first leaf sensor
-     *  whose SensorId type matches sensorTypeLower and whose Text contains
-     *  nameContainsLower (case-insensitive), or null if none match within the cap. */
-    private LeafSensor findFirstSensor(JsonObject root, String sensorTypeLower, String nameContainsLower) {
+        final int MAX_NODES = 20_000;
         Deque<JsonObject> queue = new ArrayDeque<>();
         queue.add(root);
         int visited = 0;
-        // Hard cap so a pathological/huge tree can't turn a single poll into.
-        // an unbounded scan on the background thread.
-        final int MAX_NODES = 20_000;
+        LeafSensor temp = null, clock = null, usage = null, vramUsed = null, vramMax = null;
 
         while (!queue.isEmpty() && visited < MAX_NODES) {
             JsonObject node = queue.poll();
@@ -361,18 +344,32 @@ public final class HardwareSensorPoller {
 
             JsonElement sensorIdEl = node.get("SensorId");
             if (sensorIdEl != null && sensorIdEl.isJsonPrimitive()) {
-                String sensorId = sensorIdEl.getAsString();
-                String type = sensorTypeFromId(sensorId);
-                if (type != null && type.equalsIgnoreCase(sensorTypeLower)) {
-                    String text = getString(node, "Text");
-                    if (text != null && text.toLowerCase(Locale.ROOT).contains(nameContainsLower)) {
-                        Double value = parseLeadingNumber(getString(node, "Value"));
-                        if (value != null) {
-                            return new LeafSensor(value);
+                String type = sensorTypeFromId(sensorIdEl.getAsString());
+                String text = getString(node, "Text");
+                if (type != null && text != null) {
+                    String textLower = text.toLowerCase(Locale.ROOT);
+                    Double value = parseLeadingNumber(getString(node, "Value"));
+                    if (value != null) {
+                        LeafSensor leaf = new LeafSensor(value);
+                        // Fill only still-empty slots, so each kind keeps the same
+                        // "first matching leaf in BFS order" result the old five
+                        // separate searches produced.
+                        if (temp == null && type.equalsIgnoreCase("temperature") && textLower.contains("gpu core")) {
+                            temp = leaf;
+                        } else if (clock == null && type.equalsIgnoreCase("clock") && textLower.contains("gpu core")) {
+                            clock = leaf;
+                        } else if (usage == null && type.equalsIgnoreCase("load") && textLower.contains("gpu core")) {
+                            usage = leaf;
+                        } else if (vramUsed == null && type.equalsIgnoreCase("smalldata") && textLower.contains("gpu memory used")) {
+                            vramUsed = leaf;
+                        } else if (vramMax == null && type.equalsIgnoreCase("smalldata") && textLower.contains("gpu memory total")) {
+                            vramMax = leaf;
                         }
                     }
                 }
             }
+
+            if (temp != null && clock != null && usage != null && vramUsed != null && vramMax != null) break;
 
             JsonElement childrenEl = node.get("Children");
             if (childrenEl != null && childrenEl.isJsonArray()) {
@@ -382,7 +379,14 @@ public final class HardwareSensorPoller {
                 }
             }
         }
-        return null;
+
+        return new SensorReadings(
+                temp != null ? temp.value : -1,
+                clock != null ? clock.value : -1,
+                usage != null ? usage.value : -1,
+                vramUsed != null ? vramUsed.value : -1,
+                vramMax != null ? vramMax.value : -1
+        );
     }
 
     private record SensorReadings(double tempC, double clockMhz, double usagePercent, double vramUsedMb,
