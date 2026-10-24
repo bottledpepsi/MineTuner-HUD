@@ -13,13 +13,12 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
 
     // `lines`/`colors` stay the flat single-color view every existing reader
     // (width measurement, drag-preview rendering, getListBounds sizing) was
-    // built against — one entry per row, one color per line/graph-label
-    // row) and only carries information beyond "one flat color" when a
-    // template line actually used an inline color=# modifier. Only MineTunerRenderer
-    // uses `runs` to draw, everything else keeps reading `lines`/`colors`
-    // unchanged. `lines` still holds the same text as `runs.get(i)` joined
-    // together, so anything measuring wrapped text width doesn't need to
-    // change just because coloring got richer.
+    // built against — one entry per row, one color per row. `runs` only carries
+    // information beyond "one flat color" when a template line actually used an
+    // inline color=# modifier. Only MineTunerRenderer uses `runs` to draw,
+    // everything else keeps reading `lines`/`colors` unchanged. `lines` still
+    // holds the same text as `runs.get(i)` joined together, so anything
+    // measuring row width doesn't need to change just because coloring got richer.
 
     /** Fallback size for the empty-list placeholder. */
     public static final int GRAPH_W = 80;
@@ -49,10 +48,16 @@ public record LineCache(List<String> lines, List<Integer> colors, List<List<Temp
     }
 
     public int boxW(net.minecraft.client.gui.Font font, int paddingX) {
-        int textW = lines.stream().mapToInt(font::width).max().orElse(0);
-        int graphW = graphEntries.isEmpty() ? 0 : graphEntries.stream()
-                .mapToInt(e -> Math.max(e.style().width, font.width(e.label()) + 4))
-                .max().orElse(GRAPH_W);
+        // Plain loops — the stream versions allocated a pipeline + lambdas twice per
+        // frame per list (boxW is called for both measurement and drawing).
+        int textW = 0;
+        for (String line : lines) {
+            textW = Math.max(textW, font.width(line));
+        }
+        int graphW = 0;
+        for (GraphEntry e : graphEntries) {
+            graphW = Math.max(graphW, Math.max(e.style().width, font.width(e.label()) + 4));
+        }
         int px = HudPanelChrome.paddingX(paddingX);
         return Math.max(textW, graphW) + px * 2;
     }

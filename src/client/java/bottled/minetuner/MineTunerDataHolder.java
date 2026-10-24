@@ -700,7 +700,13 @@ public final class MineTunerDataHolder {
     }
 
     private static String fmt(double value, int decimals) {
-        return String.format("%." + Math.max(0, Math.min(6, decimals)) + "f", value);
+        // FastFormat is proven byte-identical to String.format(Locale.ROOT, "%.<n>f")
+        // by FastFormatMatchesStringFormat (incl. tie rounding), and routes
+        // NaN/Infinity/negatives through the same slow path — this just skips the
+        // format-string machinery on the hot per-frame HUD formatting path.
+        StringBuilder sb = new StringBuilder(16);
+        bottled.minetuner.core.FastFormat.appendFixed(sb, value, Math.max(0, Math.min(6, decimals)));
+        return sb.toString();
     }
 
     public static String getFormattedTps() {

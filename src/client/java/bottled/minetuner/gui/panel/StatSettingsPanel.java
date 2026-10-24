@@ -7,8 +7,6 @@ import bottled.minetuner.stat.StatRegistry;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.language.I18n;
 
-import java.util.ArrayList;
-import java.util.List;
 
 import static bottled.minetuner.gui.render.PanelChrome.*;
 
@@ -51,14 +49,18 @@ public final class StatSettingsPanel {
      *  the panel that a click can actually land on — i.e. every row from
      *  {@link #panelRows} except the non-clickable header (row 0). */
     public static int[] rowOffsets(MineTunerConfig.Stat stat, int py) {
-        List<Integer> offsets = new ArrayList<>();
-        int row = 1; // row 0 is the header, which isn't clickable.
-        offsets.add(py + PANEL_PAD + ROW_H * row++); // prefix.
-        if (supportsDecimals(stat)) offsets.add(py + PANEL_PAD + ROW_H * row++);
-        if (supportsGraph(stat)) offsets.add(py + PANEL_PAD + ROW_H * row++);
-        if (supportsThresholds(stat)) offsets.add(py + PANEL_PAD + ROW_H * row++);
-        offsets.add(py + PANEL_PAD + ROW_H * row); // back.
-        return offsets.stream().mapToInt(Integer::intValue).toArray();
+        // Plain array build — the previous List<Integer>+stream version allocated
+        // on every render frame for no benefit.
+        int rows = panelRows(stat);
+        int[] offsets = new int[rows - 1]; // every row except the non-clickable header.
+        int row = 1;
+        int i = 0;
+        offsets[i++] = py + PANEL_PAD + ROW_H * row++; // prefix.
+        if (supportsDecimals(stat)) offsets[i++] = py + PANEL_PAD + ROW_H * row++;
+        if (supportsGraph(stat)) offsets[i++] = py + PANEL_PAD + ROW_H * row++;
+        if (supportsThresholds(stat)) offsets[i++] = py + PANEL_PAD + ROW_H * row++;
+        offsets[i] = py + PANEL_PAD + ROW_H * row; // back.
+        return offsets;
     }
 
     public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,

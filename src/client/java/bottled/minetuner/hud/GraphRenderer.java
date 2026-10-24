@@ -34,7 +34,7 @@ final class GraphRenderer {
         if (plotW <= 0 || plotH <= 0 || n == 0) return;
 
         if (style.showGridlines && plotH >= 12) {
-            for (float frac : new float[]{0.25f, 0.5f, 0.75f}) {
+            for (float frac : GRIDLINES) {
                 int gy = plotY + Math.round(plotH * (1f - frac));
                 for (int dx = 0; dx < plotW; dx += 3) {
                     graphics.fill(plotX + dx, gy, plotX + Math.min(dx + 1, plotW), gy + 1, 0x25FFFFFF);
@@ -180,12 +180,20 @@ final class GraphRenderer {
         };
     }
 
+    /** 4-stop gradient blue→green→yellow→red. Hoisted to a constant — it used to be
+     *  reallocated once per pixel column per frame in GRADIENT color mode, the
+     *  single worst allocation site in the HUD render path. */
+    private static final int[][] GRADIENT_STOPS = {
+            {0x40, 0x80, 0xFF}, {0x55, 0xFF, 0x55}, {0xFF, 0xFF, 0x55}, {0xFF, 0x55, 0x55}};
+
+    /** Horizontal gridline positions (fractions of the plot height). */
+    private static final float[] GRIDLINES = {0.25f, 0.5f, 0.75f};
+
     private static int gradientColorForValue(float value, float scaleMin, float scaleMax) {
         float range = scaleMax - scaleMin;
         float t = range > 1e-4f ? (value - scaleMin) / range : 0.5f;
         t = Math.max(0f, Math.min(1f, t));
-        // 4-stop gradient.
-        int[][] stops = {{0x40, 0x80, 0xFF}, {0x55, 0xFF, 0x55}, {0xFF, 0xFF, 0x55}, {0xFF, 0x55, 0x55}};
+        int[][] stops = GRADIENT_STOPS;
         float scaled = t * (stops.length - 1);
         int idx = Math.min(stops.length - 2, (int) scaled);
         float localT = scaled - idx;
