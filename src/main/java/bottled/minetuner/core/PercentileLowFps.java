@@ -20,7 +20,9 @@ public final class PercentileLowFps {
     /**
      * Both the 1% and the 0.1% low from a single sort. Results are identical to calling
      * {@link #computeLowFps} twice (same slice size, same summation order, same
-     * per-fraction minimum-sample NaN rule).
+     * per-fraction minimum-sample NaN rule). The input array is left untouched — use
+     * {@link #computeLowsInPlace} when the caller exclusively owns a scratch snapshot
+     * and the defensive copy is pure waste.
      */
     public static Lows computeLows(float[] frametimesMs, int min1PctSamples, int min01PctSamples) {
         boolean want1 = frametimesMs.length >= min1PctSamples;
@@ -30,6 +32,23 @@ public final class PercentileLowFps {
         return new Lows(
                 want1 ? lowFromAscending(ascending, 0.01f) : UNAVAILABLE,
                 want01 ? lowFromAscending(ascending, 0.001f) : UNAVAILABLE);
+    }
+
+    /**
+     * Same result as {@link #computeLows}, but sorts the given array in place — for
+     * callers passing an array they exclusively own (a fresh snapshot nobody else
+     * reads), sparing the defensive clone of up to 2000 floats twice a second.
+     * BenchmarkSession deliberately keeps using the cloning variant: its input is the
+     * frozen frametime series, which must stay in capture order for display/CSV.
+     */
+    public static Lows computeLowsInPlace(float[] frametimesMs, int min1PctSamples, int min01PctSamples) {
+        boolean want1 = frametimesMs.length >= min1PctSamples;
+        boolean want01 = frametimesMs.length >= min01PctSamples;
+        if (!want1 && !want01) return new Lows(UNAVAILABLE, UNAVAILABLE);
+        Arrays.sort(frametimesMs);
+        return new Lows(
+                want1 ? lowFromAscending(frametimesMs, 0.01f) : UNAVAILABLE,
+                want01 ? lowFromAscending(frametimesMs, 0.001f) : UNAVAILABLE);
     }
 
     private static void checkFraction(float fraction) {

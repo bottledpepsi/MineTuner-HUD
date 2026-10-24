@@ -103,4 +103,30 @@ class PercentileLowFpsTest {
         assertEquals(125f, t.low1Pct(), 0.0001f);
         assertTrue(Float.isNaN(t.low01Pct()));
     }
+
+    @Test
+    void inPlaceVariantMatchesCloningVariantAndSortsItsInput() {
+        java.util.Random rnd = new java.util.Random(42);
+        for (int iter = 0; iter < 500; iter++) {
+            int n = 1 + rnd.nextInt(400);
+            float[] a = new float[n];
+            for (int i = 0; i < n; i++) a[i] = rnd.nextFloat() * 50f;
+            float[] b = a.clone();
+
+            PercentileLowFps.Lows inPlace = PercentileLowFps.computeLowsInPlace(a, 100, 1000);
+            PercentileLowFps.Lows cloning = PercentileLowFps.computeLows(b, 100, 1000);
+
+            assertEquals(cloning.low1Pct(), inPlace.low1Pct());
+            assertEquals(cloning.low01Pct(), inPlace.low01Pct());
+            // When the min-sample threshold is met the in-place variant sorts its
+            // (exclusively owned) input; below it, it returns early untouched.
+            if (n >= 100) {
+                float[] sorted = b.clone();
+                java.util.Arrays.sort(sorted);
+                org.junit.jupiter.api.Assertions.assertArrayEquals(sorted, a, 0f);
+            } else {
+                org.junit.jupiter.api.Assertions.assertArrayEquals(b, a, 0f);
+            }
+        }
+    }
 }
