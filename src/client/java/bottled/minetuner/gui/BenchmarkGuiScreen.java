@@ -22,8 +22,6 @@ public class BenchmarkGuiScreen extends Screen {
     private static final int SECTION_GAP = 10;
     private static final int RESULT_ROW_H = 16;
 
-//    private static final int LIVE_GRAPH_H = 46;
-
     private static final int MIN_RESULT_GRAPH_H = 40;
 
     private static final int GRAPH_LABEL_H = 12;
@@ -93,9 +91,6 @@ public class BenchmarkGuiScreen extends Screen {
         } else {
             drawEmptyState(g, contentX, y, contentW);
         }
-
-//        g.centeredText(font, "§7" + I18n.get("gui.minetuner.benchmark.hint"),
-//                width / 2, height - 14, COL_TEXT_DIM);
 
         super.extractRenderState(g, mx, my, partial);
     }

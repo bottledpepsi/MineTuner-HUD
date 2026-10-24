@@ -942,25 +942,9 @@ public class MineTunerGuiScreen extends Screen {
     }
 
     private int[] getListBounds(MineTunerConfig.StatListConfig lc) {
-        var font = this.font;
-        LineCache cache = LineCache.getCachedLines(lc);
-        int lineH = font.lineHeight + 1;
-        float scale = lc.textScale <= 0f ? 1f : lc.textScale;
-        int boxW, boxH;
-        if (cache.rowKinds().isEmpty()) {
-            // Mirrors ListPreviewRenderer.drawList's empty-placeholder sizing (no scale).
-            String placeholder = I18n.get("gui.minetuner.no_stats");
-            int px = HudPanelChrome.paddingX(lc.paddingX);
-            int py = HudPanelChrome.paddingY(lc.paddingY);
-            boxW = font.width(placeholder) + px * 2;
-            boxH = lineH + py * 2;
-        } else {
-            // Mirrors ListPreviewRenderer.drawList's scaled sizing, which mirrors.
-            boxW = Math.round(cache.boxW(font, lc.paddingX) * scale);
-            boxH = Math.round(cache.boxH(font, lc.paddingY) * scale);
-        }
-        int[] pos = ListPositioner.getPosition(lc, width, height, boxW, boxH);
-        return new int[]{pos[0], pos[1], boxW, boxH};
+        int[] size = ListPreviewRenderer.computeBoxSize(font, lc);
+        int[] pos = ListPositioner.getPosition(lc, width, height, size[0], size[1]);
+        return new int[]{pos[0], pos[1], size[0], size[1]};
     }
 
     // --- Utility ---

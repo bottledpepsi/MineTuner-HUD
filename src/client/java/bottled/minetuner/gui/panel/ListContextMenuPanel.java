@@ -27,12 +27,6 @@ public final class ListContextMenuPanel {
         return PANEL_PAD * 2 + ROW_H * LM_COUNT;
     }
 
-    public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
-                              int mx, int my, int menuX, int menuY, int screenW, int screenH,
-                              MineTunerConfig.StatListConfig lc) {
-        render(g, font, mx, my, menuX, menuY, screenW, screenH, lc, 1f);
-    }
-
     /** Renders the menu as a vertically unfolding group of rows. */
     public static void render(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                               int mx, int my, int menuX, int menuY, int screenW, int screenH,

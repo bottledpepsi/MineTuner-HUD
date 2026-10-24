@@ -134,7 +134,9 @@ public final class StatSettingsPanel {
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                    MineTunerConfig.Stat statSettingsStat) {
-        int rows = (statSettingsStat != null) ? panelRows(statSettingsStat) : 3;
+        // statSettingsStat is non-null whenever this panel is routed to (the dispatch
+        // requires it), so there's no null fallback to compute against.
+        int rows = panelRows(statSettingsStat);
         int panelH = PANEL_PAD * 2 + ROW_H * rows;
         int px = PanelChrome.clampX(menuX, PANEL_W, screenW), py = PanelChrome.clampY(menuY, panelH, screenH);
         return PanelChrome.isInsidePanel(mx, my, px, py, PANEL_W, panelH);

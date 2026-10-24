@@ -72,4 +72,19 @@ public final class PanelChrome {
     public static int clampY(int y, int h, int screenHeight) {
         return Math.max(0, Math.min(screenHeight - h - 4, y));
     }
+
+    /** Truncates with an ellipsis so long text never escapes a panel row: picks the
+     *  longest prefix (binary search on rendered width) that still fits maxWidth once
+     *  the ellipsis is appended. Replaces the four per-panel copies of this. */
+    public static String truncateText(net.minecraft.client.gui.Font font, String s, int maxWidth) {
+        if (font.width(s) <= maxWidth) return s;
+        String ellipsis = "...";
+        int lo = 0, hi = s.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid;
+            else hi = mid - 1;
+        }
+        return s.substring(0, lo) + ellipsis;
+    }
 }

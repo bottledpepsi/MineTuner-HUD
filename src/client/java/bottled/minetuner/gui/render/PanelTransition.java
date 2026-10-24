@@ -9,7 +9,10 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
  */
 public final class PanelTransition {
 
-    private static final long DURATION_NANOS = 210_000_000L;
+    /** The shared 210ms rollout/entrance window used by the editor's animated
+     *  panels (previously duplicated as two private constants). */
+    public static final long ROLLOUT_NANOS = 210_000_000L;
+    private static final long DURATION_NANOS = ROLLOUT_NANOS;
     private int route = Integer.MIN_VALUE;
     private long startedAt;
 
@@ -41,8 +44,14 @@ public final class PanelTransition {
     public float progress() {
         if (startedAt == 0L) return 1f;
         float linear = Math.max(0f, Math.min(1f, (System.nanoTime() - startedAt) / (float) DURATION_NANOS));
-        // Cubic ease-out: responsive at the beginning, then gently settles.
-        float inverse = 1f - linear;
+        return easeOutCubic(linear);
+    }
+
+    /** Cubic ease-out: responsive at the beginning, then gently settles. The one
+     *  shared copy (was duplicated in ReorderPanel and TemplateListPanel too). */
+    public static float easeOutCubic(float linear) {
+        float clamped = Math.max(0f, Math.min(1f, linear));
+        float inverse = 1f - clamped;
         return 1f - inverse * inverse * inverse;
     }
 }

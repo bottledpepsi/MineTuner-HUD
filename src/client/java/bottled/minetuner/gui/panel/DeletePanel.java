@@ -40,7 +40,7 @@ public final class DeletePanel {
         // The list being deleted, truncated so a long user-created name can't
         // escape the narrow standard panel.
         g.text(font, title, px + PANEL_PAD, py + PANEL_PAD, 0xFFFFFFFF, false);
-        g.text(font, "§f" + truncate(font, name, PANEL_W - PANEL_PAD * 2),
+        g.text(font, "§f" + PanelChrome.truncateText(font, name, PANEL_W - PANEL_PAD * 2),
                 px + PANEL_PAD, py + PANEL_PAD + ROW_H, 0xFFFFFFFF, false);
 
         int rowTop = py + PANEL_PAD + ROW_H * TITLE_ROWS;
@@ -57,19 +57,7 @@ public final class DeletePanel {
         g.text(font, label, px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
     }
 
-    private static String truncate(net.minecraft.client.gui.Font font, String s, int maxWidth) {
-        if (font.width(s) <= maxWidth) return s;
-        String ellipsis = "...";
-        int lo = 0;
-        int hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid;
-            else hi = mid - 1;
-        }
-        return s.substring(0, lo) + ellipsis;
-    }
-    // (truncate is live again: it renders the list-name line above.)
+
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
         int panelH = panelHeight();

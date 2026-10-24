@@ -14,7 +14,7 @@ import static bottled.minetuner.gui.render.PanelChrome.*;
 
 public final class TemplateListPanel {
 
-    private static final long ADD_ROLLOUT_NANOS = 210_000_000L;
+    private static final long ADD_ROLLOUT_NANOS = bottled.minetuner.gui.render.PanelTransition.ROLLOUT_NANOS;
     private static final Map<Integer, AddedLine> ADDED_LINES = new HashMap<>();
     /** Per-list line index awaiting a second ✕ click to confirm deletion — template
      *  line deletes used to be instant and unconfirmed. */
@@ -87,7 +87,7 @@ public final class TemplateListPanel {
         if (allowHover) PanelChrome.drawRowHoverIfNeeded(g, mx, my, px, ry, PANEL_W, ROW_H);
         String raw = lc.templateLines.get(index);
         String preview = raw.isEmpty() ? "§7" + I18n.get("gui.minetuner.template.empty_line")
-                : "§f" + truncateForRow(font, raw, PANEL_W - PANEL_PAD - 24);
+                : "§f" + PanelChrome.truncateText(font, raw, PANEL_W - PANEL_PAD - 24);
         g.text(font, I18n.get("gui.minetuner.template.line_number", index + 1) + " " + preview,
                 px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
 
@@ -97,19 +97,6 @@ public final class TemplateListPanel {
                 px + PANEL_W - 12, ry + 2, 0xFFFFFFFF, false);
     }
 
-    /** Truncates a template line preview to fit the panel row, appending an ellipsis. */
-    private static String truncateForRow(net.minecraft.client.gui.Font font, String s, int maxWidth) {
-        if (font.width(s) <= maxWidth) return s;
-        String ellipsis = "...";
-        int lo = 0;
-        int hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid;
-            else hi = mid - 1;
-        }
-        return s.substring(0, lo) + ellipsis;
-    }
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                    MineTunerConfig.StatListConfig lc) {
@@ -210,8 +197,7 @@ public final class TemplateListPanel {
     private static float rolloutProgress(AddedLine added) {
         float linear = Math.max(0f, Math.min(1f,
                 (System.nanoTime() - added.startedAt()) / (float) ADD_ROLLOUT_NANOS));
-        float inverse = 1f - linear;
-        return 1f - inverse * inverse * inverse;
+        return bottled.minetuner.gui.render.PanelTransition.easeOutCubic(linear);
     }
 
     private record AddedLine(int index, long startedAt) {

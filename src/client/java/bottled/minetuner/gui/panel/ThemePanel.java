@@ -80,7 +80,7 @@ public final class ThemePanel {
                 ? "§f" + name + " §7(" + I18n.get("gui.minetuner.theme.builtin_suffix") + ")"
                 : "§f" + name;
         int labelMaxWidth = PANEL_W - PANEL_PAD - (builtin ? 4 : 14);
-        g.text(font, truncateForRow(font, label, labelMaxWidth), px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
+        g.text(font, PanelChrome.truncateText(font, label, labelMaxWidth), px + PANEL_PAD, ry + 2, 0xFFFFFFFF, false);
 
         if (!builtin) {
             boolean removeHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 12, ry, 10, ROW_H);
@@ -88,18 +88,6 @@ public final class ThemePanel {
         }
     }
 
-    private static String truncateForRow(net.minecraft.client.gui.Font font, String s, int maxWidth) {
-        if (font.width(s) <= maxWidth) return s;
-        String ellipsis = "...";
-        int lo = 0;
-        int hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid;
-            else hi = mid - 1;
-        }
-        return s.substring(0, lo) + ellipsis;
-    }
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                    MineTunerConfig root) {

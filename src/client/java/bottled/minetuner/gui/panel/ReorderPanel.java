@@ -339,7 +339,7 @@ public final class ReorderPanel {
         // width to leave room for the ⚙/▲/▼ cluster on the right without
         // needing per-stat-name truncation logic beyond the generic truncate()
         // helper below.
-        g.text(font, truncate(font, label, PANEL_W - 16 - 36), px + PANEL_PAD + 8, ry + 2, 0xFFFFFFFF, false);
+        g.text(font, PanelChrome.truncateText(font, label, PANEL_W - 16 - 36), px + PANEL_PAD + 8, ry + 2, 0xFFFFFFFF, false);
 
         boolean cogHovered = PanelChrome.isHoveringRow(mx, my, px + PANEL_W - 34, ry, 12, ROW_H);
         g.text(font, cogHovered ? "§e⚙" : "§7⚙", px + PANEL_W - 34, ry + 2, 0xFFFFFFFF, false);
@@ -353,20 +353,6 @@ public final class ReorderPanel {
         }
     }
 
-    /** Truncates with an ellipsis so a long stat name never collides with the ⚙/▲/▼
-     *  cluster; picks the longest prefix (via binary search on rendered width) that
-     *  still fits maxWidth once the ellipsis is appended. */
-    private static String truncate(net.minecraft.client.gui.Font font, String s, int maxWidth) {
-        if (font.width(s) <= maxWidth) return s;
-        String ellipsis = "..";
-        int lo = 0, hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(s.substring(0, mid) + ellipsis) <= maxWidth) lo = mid;
-            else hi = mid - 1;
-        }
-        return s.substring(0, lo) + ellipsis;
-    }
 
     public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH,
                                    MineTunerConfig.StatListConfig lc, UiState ui) {
@@ -528,7 +514,7 @@ public final class ReorderPanel {
         private final Set<MineTunerConfig.StatCategory> expanded = EnumSet.noneOf(MineTunerConfig.StatCategory.class);
         private final Map<MineTunerConfig.StatCategory, Long> rolloutStartedAt =
                 new EnumMap<>(MineTunerConfig.StatCategory.class);
-        private static final long ROLLOUT_NANOS = 210_000_000L;
+        private static final long ROLLOUT_NANOS = bottled.minetuner.gui.render.PanelTransition.ROLLOUT_NANOS;
         /** Live filter text, entered by the search field toggled from the title row. */
         private final EditBuffer search = new EditBuffer(32);
         private int scrollOffset = 0;
@@ -575,8 +561,7 @@ public final class ReorderPanel {
             if (elapsed >= 1f) {
                 return opening ? 1f : 0f;
             }
-            float inverse = 1f - elapsed;
-            float eased = 1f - inverse * inverse * inverse;
+            float eased = bottled.minetuner.gui.render.PanelTransition.easeOutCubic(elapsed);
             return opening ? eased : 1f - eased;
         }
 

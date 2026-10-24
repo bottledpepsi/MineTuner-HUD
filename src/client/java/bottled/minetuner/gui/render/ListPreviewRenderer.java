@@ -17,24 +17,16 @@ public final class ListPreviewRenderer {
     private ListPreviewRenderer() {
     }
 
-    /** Draws one list's box. */
-    public static void drawList(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
-                                MineTunerConfig.StatListConfig lc, int mx, int my,
-                                boolean isBeingDragged, int dragLiveX, int dragLiveY,
-                                int screenW, int screenH) {
+    /** One list's on-screen box size: the empty placeholder's single-line sizing, or
+     *  LineCache.boxW/boxH scaled by textScale (the same size the live overlay uses,
+     *  so preview, hit-boxes and drag/anchor math all agree). Single source of truth
+     *  — MineTunerGuiScreen.getListBounds used to hand-copy this block. */
+    public static int[] computeBoxSize(net.minecraft.client.gui.Font font, MineTunerConfig.StatListConfig lc) {
         LineCache cache = LineCache.getCachedLines(lc);
-        boolean empty = cache.rowKinds().isEmpty();
-
-        // For the empty placeholder, use the old single-line sizing (no
-        // LineCache row to measure) — an empty list has no rows to render at all,
-        // so there's no scaled size to match here. For a non-empty list, use
-        // LineCache.boxW/boxH scaled by textScale, the exact same box size
-        // MineTunerRenderer.render() uses, so the preview, hit-boxes, and
-        // drag/anchor math all agree with the live overlay.
         int lineH = font.lineHeight + 1;
         float scale = lc.textScale <= 0f ? 1f : lc.textScale;
         int boxW, boxH;
-        if (empty) {
+        if (cache.rowKinds().isEmpty()) {
             String placeholder = I18n.get("gui.minetuner.no_stats");
             int px = HudPanelChrome.paddingX(lc.paddingX);
             int py = HudPanelChrome.paddingY(lc.paddingY);
@@ -44,6 +36,20 @@ public final class ListPreviewRenderer {
             boxW = Math.round(cache.boxW(font, lc.paddingX) * scale);
             boxH = Math.round(cache.boxH(font, lc.paddingY) * scale);
         }
+        return new int[]{boxW, boxH};
+    }
+
+    /** Draws one list's box. */
+    public static void drawList(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
+                                MineTunerConfig.StatListConfig lc, int mx, int my,
+                                boolean isBeingDragged, int dragLiveX, int dragLiveY,
+                                int screenW, int screenH) {
+        LineCache cache = LineCache.getCachedLines(lc);
+        boolean empty = cache.rowKinds().isEmpty();
+
+        int[] size = computeBoxSize(font, lc);
+        int boxW = size[0];
+        int boxH = size[1];
 
         int wx, wy;
         if (isBeingDragged) {
@@ -67,6 +73,7 @@ public final class ListPreviewRenderer {
         }
 
         boolean shadow = lc.textShadow;
+        float scale = lc.textScale <= 0f ? 1f : lc.textScale;
         if (empty) {
             g.text(font, "§7" + I18n.get("gui.minetuner.no_stats"),
                     wx + HudPanelChrome.paddingX(lc.paddingX), wy + HudPanelChrome.paddingY(lc.paddingY),
