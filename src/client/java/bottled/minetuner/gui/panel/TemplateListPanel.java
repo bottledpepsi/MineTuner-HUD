@@ -191,6 +191,15 @@ public final class TemplateListPanel {
                 panelW - PANEL_PAD * 2);
     }
 
+    /** Hit-test for the edit box, matching renderEditBox's drawn bounds. */
+    public static boolean isInsideEditBox(int mx, int my, int menuX, int menuY, int screenW, int screenH) {
+        int panelW = PANEL_W + 40;
+        int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2;
+        int px = PanelChrome.clampX(menuX, panelW, screenW);
+        int py = PanelChrome.clampY(menuY, panelH, screenH);
+        return PanelChrome.isInsidePanel(mx, my, px, py, panelW, panelH);
+    }
+
     public enum Kind {NONE, CLOSED, EDIT_LINE}
 
     public record ClickResult(Kind kind, int editIndex) {

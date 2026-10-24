@@ -309,5 +309,6 @@
   "gui.minetuner.benchmark.button.restart": "Restart Benchmark",
   "gui.minetuner.benchmark.auto_stopped": "Hit the %s-sample cap — auto-stopped",
   "gui.minetuner.theme.save_name_taken": "\"%s\" is a built-in theme — pick another name",
-  "gui.minetuner.rename.empty": "Type a name first, or Esc to cancel"
+  "gui.minetuner.rename.empty": "Type a name first, or Esc to cancel",
+  "gui.minetuner.rename.discard": "Click outside again to discard — Enter to keep"
 }

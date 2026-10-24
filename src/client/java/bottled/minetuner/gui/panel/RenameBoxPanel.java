@@ -13,6 +13,16 @@ public final class RenameBoxPanel {
     private RenameBoxPanel() {
     }
 
+    /** Hit-test matching the box exactly as render draws it (incl. the error row). */
+    public static boolean isInside(int mx, int my, int menuX, int menuY, int screenW, int screenH,
+                                   String errorHint) {
+        int panelW = PANEL_W + 40;
+        int panelH = PANEL_PAD * 2 + ROW_H * 2 + 2 + (errorHint != null ? ROW_H : 0);
+        int px = PanelChrome.clampX(menuX, panelW, screenW);
+        int py = PanelChrome.clampY(menuY, panelH, screenH);
+        return PanelChrome.isInsidePanel(mx, my, px, py, panelW, panelH);
+    }
+
     /** Blink period for the caret, in ms — half on, half off. */
     private static final long CARET_BLINK_MS = 530;
 

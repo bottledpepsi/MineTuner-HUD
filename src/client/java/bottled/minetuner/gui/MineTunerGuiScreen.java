@@ -57,6 +57,17 @@ public class MineTunerGuiScreen extends Screen {
     /** Inline error shown inside the rename box (e.g. a rejected theme name);
      *  null = no error. Cleared whenever the box is opened or successfully closed. */
     private String renameErrorHint = null;
+    /** True when the rename box was opened from the Appearance panel, so closing it
+     *  returns THERE instead of dropping the user on the raw canvas — matching how
+     *  theme naming already returns to the Theme panel. */
+    private boolean renameFromAppearance = false;
+    /** Set on the first outside click while the rename/template buffer holds
+     *  uncommitted text; the NEXT outside click actually discards. A single stray
+     *  click used to vaporize a (possibly 200-codepoint) template line instantly. */
+    private boolean renameConfirmDiscard = false;
+    private boolean templateConfirmDiscard = false;
+    private String renameOriginal = "";
+    private String templateOriginal = "";
 
     /**
      * Whether the template line list (one row per templateLines entry, plus an
@@ -224,103 +235,124 @@ public class MineTunerGuiScreen extends Screen {
 
         MineTunerConfig root = MineTunerConfig.getInstance();
 
-        if (menuKind == MenuKind.RENAME) {
-            menuKind = MenuKind.NONE;
-            renameErrorHint = null;
-            if (namingNewTheme) {
-                namingNewTheme = false;
-                themeOpen = true; // click-outside cancels back to the Theme panel, not the raw canvas.
+        // Dispatch on the SAME route the render pass and transition tracker use —
+        // one source of truth for which panel is open and its priority. The old
+        // hand-maintained if-chain here had a DIFFERENT priority order than
+        // rendering (e.g. TEMPLATE_LIST before COLOR_SCALE), a silent divergence.
+        switch (activePanelRoute()) {
+            case RENAME -> {
+                if (isInsideRenameBox(mx, my)) return true; // clicks inside the box keep focus
+                if (!renameConfirmDiscard && hasUncommittedRenameText()) {
+                    // First outside click with uncommitted text: warn, stay open.
+                    renameConfirmDiscard = true;
+                    renameErrorHint = I18n.get("gui.minetuner.rename.discard");
+                    return true;
+                }
+                closeRename(false);
+                return true;
             }
-            return true;
-        }
-        if (menuKind == MenuKind.TEMPLATE_EDIT) {
-            // Click anywhere outside the text box cancels, same as RENAME.
-            // Enter (in keyPressed) is the confirm path.
-            menuKind = MenuKind.NONE;
-            templateEditIndex = -1;
-            return true;
-        }
-        if (menuKind == MenuKind.LIST_CONTEXT) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && ListContextMenuPanel.isInside(mx, my, menuX, menuY, width, height))
-                handleListContextMenuClick(mx, my, lc);
-            else menuKind = MenuKind.NONE;
-            return true;
-        }
-        if (menuKind == MenuKind.EMPTY_SPACE) {
-            if (EmptySpaceMenuPanel.isInside(mx, my, menuX, menuY, width, height))
-                handleEmptySpaceMenuClick(mx, my, root);
-            else menuKind = MenuKind.NONE;
-            return true;
-        }
-        if (deletePanelOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && DeletePanel.isInside(mx, my, menuX, menuY, width, height))
-                handleDeletePanelClick(mx, my, lc);
-            else deletePanelOpen = false;
-            return true;
-        }
-        if (templateListOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && TemplateListPanel.isInside(mx, my, menuX, menuY, width, height, lc))
-                handleTemplateListPanelClick(mx, my, lc);
-            else templateListOpen = false;
-            return true;
-        }
-        if (colorScaleOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && ColorScalePanel.isInside(mx, my, menuX, menuY, width, height)) {
-                boolean back = ColorScalePanel.handleClick(mx, my, menuX, menuY, width, height, lc, root);
-                if (back) {
+            case TEMPLATE_EDIT -> {
+                if (isInsideTemplateEditBox(mx, my)) return true;
+                if (!templateConfirmDiscard && hasUncommittedTemplateText()) {
+                    templateConfirmDiscard = true;
+                    return true;
+                }
+                closeTemplateEdit(false);
+                return true;
+            }
+            case LIST_CONTEXT -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && ListContextMenuPanel.isInside(mx, my, menuX, menuY, width, height))
+                    handleListContextMenuClick(mx, my, lc);
+                else menuKind = MenuKind.NONE;
+                return true;
+            }
+            case EMPTY_SPACE -> {
+                if (EmptySpaceMenuPanel.isInside(mx, my, menuX, menuY, width, height))
+                    handleEmptySpaceMenuClick(mx, my, root);
+                else menuKind = MenuKind.NONE;
+                return true;
+            }
+            case DELETE -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && DeletePanel.isInside(mx, my, menuX, menuY, width, height))
+                    handleDeletePanelClick(mx, my, lc);
+                else deletePanelOpen = false;
+                return true;
+            }
+            case TEMPLATE_LIST -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && TemplateListPanel.isInside(mx, my, menuX, menuY, width, height, lc))
+                    handleTemplateListPanelClick(mx, my, lc);
+                else templateListOpen = false;
+                return true;
+            }
+            case COLOR_SCALE -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && ColorScalePanel.isInside(mx, my, menuX, menuY, width, height)) {
+                    boolean back = ColorScalePanel.handleClick(mx, my, menuX, menuY, width, height, lc, root);
+                    if (back) {
+                        colorScaleOpen = false;
+                        appearanceOpen = true;
+                    }
+                } else {
                     colorScaleOpen = false;
-                    appearanceOpen = true;
+                    appearanceOpen = true; // click outside -> back to Appearance, since Color/Scale nests inside it.
                 }
-            } else {
-                colorScaleOpen = false;
-                appearanceOpen = true; // click outside → back to Appearance, since Color/Scale nests inside it.
+                return true;
             }
-            return true;
-        }
-        if (themeOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && ThemePanel.isInside(mx, my, menuX, menuY, width, height, root)) {
-                handleThemePanelClick(mx, my, root, lc);
-            } else {
-                themeOpen = false;
-                appearanceOpen = true; // click outside → back to Appearance, since Theme nests inside it.
-            }
-            return true;
-        }
-        if (appearanceOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && AppearancePanel.isInside(mx, my, menuX, menuY, width, height))
-                handleAppearancePanelClick(mx, my, lc);
-            else appearanceOpen = false;
-            return true;
-        }
-        if (reorderOpen) {
-            MineTunerConfig.StatListConfig lc = getListById(menuListId);
-            if (lc != null && statSettingsStat != null && thresholdPanelOpen) {
-                // Threshold sub-panel is open.
-                if (ThresholdPanel.isInside(mx, my, menuX, menuY, width, height, font)) {
-                    handleThresholdPanelClick(mx, my, lc);
+            case THEME -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && ThemePanel.isInside(mx, my, menuX, menuY, width, height, root)) {
+                    handleThemePanelClick(mx, my, root, lc);
                 } else {
-                    thresholdPanelOpen = false; // click outside → back to stat settings.
+                    themeOpen = false;
+                    appearanceOpen = true; // click outside -> back to Appearance, since Theme nests inside it.
                 }
-            } else if (lc != null && statSettingsStat != null) {
-                // Stat settings panel is open.
-                if (StatSettingsPanel.isInside(mx, my, menuX, menuY, width, height, statSettingsStat)) {
-                    handleStatSettingsPanelClick(mx, my, lc);
-                } else {
-                    statSettingsStat = null; // click outside → back to reorder.
-                }
-            } else if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc, reorderUiState)) {
-                handleReorderPanelClick(mx, my, lc);
-            } else {
-                reorderOpen = false;
-                statSettingsStat = null;
+                return true;
             }
-            return true;
+            case APPEARANCE -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && AppearancePanel.isInside(mx, my, menuX, menuY, width, height))
+                    handleAppearancePanelClick(mx, my, lc);
+                else appearanceOpen = false;
+                return true;
+            }
+            case THRESHOLDS -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null) {
+                    if (ThresholdPanel.isInside(mx, my, menuX, menuY, width, height, font)) {
+                        handleThresholdPanelClick(mx, my, lc);
+                    } else {
+                        thresholdPanelOpen = false; // click outside -> back to stat settings.
+                    }
+                }
+                return true;
+            }
+            case STAT_SETTINGS -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null) {
+                    if (StatSettingsPanel.isInside(mx, my, menuX, menuY, width, height, statSettingsStat)) {
+                        handleStatSettingsPanelClick(mx, my, lc);
+                    } else {
+                        statSettingsStat = null; // click outside -> back to reorder.
+                    }
+                }
+                return true;
+            }
+            case REORDER -> {
+                MineTunerConfig.StatListConfig lc = getListById(menuListId);
+                if (lc != null && ReorderPanel.isInside(mx, my, menuX, menuY, width, height, lc, reorderUiState)) {
+                    handleReorderPanelClick(mx, my, lc);
+                } else {
+                    reorderOpen = false;
+                    statSettingsStat = null;
+                }
+                return true;
+            }
+            case NONE -> {
+                // fall through to the list/empty-space hit testing below.
+            }
         }
 
         List<MineTunerConfig.StatListConfig> lists = root.lists;
@@ -366,6 +398,14 @@ public class MineTunerGuiScreen extends Screen {
         if (dragging && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             int mx = (int) event.x();
             int my = (int) event.y();
+            // Keep the drag box size live: stats tick while dragging, so a list's
+            // width/height changes mid-drag and clamping/snap lines must follow.
+            MineTunerConfig.StatListConfig dragged = getListById(draggingListId);
+            if (dragged != null) {
+                int[] b = getListBounds(dragged);
+                dragBoxW = b[2];
+                dragBoxH = b[3];
+            }
             int rawX = Math.max(0, Math.min(width - dragBoxW, mx - dragOffsetX));
             int rawY = Math.max(0, Math.min(height - dragBoxH, my - dragOffsetY));
             int[] snapped = applySnap(rawX, rawY, dragBoxW, dragBoxH);
@@ -413,79 +453,49 @@ public class MineTunerGuiScreen extends Screen {
         int keyCode = event.key();
         if (menuKind == MenuKind.RENAME) {
             if (keyCode == Keys.ESCAPE) {
-                menuKind = MenuKind.NONE;
-                renameErrorHint = null;
-                if (namingNewTheme) {
-                    namingNewTheme = false;
-                    themeOpen = true; // Esc cancels back to the Theme panel, not the raw canvas.
-                }
+                closeRename(false);
                 return true;
             }
             if (Keys.isEnter(keyCode)) {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null) {
-                    if (namingNewTheme) {
-                        String trimmed = renameBuffer.toString().trim();
-                        boolean saved = !trimmed.isEmpty()
-                                && MineTunerConfig.getInstance().saveTheme(trimmed, lc);
-                        if (saved) {
-                            MineTunerConfig.getInstance().requestSave();
-                        } else {
-                            // Stay in the box and show WHY the name was rejected,
-                            // instead of closing silently as if it had worked.
-                            renameErrorHint = I18n.get(trimmed.isEmpty()
-                                    ? "gui.minetuner.rename.empty"
-                                    : "gui.minetuner.theme.save_name_taken", trimmed);
-                            return true;
-                        }
-                    } else {
-                        String trimmed = renameBuffer.toString().trim();
-                        // An empty name keeps the current one rather than silently
-                        // resetting it to "List N" — an accidental Enter with an
-                        // empty box should never be a destructive action.
-                        if (!trimmed.isEmpty()) lc.name = trimmed;
+                if (namingNewTheme) {
+                    String trimmed = renameBuffer.toString().trim();
+                    boolean saved = !trimmed.isEmpty()
+                            && MineTunerConfig.getInstance().saveTheme(trimmed, getListById(menuListId));
+                    if (saved) {
                         MineTunerConfig.getInstance().requestSave();
+                        closeRename(true);
+                    } else {
+                        // Stay in the box and show WHY the name was rejected,
+                        // instead of closing silently as if it had worked.
+                        renameErrorHint = I18n.get(trimmed.isEmpty()
+                                ? "gui.minetuner.rename.empty"
+                                : "gui.minetuner.theme.save_name_taken", trimmed);
                     }
+                } else {
+                    closeRename(true);
                 }
-                boolean wasNamingTheme = namingNewTheme;
-                namingNewTheme = false;
-                menuKind = MenuKind.NONE;
-                renameErrorHint = null;
-                if (wasNamingTheme) themeOpen = true; // return to the Theme panel to see the new entry.
                 return true;
             }
             if (keyCode == Keys.BACKSPACE) {
                 renameBuffer.backspace();
                 return true;
             }
-            if (handleTextEditKeys(renameBuffer, event)) return true;
-            return true;
+            return handleTextEditKeys(renameBuffer, event) || true;
         }
         if (menuKind == MenuKind.TEMPLATE_EDIT) {
             if (keyCode == Keys.ESCAPE) {
-                menuKind = MenuKind.NONE;
-                templateEditIndex = -1;
-                templateListOpen = true; // return to the line list, not the raw canvas.
+                closeTemplateEdit(false);
                 return true;
             }
             if (Keys.isEnter(keyCode)) {
-                MineTunerConfig.StatListConfig lc = getListById(menuListId);
-                if (lc != null && templateEditIndex >= 0 && templateEditIndex < lc.templateLines.size()) {
-                    lc.templateLines.set(templateEditIndex, templateEditBuffer.toString());
-                    MineTunerConfig.getInstance().requestSave();
-                    TemplateEngine.invalidate(lc.id);
-                }
-                menuKind = MenuKind.NONE;
-                templateEditIndex = -1;
-                templateListOpen = true; // return to the line list to keep editing other lines.
+                closeTemplateEdit(true);
                 return true;
             }
             if (keyCode == Keys.BACKSPACE) {
                 templateEditBuffer.backspace();
                 return true;
             }
-            if (handleTextEditKeys(templateEditBuffer, event)) return true;
-            return true;
+            return handleTextEditKeys(templateEditBuffer, event) || true;
         }
         if (reorderOpen && statSettingsStat == null && reorderUiState.isSearchFocused()) {
             // Search field lives inside ReorderPanel's own row layout rather.
@@ -571,7 +581,15 @@ public class MineTunerGuiScreen extends Screen {
         int row = EmptySpaceMenuPanel.rowAt(mx, my, menuX, menuY, width, height);
         if (row == EmptySpaceMenuPanel.ROW_CREATE_LIST) {
             MineTunerConfig.StatListConfig nl = root.createList();
-            snapToNearestCorner(nl, mx, my, 0, 0);
+            // "Here" means the ORIGINAL right-click point (menuX/menuY), not the
+            // confirm click on the menu row. Anchored top-left at that point — the
+            // old snapToNearestCorner(..., 0, 0) call selected a corner from a
+            // zero-sized box and clobbered createList's diagonal stagger anchors.
+            nl.anchorCorner = MineTunerConfig.Corner.TOP_LEFT;
+            nl.anchorFracX = Math.max(0.0, Math.min(1.0, (double) menuX / width));
+            nl.anchorFracY = Math.max(0.0, Math.min(1.0, (double) menuY / height));
+            nl.snapX = MineTunerConfig.SnapX.NONE;
+            nl.snapY = MineTunerConfig.SnapY.NONE;
             root.save();
         }
         menuKind = MenuKind.NONE;
@@ -587,6 +605,9 @@ public class MineTunerGuiScreen extends Screen {
             case AppearancePanel.AP_RENAME -> {
                 appearanceOpen = false;
                 menuKind = MenuKind.RENAME;
+                renameFromAppearance = true; // closing returns here, not to the canvas
+                renameConfirmDiscard = false;
+                renameOriginal = lc.displayName();
                 renameErrorHint = null;
                 renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS, lc.displayName());
             }
@@ -628,11 +649,94 @@ public class MineTunerGuiScreen extends Screen {
                 themeOpen = false;
                 namingNewTheme = true;
                 menuKind = MenuKind.RENAME;
+                renameFromAppearance = false;
+                renameConfirmDiscard = false;
+                renameOriginal = "";
                 renameErrorHint = null;
                 renameBuffer = new EditBuffer(RENAME_MAX_CODE_POINTS);
             }
             case NONE -> { /** apply/delete already applied inside handleClick. */ }
         }
+    }
+
+    // --- Rename / template-edit lifecycle helpers ---
+
+    private boolean isInsideRenameBox(int mx, int my) {
+        return RenameBoxPanel.isInside(mx, my, menuX, menuY, width, height, renameErrorHint);
+    }
+
+    private boolean isInsideTemplateEditBox(int mx, int my) {
+        return TemplateListPanel.isInsideEditBox(mx, my, menuX, menuY, width, height);
+    }
+
+    private boolean hasUncommittedRenameText() {
+        return !renameBuffer.toString().equals(renameOriginal);
+    }
+
+    private boolean hasUncommittedTemplateText() {
+        if (templateEditIndex < 0) return false;
+        MineTunerConfig.StatListConfig lc = getListById(menuListId);
+        if (lc == null || templateEditIndex >= lc.templateLines.size()) return false;
+        return !templateEditBuffer.toString().equals(templateOriginal);
+    }
+
+    /** Closes the rename box. {@code commit} is false for Esc/click-outside discards.
+     *  Returns to the panel it was opened from (Appearance for list renames, Theme for
+     *  new-theme naming) instead of dropping the user on the raw canvas. */
+    private void closeRename(boolean commit) {
+        if (commit && !namingNewTheme) {
+            MineTunerConfig.StatListConfig lc = getListById(menuListId);
+            // An empty name keeps the current one rather than silently resetting it
+            // to "List N" — an accidental Enter with an empty box is not destructive.
+            String trimmed = renameBuffer.toString().trim();
+            if (lc != null && !trimmed.isEmpty()) lc.name = trimmed;
+            MineTunerConfig.getInstance().requestSave();
+        }
+        boolean wasThemeNaming = namingNewTheme;
+        boolean wasFromAppearance = renameFromAppearance;
+        namingNewTheme = false;
+        renameFromAppearance = false;
+        renameConfirmDiscard = false;
+        renameErrorHint = null;
+        menuKind = MenuKind.NONE;
+        if (wasThemeNaming) themeOpen = true; // return to the Theme panel to see the (new) entry.
+        else if (wasFromAppearance) appearanceOpen = true;
+    }
+
+    /** Closes the template line editor; commit=false discards the buffer. */
+    private void closeTemplateEdit(boolean commit) {
+        if (commit) {
+            MineTunerConfig.StatListConfig lc = getListById(menuListId);
+            if (lc != null && templateEditIndex >= 0 && templateEditIndex < lc.templateLines.size()) {
+                lc.templateLines.set(templateEditIndex, templateEditBuffer.toString());
+                MineTunerConfig.getInstance().requestSave();
+                TemplateEngine.invalidate(lc.id);
+            }
+        }
+        templateEditIndex = -1;
+        templateConfirmDiscard = false;
+        templateOriginal = "";
+        menuKind = MenuKind.NONE;
+        templateListOpen = true; // return to the line list to keep editing other lines.
+    }
+
+    /** Closes every panel at once — the single copy of what used to be an 8-field
+     *  reset pasted at every "everything goes away" site. */
+    private void closeAllPanels() {
+        reorderOpen = false;
+        statSettingsStat = null;
+        thresholdPanelOpen = false;
+        templateListOpen = false;
+        appearanceOpen = false;
+        colorScaleOpen = false;
+        themeOpen = false;
+        namingNewTheme = false;
+        renameFromAppearance = false;
+        renameConfirmDiscard = false;
+        templateConfirmDiscard = false;
+        deletePanelOpen = false;
+        menuKind = MenuKind.NONE;
+        renameErrorHint = null;
     }
 
     /** Shared caret/clipboard key handling for every EditBuffer-backed text field
@@ -726,6 +830,8 @@ public class MineTunerGuiScreen extends Screen {
             case CLOSED -> templateListOpen = false;
             case EDIT_LINE -> {
                 templateEditIndex = result.editIndex();
+                templateOriginal = lc.templateLines.get(result.editIndex());
+                templateConfirmDiscard = false;
                 templateEditBuffer = new EditBuffer(TEMPLATE_LINE_MAX_CODE_POINTS, lc.templateLines.get(result.editIndex()));
                 menuKind = MenuKind.TEMPLATE_EDIT;
             }
@@ -748,17 +854,7 @@ public class MineTunerGuiScreen extends Screen {
             case DeletePanel.LM_DELETEBUTTON -> {
                 root.removeList(lc.id);
                 root.save();
-
-                reorderOpen = false;
-                statSettingsStat = null;
-                thresholdPanelOpen = false;
-                templateListOpen = false;
-                appearanceOpen = false;
-                colorScaleOpen = false;
-                themeOpen = false;
-                namingNewTheme = false;
-                deletePanelOpen = false;
-                menuKind = MenuKind.NONE;
+                closeAllPanels();
             }
         }
     }
