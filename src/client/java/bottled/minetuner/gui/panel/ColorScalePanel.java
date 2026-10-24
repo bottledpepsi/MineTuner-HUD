@@ -94,19 +94,19 @@ public final class ColorScalePanel {
 
         if (PanelChrome.isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H)) {
             lc.useCustomColor = !lc.useCustomColor;
-            root.save();
+            root.requestSave();
         } else if (PanelChrome.isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
             int idx = java.util.stream.IntStream.range(0, COLOR_SWATCHES.length)
                     .filter(i -> COLOR_SWATCHES[i] == lc.overrideColor)
                     .findFirst().orElse(-1);
             lc.overrideColor = COLOR_SWATCHES[(idx + 1) % COLOR_SWATCHES.length];
-            root.save();
+            root.requestSave();
         } else if (PanelChrome.isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H)) {
             lc.textScale = Math.max(root.textScaleMin, Math.round((lc.textScale - 0.1f) * 100f) / 100f);
-            root.save();
+            root.requestSave();
         } else if (PanelChrome.isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H)) {
             lc.textScale = Math.min(root.textScaleMax, Math.round((lc.textScale + 0.1f) * 100f) / 100f);
-            root.save();
+            root.requestSave();
         } else
             return PanelChrome.isHoveringRow(mx, my, px, ry3, PANEL_W, ROW_H); // Color/Scale nests inside Appearance, so Back returns there.
         return false;

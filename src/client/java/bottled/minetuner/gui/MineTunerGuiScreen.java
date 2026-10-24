@@ -106,11 +106,12 @@ public class MineTunerGuiScreen extends Screen {
     }
 
     /**
-     * Force-save on close as a safety net, even though every mutation already.
+     * Force-save on close as a safety net (flushing any debounced change early),
+     * so a crash right after editing can't lose the last second of tweaks.
      */
     @Override
     public void onClose() {
-        MineTunerConfig.getInstance().save();
+        MineTunerConfig.getInstance().flushSave();
         super.onClose();
     }
 
@@ -400,7 +401,8 @@ public class MineTunerGuiScreen extends Screen {
             draggingListId = -1;
             dragSnapX = MineTunerConfig.SnapX.NONE;
             dragSnapY = MineTunerConfig.SnapY.NONE;
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave(); // debounced: drags can fire in quick succession
+
             return true;
         }
         return super.mouseReleased(event);
@@ -427,7 +429,7 @@ public class MineTunerGuiScreen extends Screen {
                         boolean saved = !trimmed.isEmpty()
                                 && MineTunerConfig.getInstance().saveTheme(trimmed, lc);
                         if (saved) {
-                            MineTunerConfig.getInstance().save();
+                            MineTunerConfig.getInstance().requestSave();
                         } else {
                             // Stay in the box and show WHY the name was rejected,
                             // instead of closing silently as if it had worked.
@@ -442,7 +444,7 @@ public class MineTunerGuiScreen extends Screen {
                         // resetting it to "List N" — an accidental Enter with an
                         // empty box should never be a destructive action.
                         if (!trimmed.isEmpty()) lc.name = trimmed;
-                        MineTunerConfig.getInstance().save();
+                        MineTunerConfig.getInstance().requestSave();
                     }
                 }
                 boolean wasNamingTheme = namingNewTheme;
@@ -470,7 +472,7 @@ public class MineTunerGuiScreen extends Screen {
                 MineTunerConfig.StatListConfig lc = getListById(menuListId);
                 if (lc != null && templateEditIndex >= 0 && templateEditIndex < lc.templateLines.size()) {
                     lc.templateLines.set(templateEditIndex, templateEditBuffer.toString());
-                    MineTunerConfig.getInstance().save();
+                    MineTunerConfig.getInstance().requestSave();
                     TemplateEngine.invalidate(lc.id);
                 }
                 menuKind = MenuKind.NONE;
@@ -590,11 +592,11 @@ public class MineTunerGuiScreen extends Screen {
             }
             case AppearancePanel.AP_BG -> {
                 lc.showBackground = !lc.showBackground;
-                root.save();
+                root.requestSave();
             }
             case AppearancePanel.AP_SHADOW -> {
                 lc.textShadow = !lc.textShadow;
-                root.save();
+                root.requestSave();
             }
             case AppearancePanel.AP_COLOR_SCALE -> {
                 appearanceOpen = false;
@@ -606,7 +608,7 @@ public class MineTunerGuiScreen extends Screen {
             }
             case AppearancePanel.AP_TEMPLATE_MODE -> {
                 lc.useTemplate = !lc.useTemplate;
-                root.save();
+                root.requestSave();
             }
             case AppearancePanel.AP_BACK -> {
                 appearanceOpen = false;

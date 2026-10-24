@@ -417,6 +417,43 @@ public class MineTunerConfig {
         return true;
     }
 
+    /** How long a debounced save waits for further changes before hitting disk.
+     *  Package-visible (mutable) so ConfigSaveDebounceTest can shrink it. */
+    static long SAVE_DEBOUNCE_MS = 1000;
+    private boolean savePending = false;
+    private long saveRequestedAtMs = 0L;
+
+    /** Marks the config dirty and schedules a debounced write instead of serializing
+     *  + writing the whole file synchronously on the render thread. Editor panels call
+     *  this for every toggle/stepper/drag-release; the actual write happens in
+     *  {@link #tickSave()} once the debounce window elapses with no further changes.
+     *  Rapid interactions (holding a +/- stepper, dragging) coalesce into one write. */
+    public void requestSave() {
+        savePending = true;
+        if (saveRequestedAtMs == 0L) saveRequestedAtMs = System.currentTimeMillis();
+    }
+
+    /** Flushes a pending debounced save once the debounce window has elapsed. Called
+     *  once per client tick from MineTunerClient's tick hook — never on the render
+     *  loop between frames, so the disk write cost lands at most once per second of
+     *  active editing instead of once per click. */
+    public void tickSave() {
+        if (!savePending) return;
+        if (System.currentTimeMillis() - saveRequestedAtMs < SAVE_DEBOUNCE_MS) return;
+        savePending = false;
+        saveRequestedAtMs = 0L;
+        save();
+    }
+
+    /** Writes a pending debounced change to disk immediately (screen close, world
+     *  disconnect, client shutdown) so a crash right after an edit can't lose it. */
+    public void flushSave() {
+        if (!savePending) return;
+        savePending = false;
+        saveRequestedAtMs = 0L;
+        save();
+    }
+
     /** Writes the config atomically. */
     public void save() {
         clampGuiTuning();

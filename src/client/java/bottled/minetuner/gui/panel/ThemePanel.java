@@ -134,13 +134,13 @@ public final class ThemePanel {
             boolean builtin = theme != null && theme.builtin;
             if (!builtin && mx >= px + PANEL_W - 12) {
                 root.deleteTheme(name);
-                root.save();
+                root.requestSave();
                 return ClickResult.NONE_RESULT;
             }
             // Applying is a one-time field copy — no per-frame cost regardless of
             // how many appearance fields the theme covers.
             if (theme != null) theme.applyTo(lc);
-            root.save();
+            root.requestSave();
             return ClickResult.NONE_RESULT;
         }
         return ClickResult.NONE_RESULT;

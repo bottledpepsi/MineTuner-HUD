@@ -167,31 +167,31 @@ public final class ThresholdPanel {
 
         if (PanelChrome.isHoveringRow(mx, my, px, ry0, PANEL_W, ROW_H)) {
             ts.enabled = !ts.enabled;
-            root.save();
+            root.requestSave();
             return false;
         }
 
         if (PanelChrome.isHoveringRow(mx, my, px, ry1, PANEL_W / 2, ROW_H)) {
             ts.goodMin = Math.max(0f, roundStep(ts.goodMin - step));
             clampThresholdOrder(ts, higherBetter, true);
-            root.save();
+            root.requestSave();
             return false;
         } else if (PanelChrome.isHoveringRow(mx, my, px + PANEL_W / 2, ry1, PANEL_W / 2, ROW_H)) {
             ts.goodMin = Math.max(0f, roundStep(ts.goodMin + step));
             clampThresholdOrder(ts, higherBetter, true);
-            root.save();
+            root.requestSave();
             return false;
         }
 
         if (PanelChrome.isHoveringRow(mx, my, px, ry2, PANEL_W / 2, ROW_H)) {
             ts.warnMin = Math.max(0f, roundStep(ts.warnMin - step));
             clampThresholdOrder(ts, higherBetter, false);
-            root.save();
+            root.requestSave();
             return false;
         } else if (PanelChrome.isHoveringRow(mx, my, px + PANEL_W / 2, ry2, PANEL_W / 2, ROW_H)) {
             ts.warnMin = Math.max(0f, roundStep(ts.warnMin + step));
             clampThresholdOrder(ts, higherBetter, false);
-            root.save();
+            root.requestSave();
             return false;
         }
 

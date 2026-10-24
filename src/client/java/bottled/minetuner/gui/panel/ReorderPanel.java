@@ -483,15 +483,15 @@ public final class ReorderPanel {
         // never crosses a category boundary.
         if (mx >= px + PANEL_W - 22 && mx < px + PANEL_W - 12 && statRow.indexInCategory() > 0) {
             moveWithinCategory(lc, stat, -1);
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave();
             // ▼: move down, same category-boundary rule as ▲ above.
         } else if (mx >= px + PANEL_W - 12 && statRow.indexInCategory() < statRow.categorySize() - 1) {
             moveWithinCategory(lc, stat, +1);
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave();
             // Clicked the row itself (not ⚙/▲/▼): toggle enabled state.
         } else {
             lc.setEnabled(stat, !lc.isEnabled(stat));
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave();
         }
         return null;
     }

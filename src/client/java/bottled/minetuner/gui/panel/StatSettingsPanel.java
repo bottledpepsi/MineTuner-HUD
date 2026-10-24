@@ -158,7 +158,7 @@ public final class StatSettingsPanel {
         int ry1 = rowY[idx++];
         if (PanelChrome.isHoveringRow(mx, my, px, ry1, PANEL_W, ROW_H)) {
             ss.showPrefix = !ss.showPrefix;
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave();
             return ClickResult.HANDLED;
         }
 
@@ -166,11 +166,11 @@ public final class StatSettingsPanel {
             int ryDec = rowY[idx++];
             if (PanelChrome.isHoveringRow(mx, my, px, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.max(0, ss.decimals - 1);
-                MineTunerConfig.getInstance().save();
+                MineTunerConfig.getInstance().requestSave();
                 return ClickResult.HANDLED;
             } else if (PanelChrome.isHoveringRow(mx, my, px + PANEL_W / 2, ryDec, PANEL_W / 2, ROW_H)) {
                 ss.decimals = Math.min(4, ss.decimals + 1);
-                MineTunerConfig.getInstance().save();
+                MineTunerConfig.getInstance().requestSave();
                 return ClickResult.HANDLED;
             }
         }
@@ -179,7 +179,7 @@ public final class StatSettingsPanel {
             int ryGraph = rowY[idx++];
             if (PanelChrome.isHoveringRow(mx, my, px, ryGraph, PANEL_W, ROW_H)) {
                 ss.renderAsGraph = !ss.renderAsGraph;
-                MineTunerConfig.getInstance().save();
+                MineTunerConfig.getInstance().requestSave();
                 return ClickResult.HANDLED;
             }
         }

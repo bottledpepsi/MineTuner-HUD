@@ -137,7 +137,7 @@ public final class TemplateListPanel {
             PENDING_DELETE.remove(lc.id);
             lc.templateLines.add("");
             ADDED_LINES.put(lc.id, new AddedLine(lc.templateLines.size() - 1, System.nanoTime()));
-            MineTunerConfig.getInstance().save();
+            MineTunerConfig.getInstance().requestSave();
             TemplateEngine.invalidate(lc.id);
             return ClickResult.NONE_RESULT;
         }
@@ -155,7 +155,7 @@ public final class TemplateListPanel {
                     PENDING_DELETE.remove(lc.id);
                     lc.templateLines.remove(i);
                     ADDED_LINES.remove(lc.id);
-                    MineTunerConfig.getInstance().save();
+                    MineTunerConfig.getInstance().requestSave();
                     TemplateEngine.invalidate(lc.id);
                 } else {
                     PENDING_DELETE.put(lc.id, i);

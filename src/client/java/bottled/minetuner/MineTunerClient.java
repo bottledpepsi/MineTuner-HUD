@@ -113,7 +113,15 @@ public class MineTunerClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             MineTunerDataHolder.resetSessionFpsStats();
             MineTunerDataHolder.resetPercentileLowFps();
+            // Don't lose a debounced edit because the user left the world right after it.
+            MineTunerConfig.getInstance().flushSave();
         });
+
+        // Same for quitting the game entirely with an edit still inside the debounce
+        // window — the single-threaded save executor pattern doesn't apply here, so
+        // this is a plain synchronous final flush.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(client ->
+                MineTunerConfig.getInstance().flushSave());
 
         // Deliberately NOT resetting BenchmarkSession here, unlike the session FPS/
         // percentile-low stats just above. Those two exist specifically to describe "this
@@ -130,6 +138,10 @@ public class MineTunerClient implements ClientModInitializer {
                 MineTunerCommand.register(dispatcher));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Flush any debounced config change once its window elapses; editor
+            // mutations coalesce into at most one disk write per second instead of
+            // one synchronous write per click on the render thread.
+            MineTunerConfig.getInstance().tickSave();
             // Sampling is driven by ticks, not rendering, so histories, CPU and percentile
             // lows keep updating while the overlay is hidden, F3 is open or a screen is up.
             SamplingDriver.instance().sampleTick();
