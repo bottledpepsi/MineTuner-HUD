@@ -154,9 +154,14 @@ public class BenchmarkGuiScreen extends Screen {
         boolean stopEnabled = state == BenchmarkSession.State.RECORDING;
         boolean saveEnabled = state == BenchmarkSession.State.STOPPED;
 
-        String startLabel = state == BenchmarkSession.State.STOPPED
-                ? I18n.get("gui.minetuner.benchmark.button.reset")
-                : I18n.get("gui.minetuner.benchmark.button.start");
+        String startLabel = switch (state) {
+            case STOPPED -> I18n.get("gui.minetuner.benchmark.button.reset");
+            // While RECORDING the button discards the in-progress capture and starts
+            // fresh (RTSS F9 semantics) — label it "Restart" so that's visible instead
+            // of a plain "Start" that reads like a no-op while a run is already live.
+            case RECORDING -> I18n.get("gui.minetuner.benchmark.button.restart");
+            default -> I18n.get("gui.minetuner.benchmark.button.start");
+        };
         drawButton(g, mx, my, startBtnX, startBtnY, startBtnW, startBtnH, startLabel, true);
         drawButton(g, mx, my, stopBtnX, stopBtnY, stopBtnW, stopBtnH,
                 I18n.get("gui.minetuner.benchmark.button.stop"), stopEnabled);
@@ -237,6 +242,13 @@ public class BenchmarkGuiScreen extends Screen {
         String sampleLine = I18n.get("gui.minetuner.benchmark.samples", samples);
         int sampleLineW = font.width(sampleLine);
         g.text(font, "§7" + sampleLine, x + w - sampleLineW - 6, innerY, COL_TEXT_DIM, false);
+        // Auto-stop notice, centered on the duration row (no layout-height change):
+        // the log line is easy to miss, so the "you forgot it was running" case is
+        // surfaced right on the frozen result it produced.
+        if (BenchmarkSession.wasAutoStopped()) {
+            String note = I18n.get("gui.minetuner.benchmark.auto_stopped", BenchmarkSession.MAX_SAMPLES);
+            g.centeredText(font, "§e" + note, x + w / 2, innerY, COL_RECORDING);
+        }
         innerY += RESULT_ROW_H;
 
         // Three-up stat readout: Avg FPS / 1% Low / 0.1% Low, each its own column, each

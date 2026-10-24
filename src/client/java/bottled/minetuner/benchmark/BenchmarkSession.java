@@ -28,6 +28,10 @@ public final class BenchmarkSession {
     public static final int MAX_SAMPLES = 240 /* fps */ * 60 /* sec */ * 30 /* min */;
 
     private static State state = State.IDLE;
+    /** True when the current/last frozen run ended via the {@link #MAX_SAMPLES}
+     *  auto-stop rather than a user Stop press — the GUI surfaces this so the
+     *  "you forgot it was running" case is visible in-game, not only in the log. */
+    private static volatile boolean autoStopped = false;
 
     // --- Active capture ---
     // Manually-doubling float[] rather than List<Float> to avoid autoboxing on a buffer
@@ -126,6 +130,7 @@ public final class BenchmarkSession {
             // Auto-stop cleanly rather than growing the buffers indefinitely — see the
             // class doc's "Cap" section. This still computes a valid final result over
             // the (very long) capped window; it just means "you forgot this was running."
+            autoStopped = true;
             MineTunerMod.LOGGER.warn(
                     "MineTuner benchmark hit its {} sample cap and was auto-stopped — "
                             + "if this wasn't intentional, remember to press Stop/Freeze "
@@ -154,6 +159,12 @@ public final class BenchmarkSession {
 
     public static boolean isRecording() {
         return state == State.RECORDING;
+    }
+
+    /** True when this run ended via the {@link #MAX_SAMPLES} auto-stop instead of a
+     *  user Stop press. Cleared by start()/reset(). */
+    public static boolean wasAutoStopped() {
+        return autoStopped;
     }
 
     public static boolean hasFrozenResult() {
@@ -252,6 +263,7 @@ public final class BenchmarkSession {
      *  blending two runs' data together, and pressing Start again while already RECORDING
      *  restarts cleanly rather than corrupting/appending to the in-progress capture. */
     public static void start() {
+        autoStopped = false;
         captureSize = 0; // Retains the backing arrays (no reallocation) — see clear()'s
         // reasoning below in MineTunerDataHolder.RingBuffer for the same "just reset the
         // count" approach; stale float values beyond captureSize are never read by
@@ -329,6 +341,7 @@ public final class BenchmarkSession {
      *  "discard old results and go fresh" UX this feature calls for — but kept as a
      *  small, clearly-named seam rather than folding "discard" logic only into start(). */
     public static void reset() {
+        autoStopped = false;
         captureSize = 0;
         startNanos = 0L;
         stopNanos = 0L;

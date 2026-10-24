@@ -305,5 +305,7 @@
   "gui.minetuner.menu.delete": "Delete",
   "gui.minetuner.delete.title": "Delete List?",
   "gui.minetuner.delete.cancel": "Cancel",
-  "gui.minetuner.delete.delete": "Delete"
+  "gui.minetuner.delete.delete": "Delete",
+  "gui.minetuner.benchmark.button.restart": "Restart Benchmark",
+  "gui.minetuner.benchmark.auto_stopped": "Hit the %s-sample cap — auto-stopped"
 }

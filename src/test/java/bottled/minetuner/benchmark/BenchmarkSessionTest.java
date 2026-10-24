@@ -156,10 +156,33 @@ class BenchmarkSessionTest {
         assertEquals(BenchmarkSession.State.STOPPED, BenchmarkSession.state());
         assertEquals(BenchmarkSession.MAX_SAMPLES, BenchmarkSession.finalSampleCount());
         assertTrue(BenchmarkSession.hasCpuData());
+        assertTrue(BenchmarkSession.wasAutoStopped(),
+                "a run that hit the cap must report wasAutoStopped() so the GUI can surface it");
         // Further samples after the auto-stop are ignored, not appended.
         int count = BenchmarkSession.finalSampleCount();
         BenchmarkSession.recordFrametimeIfRecording(16.6f);
         assertEquals(count, BenchmarkSession.finalSampleCount());
+    }
+
+    @Test
+    void manualStopDoesNotSetAutoStopped() {
+        BenchmarkSession.start();
+        BenchmarkSession.recordFrametimeIfRecording(16.6f);
+        BenchmarkSession.stop();
+        assertFalse(BenchmarkSession.wasAutoStopped());
+    }
+
+    @Test
+    void startingANewRunClearsTheAutoStoppedFlag() {
+        BenchmarkSession.start();
+        for (int i = 0; i < BenchmarkSession.MAX_SAMPLES + 5; i++) {
+            BenchmarkSession.recordFrametimeIfRecording(16.6f);
+        }
+        assertTrue(BenchmarkSession.wasAutoStopped());
+        BenchmarkSession.start();
+        assertFalse(BenchmarkSession.wasAutoStopped());
+        BenchmarkSession.reset();
+        assertFalse(BenchmarkSession.wasAutoStopped());
     }
 
     @Test
